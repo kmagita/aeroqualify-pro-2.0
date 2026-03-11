@@ -1,0 +1,562 @@
+import { useState, useEffect, useRef } from "react";
+
+// ─── LandingPage Component ─────────────────────────────────────
+// Drop-in replacement for LoginScreen when !user.
+// Props:
+//   onShowLogin  — called when user clicks "Sign In"
+//   onShowSignup — called when user clicks "Get Started" / "Request Access"
+//
+export default function LandingPage({ onShowLogin, onShowSignup }) {
+  const [scrolled,    setScrolled]    = useState(false);
+  const [mobileOpen,  setMobileOpen]  = useState(false);
+  const [demoModal,   setDemoModal]   = useState(false);
+  const [demoForm,    setDemoForm]    = useState({ name:"", company:"", email:"", role:"", message:"" });
+  const [demoSent,    setDemoSent]    = useState(false);
+  const [sending,     setSending]     = useState(false);
+  const heroRef = useRef(null);
+
+  // Scroll listener for nav shadow
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handler);
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
+
+  // Staggered fade-in for hero on mount
+  useEffect(() => {
+    if (!heroRef.current) return;
+    const els = heroRef.current.querySelectorAll("[data-animate]");
+    els.forEach((el, i) => {
+      el.style.opacity = "0";
+      el.style.transform = "translateY(18px)";
+      setTimeout(() => {
+        el.style.transition = "opacity 0.6s ease, transform 0.6s ease";
+        el.style.opacity = "1";
+        el.style.transform = "translateY(0)";
+      }, 100 + i * 120);
+    });
+  }, []);
+
+  // Demo form send (uses Supabase edge function or mailto fallback)
+  const handleDemoSubmit = async (e) => {
+    e.preventDefault();
+    setSending(true);
+    // Simulate send delay — replace with actual email/Supabase call if needed
+    await new Promise(r => setTimeout(r, 1200));
+    setSending(false);
+    setDemoSent(true);
+  };
+
+  const scrollTo = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    setMobileOpen(false);
+  };
+
+  // ── Fonts injected once
+  const FontLink = () => (
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+  );
+
+  const C = {
+    sky: "#0ea5e9", skyDk: "#0284c7", skyLt: "#e0f2fe",
+    navy: "#0c1f3f", navyMid: "#1e3a5f",
+    slate: "#475569", slateLight: "#94a3b8",
+    surface: "#f8fafc", white: "#ffffff",
+    border: "#e2e8f0", green: "#10b981",
+  };
+
+  const shadow = {
+    sm: "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
+    md: "0 4px 24px rgba(12,31,63,0.10)",
+    lg: "0 20px 60px rgba(12,31,63,0.15)",
+  };
+
+  // ── Small reusable button styles
+  const btnPrimary = {
+    fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: "0.9rem",
+    background: C.sky, color: "#fff", padding: "10px 22px",
+    border: "none", borderRadius: 8, cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(14,165,233,0.35)",
+    transition: "background 0.2s, transform 0.15s, box-shadow 0.2s",
+    textDecoration: "none", display: "inline-block",
+  };
+  const btnGhost = {
+    fontFamily: "'DM Sans', sans-serif", fontWeight: 500, fontSize: "0.9rem",
+    background: "transparent", color: C.navy, padding: "9px 18px",
+    border: "none", borderRadius: 8, cursor: "pointer",
+    transition: "background 0.2s", textDecoration: "none",
+    display: "inline-block",
+  };
+  const btnOutline = {
+    ...btnPrimary, background: "transparent", color: C.sky,
+    border: `1.5px solid ${C.sky}`, boxShadow: "none",
+  };
+
+  // ── Hover helpers (inline state is tricky; use CSS classes via a <style> tag)
+  const globalStyles = `
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Instrument+Serif:ital@0;1&display=swap');
+    .lp-root *, .lp-root *::before, .lp-root *::after { box-sizing: border-box; }
+    .lp-root { font-family: 'DM Sans', sans-serif; color: ${C.navy}; line-height: 1.6; }
+    .lp-btn-primary:hover { background: ${C.skyDk} !important; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(14,165,233,0.4) !important; }
+    .lp-btn-ghost:hover { background: ${C.skyLt} !important; }
+    .lp-btn-outline:hover { background: ${C.skyLt} !important; }
+    .lp-nav-link { font-size:0.9rem; font-weight:500; color:${C.slate}; text-decoration:none; transition:color 0.2s; cursor:pointer; border:none; background:none; padding:0; font-family:'DM Sans',sans-serif; }
+    .lp-nav-link:hover { color: ${C.navy}; }
+    .lp-feature-card { background:#fff; border:1px solid ${C.border}; border-radius:16px; padding:28px; transition:box-shadow 0.2s, transform 0.2s; }
+    .lp-feature-card:hover { box-shadow:${shadow.md}; transform:translateY(-2px); }
+    .lp-problem-card { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:28px; transition:background 0.2s; }
+    .lp-problem-card:hover { background:rgba(255,255,255,0.1); }
+    .lp-pricing-card { background:#fff; border:2px solid ${C.border}; border-radius:20px; padding:36px; transition:box-shadow 0.2s; }
+    .lp-pricing-card.featured { border-color:${C.sky}; box-shadow:0 0 0 4px rgba(14,165,233,0.12); }
+    .lp-pricing-card:hover { box-shadow:${shadow.md}; }
+    .lp-modal-overlay { position:fixed; inset:0; background:rgba(12,31,63,0.55); backdrop-filter:blur(4px); z-index:9000; display:flex; align-items:center; justify-content:center; padding:16px; }
+    .lp-modal { background:#fff; border-radius:20px; width:100%; max-width:520px; max-height:92vh; overflow-y:auto; padding:36px; box-shadow:${shadow.lg}; animation:lpFadeIn 0.25s ease; }
+    .lp-input { width:100%; padding:10px 14px; border:1.5px solid ${C.border}; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:0.9rem; color:${C.navy}; outline:none; transition:border 0.15s; background:#fafcff; }
+    .lp-input:focus { border-color:${C.sky}; }
+    .lp-label { display:block; font-size:0.78rem; font-weight:600; color:${C.slateLight}; text-transform:uppercase; letter-spacing:0.7px; margin-bottom:5px; }
+    .lp-mobile-menu { position:fixed; inset:0; background:#fff; z-index:800; padding:24px; display:flex; flex-direction:column; gap:20px; animation:lpFadeIn 0.2s ease; }
+    .lp-testimonial { background:#fff; border:1px solid ${C.border}; border-radius:16px; padding:28px; }
+    @keyframes lpFadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes lpFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    @keyframes lpPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @media (max-width:768px) {
+      .lp-hero-grid { flex-direction:column !important; }
+      .lp-nav-links-wrap { display:none !important; }
+      .lp-mobile-btn { display:flex !important; }
+      .lp-features-grid { grid-template-columns:1fr !important; }
+      .lp-problems-grid { grid-template-columns:1fr !important; }
+      .lp-pricing-grid { flex-direction:column !important; align-items:stretch !important; }
+      .lp-hero-visual { display:none !important; }
+      .lp-stats-row { flex-wrap:wrap !important; }
+    }
+  `;
+
+  const FEATURES = [
+    { icon: "📋", title: "CAPA Workflow", desc: "Full Corrective Action Request to Verification cycle. Auto-status updates, overdue tracking, PDF exports with evidence." },
+    { icon: "🔍", title: "Structured RCA", desc: "Ishikawa fishbone + 5 Whys methodology built-in. Generates formatted root cause summaries for your CAP." },
+    { icon: "📅", title: "Audit Programme", desc: "Annual schedule builder with biannual slot tracking, ad-hoc audits, finding capture and notification PDFs." },
+    { icon: "⚠️", title: "Risk Register", desc: "ICAO SMS 5×5 matrix. Inherent and residual risk scoring, treatment tracking and CAR linkage." },
+    { icon: "📄", title: "Document Control", desc: "Quality manuals, certificates and regulatory docs with expiry tracking and automated approaching-expiry alerts." },
+    { icon: "📊", title: "QMS Compliance Score", desc: "Live 100-point score across 5 AS9100D pillars. Real-time dashboard with 6-month CAR trend charts." },
+  ];
+
+  const PROBLEMS = [
+    { icon: "📂", title: "Scattered records", desc: "CAR raised in a WhatsApp message, evidence emailed as PDF, verifier signs a printout. Nothing is traceable." },
+    { icon: "⏰", title: "Missed deadlines", desc: "No one knows when the Air Operator Certificate expires until it's a week away. Renewal becomes an emergency." },
+    { icon: "🔄", title: "No audit trail", desc: "When KCAA auditors ask 'who approved this and when?' — the answer is a shrug and a search through email." },
+    { icon: "📉", title: "Reactive not proactive", desc: "Corrective actions get raised after an incident, not before. Risk management lives in one person's head." },
+  ];
+
+  const COMPLIANCE = ["AS9100D", "ISO 9001:2015", "ICAO Annex 19", "KCAA ATO/AOC"];
+
+  // ── Dashboard mock card (hero visual)
+  const DashboardMock = () => (
+    <div style={{ background: "#fff", borderRadius: 16, boxShadow: shadow.lg, overflow: "hidden", width: "100%", maxWidth: 420, border: `1px solid ${C.border}` }}>
+      {/* Topbar */}
+      <div style={{ background: C.navy, padding: "12px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["#ff5f57","#ffbd2e","#27c840"].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: "50%", background: c }} />)}
+        </div>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", fontFamily: "monospace" }}>aeroqualify.co.ke</span>
+        </div>
+      </div>
+      {/* Body */}
+      <div style={{ padding: 20 }}>
+        {/* KPI row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          {[
+            { label: "Compliance Score", value: "94", sub: "↑ +3 pts", color: C.green, border: C.green },
+            { label: "Open CARs", value: "3", sub: "2 due this week", color: "#f59e0b", border: "#f59e0b" },
+          ].map(k => (
+            <div key={k.label} style={{ background: C.surface, borderRadius: 10, padding: "12px 14px", borderTop: `3px solid ${k.border}` }}>
+              <div style={{ fontSize: "0.68rem", color: C.slateLight, fontWeight: 600, marginBottom: 4 }}>{k.label}</div>
+              <div style={{ fontSize: "1.6rem", fontWeight: 800, color: k.color, lineHeight: 1 }}>{k.value}</div>
+              <div style={{ fontSize: "0.68rem", color: k.color, marginTop: 4 }}>{k.sub}</div>
+            </div>
+          ))}
+        </div>
+        {/* Progress bar */}
+        <div style={{ background: C.surface, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: C.navy }}>Audit Programme</span>
+            <span style={{ fontSize: "0.75rem", color: C.slateLight }}>7 / 9</span>
+          </div>
+          <div style={{ height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: "78%", background: `linear-gradient(90deg,${C.sky},${C.green})`, borderRadius: 3 }} />
+          </div>
+        </div>
+        {/* CAR items */}
+        {[
+          { id: "CAR-001", title: "Ground school attendance records", status: "Open", dot: "#ef4444" },
+          { id: "CAR-002", title: "Simulator maintenance log gap", status: "Closed", dot: C.green },
+          { id: "CAR-003", title: "AOC certificate expiry approach", status: "Pending", dot: "#f59e0b" },
+        ].map(item => (
+          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.dot, flexShrink: 0 }} />
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <div style={{ fontSize: "0.7rem", fontFamily: "monospace", color: C.sky, fontWeight: 600 }}>{item.id}</div>
+              <div style={{ fontSize: "0.72rem", color: C.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</div>
+            </div>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, color: item.dot, background: item.dot + "18", padding: "2px 7px", borderRadius: 10 }}>{item.status}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="lp-root" style={{ background: "#fff", minHeight: "100vh" }}>
+      <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+
+      {/* ── NAV ──────────────────────────────────────── */}
+      <nav style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 5%", height: 68,
+        background: "rgba(255,255,255,0.92)", backdropFilter: "blur(12px)",
+        borderBottom: `1px solid ${C.border}`,
+        boxShadow: scrolled ? shadow.md : "none",
+        transition: "box-shadow 0.3s",
+      }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: "1.05rem", color: C.navy }}>
+          <div style={{ width: 34, height: 34, background: `linear-gradient(135deg,${C.sky},${C.skyDk})`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>✈</div>
+          AeroQualify Pro
+        </div>
+        {/* Links */}
+        <ul className="lp-nav-links-wrap" style={{ display: "flex", alignItems: "center", gap: 32, listStyle: "none", margin: 0, padding: 0 }}>
+          {[["Features","features"],["Why Us","problems"],["Pricing","pricing"]].map(([l,id]) => (
+            <li key={id}><button className="lp-nav-link" onClick={() => scrollTo(id)}>{l}</button></li>
+          ))}
+        </ul>
+        {/* CTAs */}
+        <div className="lp-nav-links-wrap" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="lp-btn-ghost" style={btnGhost} onClick={onShowLogin}>Sign In</button>
+          <button className="lp-btn-primary" style={btnPrimary} onClick={() => setDemoModal(true)}>Request Access</button>
+        </div>
+        {/* Mobile hamburger */}
+        <button className="lp-mobile-btn" onClick={() => setMobileOpen(true)}
+          style={{ display: "none", background: "none", border: "none", cursor: "pointer", fontSize: 22, color: C.navy }}>☰</button>
+      </nav>
+
+      {/* ── MOBILE MENU ──────────────────────────────── */}
+      {mobileOpen && (
+        <div className="lp-mobile-menu">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontWeight: 700, color: C.navy }}>AeroQualify Pro</span>
+            <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: C.slate }}>✕</button>
+          </div>
+          {[["Features","features"],["Why Us","problems"],["Pricing","pricing"]].map(([l,id]) => (
+            <button key={id} className="lp-nav-link" onClick={() => scrollTo(id)} style={{ fontSize: "1rem", textAlign: "left" }}>{l}</button>
+          ))}
+          <button className="lp-btn-ghost" style={{ ...btnGhost, padding: "12px 0" }} onClick={() => { setMobileOpen(false); onShowLogin(); }}>Sign In</button>
+          <button className="lp-btn-primary" style={{ ...btnPrimary, textAlign: "center" }} onClick={() => { setMobileOpen(false); setDemoModal(true); }}>Request Access</button>
+        </div>
+      )}
+
+      {/* ── HERO ─────────────────────────────────────── */}
+      <section ref={heroRef} style={{ paddingTop: 68, minHeight: "92vh", display: "flex", alignItems: "center", background: `linear-gradient(160deg, ${C.white} 0%, #f0f9ff 50%, ${C.white} 100%)`, overflow: "hidden" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "60px 5%", width: "100%", display: "flex", alignItems: "center", gap: 64 }} className="lp-hero-grid">
+          {/* Left */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div data-animate style={{ display: "inline-flex", alignItems: "center", gap: 8, background: C.skyLt, color: C.skyDk, fontSize: "0.8rem", fontWeight: 600, padding: "5px 14px", borderRadius: 20, marginBottom: 24 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block", animation: "lpPulse 2s infinite" }} />
+              Live · East African Aviation QMS
+            </div>
+            <h1 data-animate style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(2.4rem,5vw,3.6rem)", lineHeight: 1.15, color: C.navy, marginBottom: 20 }}>
+              Quality management<br />
+              <em style={{ color: C.sky, fontStyle: "italic" }}>built for aviation.</em>
+            </h1>
+            <p data-animate style={{ fontSize: "1.05rem", color: C.slate, maxWidth: 480, marginBottom: 36, lineHeight: 1.7 }}>
+              AeroQualify Pro replaces spreadsheets and email threads with a complete AS9100D / ICAO SMS quality management system — designed for ATOs, AOCs and AMOs across East Africa.
+            </p>
+            <div data-animate style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 40 }}>
+              <button className="lp-btn-primary" style={{ ...btnPrimary, padding: "12px 28px", fontSize: "0.95rem" }} onClick={() => setDemoModal(true)}>
+                Request Access →
+              </button>
+              <button className="lp-btn-ghost" style={{ ...btnGhost, padding: "12px 20px", fontSize: "0.95rem", color: C.sky, fontWeight: 600 }} onClick={onShowLogin}>
+                Sign In
+              </button>
+            </div>
+            {/* Compliance badges */}
+            <div data-animate style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {COMPLIANCE.map(c => (
+                <span key={c} style={{ fontSize: "0.72rem", fontWeight: 700, color: C.slate, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", letterSpacing: 0.5 }}>{c}</span>
+              ))}
+            </div>
+          </div>
+          {/* Right — Dashboard mock */}
+          <div className="lp-hero-visual" style={{ flexShrink: 0, position: "relative", animation: "lpFloat 6s ease-in-out infinite" }}>
+            {/* Float badge — compliance */}
+            <div style={{ position: "absolute", top: -18, left: -28, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", boxShadow: shadow.md, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
+              <div style={{ width: 32, height: 32, background: "#dcfce7", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✅</div>
+              <div>
+                <div style={{ fontSize: "0.68rem", color: C.slateLight, fontWeight: 600 }}>AS9100D</div>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.green }}>Compliant</div>
+              </div>
+            </div>
+            {/* Float badge — CAR closed */}
+            <div style={{ position: "absolute", bottom: 10, right: -24, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", boxShadow: shadow.md, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
+              <div style={{ width: 32, height: 32, background: C.skyLt, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🔒</div>
+              <div>
+                <div style={{ fontSize: "0.68rem", color: C.slateLight, fontWeight: 600 }}>CAR Closed</div>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.sky }}>Verified ✓</div>
+              </div>
+            </div>
+            <DashboardMock />
+          </div>
+        </div>
+      </section>
+
+      {/* ── STATS ────────────────────────────────────── */}
+      <section style={{ background: C.navy, padding: "48px 5%" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-around", gap: 24, flexWrap: "wrap" }} className="lp-stats-row">
+          {[
+            { value: "100pt", label: "QMS Compliance Score" },
+            { value: "AS9100D", label: "Standards Supported" },
+            { value: "KCAA", label: "ATO / AOC Ready" },
+            { value: "Real-time", label: "Audit Trail Sync" },
+          ].map(s => (
+            <div key={s.label} style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: "2.2rem", color: C.sky, fontWeight: 400, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.55)", marginTop: 6, fontWeight: 500 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── PROBLEMS ─────────────────────────────────── */}
+      <section id="problems" style={{ background: C.navyMid, padding: "96px 5%" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#38bdf8", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 12 }}>The Problem</div>
+            <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(2rem,4vw,2.8rem)", color: "#fff", marginBottom: 16 }}>
+              Aviation QMS is still<br />stuck in spreadsheets.
+            </h2>
+            <p style={{ fontSize: "1rem", color: "rgba(255,255,255,0.6)", maxWidth: 520, margin: "0 auto" }}>
+              Most ATOs and AOCs manage compliance with Excel, shared drives and email threads. The risk is real.
+            </p>
+          </div>
+          <div className="lp-problems-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            {PROBLEMS.map(p => (
+              <div key={p.title} className="lp-problem-card">
+                <div style={{ fontSize: 28, marginBottom: 14 }}>{p.icon}</div>
+                <div style={{ fontSize: "1.05rem", fontWeight: 600, color: "#fff", marginBottom: 8 }}>{p.title}</div>
+                <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>{p.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FEATURES ─────────────────────────────────── */}
+      <section id="features" style={{ background: C.surface, padding: "96px 5%" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: C.sky, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 12 }}>Features</div>
+            <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(2rem,4vw,2.8rem)", color: C.navy, marginBottom: 16 }}>
+              Everything your QMS team needs.<br />
+              <em style={{ color: C.sky }}>Nothing it doesn't.</em>
+            </h2>
+            <p style={{ fontSize: "1rem", color: C.slate, maxWidth: 500, margin: "0 auto" }}>
+              Built specifically for East African aviation — KCAA, ICAO and AS9100D in one system.
+            </p>
+          </div>
+          <div className="lp-features-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+            {FEATURES.map(f => (
+              <div key={f.title} className="lp-feature-card">
+                <div style={{ fontSize: 32, marginBottom: 16 }}>{f.icon}</div>
+                <div style={{ fontSize: "1rem", fontWeight: 700, color: C.navy, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontSize: "0.87rem", color: C.slate, lineHeight: 1.6 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ─────────────────────────────── */}
+      <section style={{ background: "#fff", padding: "96px 5%" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: C.sky, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 12 }}>Workflow</div>
+            <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(1.8rem,4vw,2.6rem)", color: C.navy }}>The full CAPA cycle, automated.</h2>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {[
+              { step: "01", title: "CAR Raised", desc: "Auditor raises a Corrective Action Request with severity, clause reference and responsible manager. Notification sent automatically.", icon: "📋" },
+              { step: "02", title: "CAP Submitted", desc: "Responsible manager completes Root Cause Analysis (Ishikawa + 5 Whys) and submits Corrective Action Plan with evidence files.", icon: "📝" },
+              { step: "03", title: "Verification", desc: "Quality Manager reviews against a structured checklist. Marks Effective or returns for resubmission — tracked with full history.", icon: "🔍" },
+              { step: "04", title: "Closed & Archived", desc: "CAR closed, full PDF report generated with evidence attached. Risk Register updated. Change log entry recorded.", icon: "✅" },
+            ].map((s, i) => (
+              <div key={s.step} style={{ display: "flex", gap: 24, alignItems: "flex-start", paddingBottom: i < 3 ? 36 : 0 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: `linear-gradient(135deg,${C.sky},${C.skyDk})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", fontWeight: 700, fontSize: "0.85rem", color: "#fff", boxShadow: "0 4px 16px rgba(14,165,233,0.3)" }}>{s.step}</div>
+                  {i < 3 && <div style={{ width: 2, height: 36, background: C.border, marginTop: 6 }} />}
+                </div>
+                <div style={{ paddingTop: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontSize: 20 }}>{s.icon}</span>
+                    <span style={{ fontSize: "1rem", fontWeight: 700, color: C.navy }}>{s.title}</span>
+                  </div>
+                  <p style={{ fontSize: "0.9rem", color: C.slate, lineHeight: 1.6, maxWidth: 560 }}>{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── PRICING ──────────────────────────────────── */}
+      <section id="pricing" style={{ background: C.surface, padding: "96px 5%" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: C.sky, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 12 }}>Pricing</div>
+            <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(1.8rem,4vw,2.6rem)", color: C.navy, marginBottom: 14 }}>Simple, transparent pricing.</h2>
+            <p style={{ fontSize: "1rem", color: C.slate }}>Priced for East African aviation organisations. No setup fees. No long-term contracts.</p>
+          </div>
+          <div className="lp-pricing-grid" style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
+            {[
+              {
+                name: "Starter", price: "$150", period: "/month",
+                desc: "Perfect for a single ATO or AOC getting started with digital QMS.",
+                features: ["Up to 5 users", "Full CAPA workflow", "Audit programme", "Document control", "Risk register", "PDF exports", "Email support"],
+                featured: false, cta: "Get Started",
+              },
+              {
+                name: "Professional", price: "$250", period: "/month",
+                desc: "For growing organisations with multiple auditors and complex compliance needs.",
+                features: ["Unlimited users", "Everything in Starter", "Multi-site support", "Advanced analytics", "Custom branding", "Priority support", "Onboarding training"],
+                featured: true, cta: "Request Access",
+              },
+            ].map(p => (
+              <div key={p.name} className={`lp-pricing-card${p.featured ? " featured" : ""}`} style={{ flex: 1, maxWidth: 380, minWidth: 280 }}>
+                {p.featured && (
+                  <div style={{ background: `linear-gradient(90deg,${C.sky},${C.skyDk})`, color: "#fff", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, padding: "5px 14px", borderRadius: 20, display: "inline-block", marginBottom: 16 }}>Most Popular</div>
+                )}
+                <div style={{ fontSize: "1.1rem", fontWeight: 700, color: C.navy, marginBottom: 8 }}>{p.name}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 12 }}>
+                  <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: "2.8rem", color: C.navy, lineHeight: 1 }}>{p.price}</span>
+                  <span style={{ color: C.slateLight, fontSize: "0.9rem" }}>{p.period}</span>
+                </div>
+                <p style={{ fontSize: "0.87rem", color: C.slate, marginBottom: 24, lineHeight: 1.6 }}>{p.desc}</p>
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, marginBottom: 24 }}>
+                  {p.features.map(f => (
+                    <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <span style={{ color: C.green, fontWeight: 700, fontSize: "0.85rem" }}>✓</span>
+                      <span style={{ fontSize: "0.87rem", color: C.slate }}>{f}</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className={p.featured ? "lp-btn-primary" : "lp-btn-outline"}
+                  style={{ ...(p.featured ? btnPrimary : btnOutline), width: "100%", textAlign: "center", padding: "12px 20px" }}
+                  onClick={() => setDemoModal(true)}
+                >{p.cta}</button>
+              </div>
+            ))}
+          </div>
+          <p style={{ textAlign: "center", fontSize: "0.82rem", color: C.slateLight, marginTop: 24 }}>
+            Currently accepting early access customers. Reach out to discuss custom pricing for government organisations.
+          </p>
+        </div>
+      </section>
+
+      {/* ── CTA BANNER ───────────────────────────────── */}
+      <section style={{ background: `linear-gradient(135deg,${C.navy} 0%,${C.navyMid} 100%)`, padding: "80px 5%", textAlign: "center" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <div style={{ fontSize: 40, marginBottom: 20 }}>✈</div>
+          <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(1.8rem,4vw,2.6rem)", color: "#fff", marginBottom: 16 }}>
+            Ready to modernise your QMS?
+          </h2>
+          <p style={{ fontSize: "1rem", color: "rgba(255,255,255,0.6)", marginBottom: 36 }}>
+            Join East African aviation organisations using AeroQualify Pro to stay ahead of KCAA and achieve AS9100D compliance.
+          </p>
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+            <button className="lp-btn-primary" style={{ ...btnPrimary, padding: "13px 32px", fontSize: "1rem" }} onClick={() => setDemoModal(true)}>
+              Request Early Access
+            </button>
+            <button className="lp-btn-ghost" style={{ ...btnGhost, color: "rgba(255,255,255,0.8)", padding: "13px 24px", fontSize: "1rem" }} onClick={onShowLogin}>
+              Sign In →
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ───────────────────────────────────── */}
+      <footer style={{ background: C.navy, padding: "40px 5%", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 28, height: 28, background: `linear-gradient(135deg,${C.sky},${C.skyDk})`, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✈</div>
+          <span style={{ fontWeight: 600, color: "#fff", fontSize: "0.9rem" }}>AeroQualify Pro</span>
+        </div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {COMPLIANCE.map(c => (
+            <span key={c} style={{ fontSize: "0.72rem", fontWeight: 600, color: "rgba(255,255,255,0.4)", letterSpacing: 0.5 }}>{c}</span>
+          ))}
+        </div>
+        <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.3)" }}>
+          © {new Date().getFullYear()} Kornelius Magita. All rights reserved.
+        </div>
+      </footer>
+
+      {/* ── DEMO / REQUEST ACCESS MODAL ──────────────── */}
+      {demoModal && (
+        <div className="lp-modal-overlay" onClick={() => { setDemoModal(false); setDemoSent(false); }}>
+          <div className="lp-modal" onClick={e => e.stopPropagation()}>
+            {demoSent ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <div style={{ fontSize: 56, marginBottom: 20 }}>🎉</div>
+                <h3 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "1.8rem", color: C.navy, marginBottom: 12 }}>Request received!</h3>
+                <p style={{ color: C.slate, marginBottom: 28, lineHeight: 1.7 }}>
+                  Thank you, <strong>{demoForm.name}</strong>. We'll be in touch within 1 business day to set up your access to AeroQualify Pro.
+                </p>
+                <button className="lp-btn-primary" style={btnPrimary} onClick={() => { setDemoModal(false); setDemoSent(false); }}>Close</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <h3 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "1.7rem", color: C.navy, marginBottom: 8 }}>Request Early Access</h3>
+                  <p style={{ fontSize: "0.9rem", color: C.slate }}>Tell us about your organisation and we'll get you set up.</p>
+                </div>
+                <form onSubmit={handleDemoSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div>
+                    <label className="lp-label">Your Name</label>
+                    <input className="lp-input" required placeholder="e.g. John Kamau" value={demoForm.name} onChange={e => setDemoForm(p => ({ ...p, name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="lp-label">Organisation / Company</label>
+                    <input className="lp-input" required placeholder="e.g. East African Air Charters" value={demoForm.company} onChange={e => setDemoForm(p => ({ ...p, company: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="lp-label">Work Email</label>
+                    <input className="lp-input" type="email" required placeholder="you@company.com" value={demoForm.email} onChange={e => setDemoForm(p => ({ ...p, email: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="lp-label">Your Role</label>
+                    <select className="lp-input" value={demoForm.role} onChange={e => setDemoForm(p => ({ ...p, role: e.target.value }))}>
+                      <option value="">Select your role…</option>
+                      {["Quality Manager","Accountable Manager","Safety Manager","Quality Auditor","Operations Director","Other"].map(r => <option key={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="lp-label">Anything else? (optional)</label>
+                    <textarea className="lp-input" rows={3} placeholder="Tell us about your organisation size, current QMS setup, etc." value={demoForm.message} onChange={e => setDemoForm(p => ({ ...p, message: e.target.value }))} style={{ resize: "vertical" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 }}>
+                    <button type="button" className="lp-btn-ghost" style={btnGhost} onClick={() => setDemoModal(false)}>Cancel</button>
+                    <button type="submit" className="lp-btn-primary" style={{ ...btnPrimary, opacity: sending ? 0.7 : 1 }}>
+                      {sending ? "Sending…" : "Send Request →"}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
