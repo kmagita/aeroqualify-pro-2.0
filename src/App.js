@@ -748,7 +748,10 @@ const PendingApprovalScreen = ({ user, onSignOut }) => (
 // ─── Login ────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }) => {
   const [email,setEmail]=useState(""); const [pw,setPw]=useState("");
-  const [loading,setLoading]=useState(false); const [err,setErr]=useState(""); const [mode,setMode]=useState("login");
+  const [loading,setLoading]=useState(false); const [mode,setMode]=useState("login");
+  const storedMsg = sessionStorage.getItem("aq_verified_msg") || "";
+  const [err,setErr]=useState(storedMsg);
+  useEffect(()=>{ if(storedMsg) sessionStorage.removeItem("aq_verified_msg"); },[]);
   const handle = async(e) => {
     e.preventDefault(); setLoading(true); setErr("");
     try {
@@ -5501,9 +5504,30 @@ export default function App() {
   const showToast = useCallback((msg,type="success")=>setToast({message:msg,type}),[]);
 
   useEffect(()=>{
-    // Always start on landing page — no auto session restore.
-    // Sign out any existing session so user must log in manually.
+    // Handle email verification redirect — Supabase redirects back to the app
+    // with an access_token in the URL after the user clicks the verification link.
+    // In this case we must NOT sign them out — we need the session to exist briefly
+    // so the profile trigger fires in Supabase. Then we sign them out and show
+    // the "pending approval" message.
+    const url = new URL(window.location.href);
+    const isEmailVerification = url.hash.includes("access_token") || url.searchParams.get("type") === "signup";
+
+    if(isEmailVerification){
+      // Give Supabase a moment to process the verification and fire the profile trigger
+      setTimeout(async()=>{
+        await supabase.auth.signOut();
+        // Clean the URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setShowLogin(true);
+        // Show message on login screen via sessionStorage so it survives the state reset
+        sessionStorage.setItem("aq_verified_msg", "✓ Email verified! Your account is now pending administrator approval. Sign in below once approved.");
+      }, 1500);
+      return;
+    }
+
+    // Normal app load — sign out any lingering session so user always starts at landing page
     supabase.auth.signOut();
+
     const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
       if(!session?.user){setLoading(false);setProfile(null);setShowLogin(false);setUser(null);}
     });
