@@ -2,7 +2,17 @@
 import { createClient } from '@supabase/supabase-js';
 export const SUPABASE_URL = "https://lsgawxzpilototfsummm.supabase.co";
 export const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzZ2F3eHpwaWxvdG90ZnN1bW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMDU3MTcsImV4cCI6MjA4NzY4MTcxN30.HLCaCqZ-YjywEhNC2e6LtR3haLivuZ13ukit1AeZ0QM";
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// persistSession: false — disables localStorage session storage entirely.
+// Users must always sign in manually. No automatic re-login on page load.
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  }
+});
+
 export const TABLES = {
   cars: 'cars', caps: 'caps', verifications: 'capa_verifications',
   documents: 'documents', flightDocs: 'flight_school_docs',
@@ -12,6 +22,7 @@ export const TABLES = {
   risks: 'risk_register',
   auditSchedule: 'audit_schedule',
 };
+
 export async function logChange({ user, action, table, recordId, recordTitle, oldData, newData }) {
   try {
     await supabase.from(TABLES.changeLog).insert({
@@ -22,6 +33,7 @@ export async function logChange({ user, action, table, recordId, recordTitle, ol
     });
   } catch(e) { console.warn('Log failed:', e.message); }
 }
+
 export async function sendNotification({ type, record, recipients }) {
   try {
     const { data, error } = await supabase.functions.invoke('send-notification', {
