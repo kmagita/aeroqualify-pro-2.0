@@ -746,11 +746,12 @@ const PendingApprovalScreen = ({ user, onSignOut }) => (
 );
 
 // ─── Login ────────────────────────────────────────────────────
-const LoginScreen = ({ onLogin }) => {
+const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
   const [email,setEmail]=useState(""); const [pw,setPw]=useState("");
   const [loading,setLoading]=useState(false); const [err,setErr]=useState("");
   const [mode,setMode]=useState("login");
-  const [popup,setPopup]=useState(null); // "signup" | "pending" | "noProfile"
+  const popup = authPopup;
+  const setPopup = setAuthPopup;
 
   const POPUPS = {
     signup: {
@@ -5522,6 +5523,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
 export default function App() {
   const [user,setUser]         = useState(null);
   const [showLogin,setShowLogin] = useState(false);
+  const [authPopup,setAuthPopup] = useState(null); // "signup" | "pending" | "noProfile"
   const [profile,setProfile]   = useState(null);
   const [managers,setManagers] = useState([]);
   const [data,setData]         = useState({cars:[],caps:[],verifications:[],documents:[],flightDocs:[],audits:[],contractors:[],changeLog:[],risks:[],auditSchedule:[]});
@@ -5632,7 +5634,7 @@ export default function App() {
   };
 
   if(!user) {
-    if(showLogin) return <LoginScreen onLogin={(u) => { setUser(u); setShowLogin(false); }}/>;
+    if(showLogin) return <LoginScreen onLogin={(u) => { setUser(u); setShowLogin(false); setAuthPopup(null); }} authPopup={authPopup} setAuthPopup={setAuthPopup}/>;
     return (
       <LandingPage
         onShowLogin={() => setShowLogin(true)}
