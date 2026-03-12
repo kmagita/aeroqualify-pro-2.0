@@ -751,7 +751,8 @@ const LoginScreen = ({ onLogin }) => {
   const [loading,setLoading]=useState(false); const [mode,setMode]=useState("login");
   const storedMsg = sessionStorage.getItem("aq_verified_msg") || "";
   const [err,setErr]=useState(storedMsg);
-  useEffect(()=>{ if(storedMsg) sessionStorage.removeItem("aq_verified_msg"); },[]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(()=>{ sessionStorage.removeItem("aq_verified_msg"); },[]);
   const handle = async(e) => {
     e.preventDefault(); setLoading(true); setErr("");
     try {
