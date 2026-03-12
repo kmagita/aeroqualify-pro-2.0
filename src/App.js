@@ -5505,33 +5505,36 @@ export default function App() {
   const showToast = useCallback((msg,type="success")=>setToast({message:msg,type}),[]);
 
   useEffect(()=>{
-    // Handle email verification redirect — Supabase redirects back to the app
-    // with an access_token in the URL after the user clicks the verification link.
-    // In this case we must NOT sign them out — we need the session to exist briefly
-    // so the profile trigger fires in Supabase. Then we sign them out and show
-    // the "pending approval" message.
-    const url = new URL(window.location.href);
-    const isEmailVerification = url.hash.includes("access_token") || url.searchParams.get("type") === "signup";
+    // onAuthStateChange handles ALL auth events:
+    // SIGNED_IN, SIGNED_OUT, USER_UPDATED, and critically — EMAIL_CONFIRMED
+    const{data:{subscription}}=supabase.auth.onAuthStateChange(async(event, session)=>{
+      // Email verification redirect — user just clicked the confirmation link
+      if(event === "SIGNED_IN" && session?.user){
+        // Check if this is coming from an email confirmation (URL has type=signup or access_token)
+        const url = new URL(window.location.href);
+        const fromEmailConfirm = url.hash.includes("access_token") || url.searchParams.get("type") === "signup" || url.hash.includes("type=signup");
 
-    if(isEmailVerification){
-      // Give Supabase a moment to process the verification and fire the profile trigger
-      setTimeout(async()=>{
-        await supabase.auth.signOut();
-        // Clean the URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-        setShowLogin(true);
-        // Show message on login screen via sessionStorage so it survives the state reset
-        sessionStorage.setItem("aq_verified_msg", "✓ Email verified! Your account is now pending administrator approval. Sign in below once approved.");
-      }, 1500);
-      return;
-    }
+        if(fromEmailConfirm){
+          // Sign them out immediately — they must wait for admin approval
+          await supabase.auth.signOut();
+          window.history.replaceState({}, document.title, window.location.pathname);
+          sessionStorage.setItem("aq_verified_msg", "✓ Email verified! Your account is pending administrator approval. You will be notified once access is granted.");
+          setShowLogin(true);
+          return;
+        }
+      }
 
-    // Normal app load — sign out any lingering session so user always starts at landing page
+      if(!session?.user){
+        setLoading(false);
+        setProfile(null);
+        setShowLogin(false);
+        setUser(null);
+      }
+    });
+
+    // Sign out any lingering session on app load so user always starts at landing page
     supabase.auth.signOut();
 
-    const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
-      if(!session?.user){setLoading(false);setProfile(null);setShowLogin(false);setUser(null);}
-    });
     return()=>subscription.unsubscribe();
   },[]);
 
