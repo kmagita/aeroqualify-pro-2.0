@@ -5505,23 +5505,27 @@ export default function App() {
   const showToast = useCallback((msg,type="success")=>setToast({message:msg,type}),[]);
 
   useEffect(()=>{
-    // onAuthStateChange handles ALL auth events:
-    // SIGNED_IN, SIGNED_OUT, USER_UPDATED, and critically — EMAIL_CONFIRMED
     const{data:{subscription}}=supabase.auth.onAuthStateChange(async(event, session)=>{
-      // Email verification redirect — user just clicked the confirmation link
-      if(event === "SIGNED_IN" && session?.user){
-        // Check if this is coming from an email confirmation (URL has type=signup or access_token)
-        const url = new URL(window.location.href);
-        const fromEmailConfirm = url.hash.includes("access_token") || url.searchParams.get("type") === "signup" || url.hash.includes("type=signup");
 
-        if(fromEmailConfirm){
-          // Sign them out immediately — they must wait for admin approval
+      // Any SIGNED_IN event — check profile status before allowing access
+      if(event === "SIGNED_IN" && session?.user){
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("status, role")
+          .eq("id", session.user.id)
+          .single();
+
+        // No profile or not approved — sign out and show pending message
+        if(!prof || prof.status !== "approved"){
           await supabase.auth.signOut();
           window.history.replaceState({}, document.title, window.location.pathname);
           sessionStorage.setItem("aq_verified_msg", "✓ Email verified! Your account is pending administrator approval. You will be notified once access is granted.");
           setShowLogin(true);
           return;
         }
+
+        // Approved — let them through (onLogin will be called by LoginScreen for manual logins)
+        return;
       }
 
       if(!session?.user){
@@ -5532,7 +5536,7 @@ export default function App() {
       }
     });
 
-    // Sign out any lingering session on app load so user always starts at landing page
+    // Sign out any lingering session so user always starts at landing page
     supabase.auth.signOut();
 
     return()=>subscription.unsubscribe();
