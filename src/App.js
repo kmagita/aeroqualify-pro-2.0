@@ -348,19 +348,19 @@ function LandingPage({ onShowLogin, onShowSignup }) {
     { icon: "📋", title: "CAPA Workflow", desc: "Full Corrective Action Request to Verification cycle. Auto-status updates, overdue tracking, PDF exports with evidence." },
     { icon: "🔍", title: "Structured RCA", desc: "Ishikawa fishbone + 5 Whys methodology built-in. Generates formatted root cause summaries for your CAP." },
     { icon: "📅", title: "Audit Programme", desc: "Annual schedule builder with biannual slot tracking, ad-hoc audits, finding capture and notification PDFs." },
-    { icon: "⚠️", title: "Risk Register", desc: "ICAO SMS 5×5 matrix. Inherent and residual risk scoring, treatment tracking and CAR linkage." },
-    { icon: "📄", title: "Document Control", desc: "Quality manuals, certificates and regulatory docs with expiry tracking and automated approaching-expiry alerts." },
-    { icon: "📊", title: "QMS Compliance Score", desc: "Live 100-point score across 5 AS9100D pillars. Real-time dashboard with 6-month CAR trend charts." },
+    { icon: "⚠️", title: "Risk Register", desc: "Inherent and residual risk scoring with 5×5 matrix, treatment tracking and CAR linkage." },
+    { icon: "📄", title: "Document Control", desc: "Quality manuals, certificates and documents with expiry tracking and automated approaching-expiry alerts." },
+    { icon: "📊", title: "QMS Score Dashboard", desc: "Live 100-point QMS score across 5 pillars. Real-time dashboard with 6-month CAR trend charts." },
   ];
 
   const PROBLEMS = [
     { icon: "📂", title: "Scattered records", desc: "CAR raised in a WhatsApp message, evidence emailed as PDF, verifier signs a printout. Nothing is traceable." },
-    { icon: "⏰", title: "Missed deadlines", desc: "No one knows when the Air Operator Certificate expires until it's a week away. Renewal becomes an emergency." },
-    { icon: "🔄", title: "No audit trail", desc: "When KCAA auditors ask 'who approved this and when?' — the answer is a shrug and a search through email." },
+    { icon: "⏰", title: "Missed deadlines", desc: "No one knows when critical documents expire until it's a week away. Renewal becomes an emergency." },
+    { icon: "🔄", title: "No audit trail", desc: "When auditors ask 'who approved this and when?' — the answer is a shrug and a search through email." },
     { icon: "📉", title: "Reactive not proactive", desc: "Corrective actions get raised after an incident, not before. Risk management lives in one person's head." },
   ];
 
-  const COMPLIANCE = ["AS9100D", "ISO 9001:2015", "ICAO Annex 19", "KCAA ATO/AOC"];
+  const BADGES = ["Quality Management", "Aviation Safety", "Document Control", "Audit Ready"];
 
   // ── Dashboard mock card (hero visual)
   const DashboardMock = () => (
@@ -379,7 +379,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
         {/* KPI row */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
           {[
-            { label: "Compliance Score", value: "94", sub: "↑ +3 pts", color: C.green, border: C.green },
+            { label: "QMS Score", value: "94", sub: "↑ +3 pts", color: C.green, border: C.green },
             { label: "Open CARs", value: "3", sub: "2 due this week", color: "#f59e0b", border: "#f59e0b" },
           ].map(k => (
             <div key={k.label} style={{ background: C.surface, borderRadius: 10, padding: "12px 14px", borderTop: `3px solid ${k.border}` }}>
@@ -403,7 +403,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
         {[
           { id: "CAR-001", title: "Ground school attendance records", status: "Open", dot: "#ef4444" },
           { id: "CAR-002", title: "Simulator maintenance log gap", status: "Closed", dot: C.green },
-          { id: "CAR-003", title: "AOC certificate expiry approach", status: "Pending", dot: "#f59e0b" },
+          { id: "CAR-003", title: "Flight manual revision overdue", status: "Pending", dot: "#f59e0b" },
         ].map(item => (
           <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.dot, flexShrink: 0 }} />
@@ -482,7 +482,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
               <em style={{ color: C.sky, fontStyle: "italic" }}>built for aviation.</em>
             </h1>
             <p data-animate style={{ fontSize: "1.05rem", color: C.slate, maxWidth: 480, marginBottom: 36, lineHeight: 1.7 }}>
-              AeroQualify Pro replaces spreadsheets and email threads with a complete AS9100D / ICAO SMS quality management system — designed for ATOs, AOCs and AMOs across East Africa.
+              AeroQualify Pro replaces spreadsheets and email threads with a complete digital quality management system — designed for ATOs, AOCs and AMOs.
             </p>
             <div data-animate style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 40 }}>
               <button className="lp-btn-primary" style={{ ...btnPrimary, padding: "12px 28px", fontSize: "0.95rem" }} onClick={() => setDemoModal(true)}>
@@ -492,21 +492,21 @@ function LandingPage({ onShowLogin, onShowSignup }) {
                 Sign In
               </button>
             </div>
-            {/* Compliance badges */}
+            {/* Quality badges */}
             <div data-animate style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {COMPLIANCE.map(c => (
+              {BADGES.map(c => (
                 <span key={c} style={{ fontSize: "0.72rem", fontWeight: 700, color: C.slate, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", letterSpacing: 0.5 }}>{c}</span>
               ))}
             </div>
           </div>
           {/* Right — Dashboard mock */}
           <div className="lp-hero-visual" style={{ flexShrink: 0, position: "relative", animation: "lpFloat 6s ease-in-out infinite" }}>
-            {/* Float badge — compliance */}
+            {/* Float badge */}
             <div style={{ position: "absolute", top: -18, left: -28, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", boxShadow: shadow.md, display: "flex", alignItems: "center", gap: 10, zIndex: 10 }}>
               <div style={{ width: 32, height: 32, background: "#dcfce7", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✅</div>
               <div>
-                <div style={{ fontSize: "0.68rem", color: C.slateLight, fontWeight: 600 }}>AS9100D</div>
-                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.green }}>Compliant</div>
+                <div style={{ fontSize: "0.68rem", color: C.slateLight, fontWeight: 600 }}>Quality</div>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.green }}>Managed</div>
               </div>
             </div>
             {/* Float badge — CAR closed */}
@@ -526,10 +526,10 @@ function LandingPage({ onShowLogin, onShowSignup }) {
       <section style={{ background: C.navy, padding: "48px 5%" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-around", gap: 24, flexWrap: "wrap" }} className="lp-stats-row">
           {[
-            { value: "100pt", label: "QMS Compliance Score" },
-            { value: "AS9100D", label: "Standards Supported" },
-            { value: "KCAA", label: "ATO / AOC Ready" },
-            { value: "Real-time", label: "Audit Trail Sync" },
+            { value: "100pt", label: "QMS Score" },
+            { value: "Digital", label: "Paperless QMS" },
+            { value: "Fast", label: "Easy Onboarding" },
+            { value: "Real-time", label: "Team Sync" },
           ].map(s => (
             <div key={s.label} style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: "2.2rem", color: C.sky, fontWeight: 400, lineHeight: 1 }}>{s.value}</div>
@@ -548,7 +548,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
               Aviation QMS is still<br />stuck in spreadsheets.
             </h2>
             <p style={{ fontSize: "1rem", color: "rgba(255,255,255,0.6)", maxWidth: 520, margin: "0 auto" }}>
-              Most ATOs and AOCs manage compliance with Excel, shared drives and email threads. The risk is real.
+              Most ATOs, AOCs and AMOs manage quality with Excel, shared drives and email threads. The risk is real.
             </p>
           </div>
           <div className="lp-problems-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
@@ -573,7 +573,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
               <em style={{ color: C.sky }}>Nothing it doesn't.</em>
             </h2>
             <p style={{ fontSize: "1rem", color: C.slate, maxWidth: 500, margin: "0 auto" }}>
-              Built specifically for East African aviation — KCAA, ICAO and AS9100D in one system.
+              Built for aviation organisations — ATOs, AOCs and AMOs — everything in one system.
             </p>
           </div>
           <div className="lp-features-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
@@ -628,7 +628,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
             Ready to modernise your QMS?
           </h2>
           <p style={{ fontSize: "1rem", color: "rgba(255,255,255,0.6)", marginBottom: 36 }}>
-            Join East African aviation organisations using AeroQualify Pro to stay ahead of KCAA and achieve AS9100D compliance.
+            Join aviation organisations using AeroQualify Pro to manage quality the right way.
           </p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
             <button className="lp-btn-primary" style={{ ...btnPrimary, padding: "13px 32px", fontSize: "1rem" }} onClick={() => setDemoModal(true)}>
@@ -648,7 +648,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
           <span style={{ fontWeight: 600, color: "#fff", fontSize: "0.9rem" }}>AeroQualify Pro</span>
         </div>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {COMPLIANCE.map(c => (
+          {BADGES.map(c => (
             <span key={c} style={{ fontSize: "0.72rem", fontWeight: 600, color: "rgba(255,255,255,0.4)", letterSpacing: 0.5 }}>{c}</span>
           ))}
         </div>
@@ -674,7 +674,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
               <>
                 <div style={{ marginBottom: 24 }}>
                   <h3 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "1.7rem", color: C.navy, marginBottom: 8 }}>Request Early Access</h3>
-                  <p style={{ fontSize: "0.9rem", color: C.slate }}>Tell us about your organisation and we'll get you set up.</p>
+                  <p style={{ fontSize: "0.9rem", color: C.slate }}>Tell us about your organisation and we'll be in touch.</p>
                 </div>
                 <form onSubmit={handleDemoSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div>
@@ -682,8 +682,8 @@ function LandingPage({ onShowLogin, onShowSignup }) {
                     <input className="lp-input" required placeholder="e.g. John Kamau" value={demoForm.name} onChange={e => setDemoForm(p => ({ ...p, name: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="lp-label">Organisation / Company</label>
-                    <input className="lp-input" required placeholder="e.g. East African Air Charters" value={demoForm.company} onChange={e => setDemoForm(p => ({ ...p, company: e.target.value }))} />
+                    <label className="lp-label">Organisation Name</label>
+                    <input className="lp-input" required placeholder="Your organisation name" value={demoForm.company} onChange={e => setDemoForm(p => ({ ...p, company: e.target.value }))} />
                   </div>
                   <div>
                     <label className="lp-label">Work Email</label>
@@ -698,7 +698,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
                   </div>
                   <div>
                     <label className="lp-label">Anything else? (optional)</label>
-                    <textarea className="lp-input" rows={3} placeholder="Tell us about your organisation size, current QMS setup, etc." value={demoForm.message} onChange={e => setDemoForm(p => ({ ...p, message: e.target.value }))} style={{ resize: "vertical" }} />
+                    <textarea className="lp-input" rows={3} placeholder="Tell us a bit about your organisation and what you're looking for." value={demoForm.message} onChange={e => setDemoForm(p => ({ ...p, message: e.target.value }))} style={{ resize: "vertical" }} />
                   </div>
                   <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 }}>
                     <button type="button" className="lp-btn-ghost" style={btnGhost} onClick={() => setDemoModal(false)}>Cancel</button>
