@@ -216,7 +216,7 @@ const AlertBanner = ({ items }) => {
 //   onShowLogin  — called when user clicks "Sign In"
 //   onShowSignup — called when user clicks "Get Started" / "Request Access"
 //
-export default function LandingPage({ onShowLogin, onShowSignup }) {
+function LandingPage({ onShowLogin, onShowSignup }) {
   const [scrolled,    setScrolled]    = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const [demoModal,   setDemoModal]   = useState(false);
