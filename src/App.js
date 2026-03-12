@@ -5118,18 +5118,18 @@ export default function App() {
   const [data,setData]         = useState({cars:[],caps:[],verifications:[],documents:[],flightDocs:[],audits:[],contractors:[],changeLog:[],risks:[],auditSchedule:[]});
   const [activeTab,setTab]     = useState("dashboard");
   const [toast,setToast]       = useState(null);
-  const [loading,setLoading]   = useState(true);
+  const [loading,setLoading]   = useState(false);
   const subs                   = useRef([]);
   const dataLoaded              = useRef(false);
 
   const showToast = useCallback((msg,type="success")=>setToast({message:msg,type}),[]);
 
   useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>{
-      if(session?.user)setUser(session.user); else setLoading(false);
-    });
+    // Always start on landing page — no auto session restore.
+    // Sign out any existing session so user must log in manually.
+    supabase.auth.signOut();
     const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
-      setUser(session?.user||null); if(!session?.user){setLoading(false);setProfile(null);setShowLogin(false);}
+      if(!session?.user){setLoading(false);setProfile(null);setShowLogin(false);setUser(null);}
     });
     return()=>subscription.unsubscribe();
   },[]);
