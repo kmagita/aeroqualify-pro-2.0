@@ -5543,18 +5543,31 @@ export default function App() {
   const showToast = useCallback((msg,type="success")=>setToast({message:msg,type}),[]);
 
   useEffect(()=>{
-    // Always start fresh — no auto session restore
-    supabase.auth.signOut();
+    // On a fresh tab open (not a refresh), sign out any lingering session
+    // so the user always starts at the landing page.
+    // On a page refresh, preserve the session so they stay logged in.
+    const isRefresh = sessionStorage.getItem("aq_loaded");
+    if(!isRefresh){
+      supabase.auth.signOut();
+    }
+    sessionStorage.setItem("aq_loaded", "1");
+
     const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
       if(!session?.user){
         setLoading(false);
         setProfile(null);
         setUser(null);
-        // Do NOT reset showLogin — if we're already on the login screen
-        // (e.g. after deliberately signing out a pending user), keep it there
         setShowLogin(prev => prev ? prev : false);
       }
     });
+
+    // If there is an existing session on refresh, restore it
+    if(isRefresh){
+      supabase.auth.getSession().then(({data:{session}})=>{
+        if(session?.user) setUser(session.user);
+      });
+    }
+
     return()=>subscription.unsubscribe();
   },[]);
 
