@@ -748,11 +748,36 @@ const PendingApprovalScreen = ({ user, onSignOut }) => (
 // ─── Login ────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }) => {
   const [email,setEmail]=useState(""); const [pw,setPw]=useState("");
-  const [loading,setLoading]=useState(false); const [mode,setMode]=useState("login");
-  const storedMsg = sessionStorage.getItem("aq_verified_msg") || "";
-  const [err,setErr]=useState(storedMsg);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(()=>{ sessionStorage.removeItem("aq_verified_msg"); },[]);
+  const [loading,setLoading]=useState(false); const [err,setErr]=useState("");
+  const [mode,setMode]=useState("login");
+  const [popup,setPopup]=useState(null); // "signup" | "pending" | "noProfile"
+
+  const POPUPS = {
+    signup: {
+      icon:"📧",
+      title:"Check your email",
+      msg:"A verification link has been sent to your email address. Click the link to verify your account, then return here to sign in.",
+      sub:"Once verified, your account will be reviewed by an administrator before you can access AeroQualify.",
+      color: "#01579b",
+      bg: "#e3f2fd",
+    },
+    pending: {
+      icon:"⏳",
+      title:"Account pending approval",
+      msg:"Your account has been successfully created and your email verified.",
+      sub:"Please contact your administrator to request access to AeroQualify Pro.",
+      color: "#e65100",
+      bg: "#fff3e0",
+    },
+    noProfile: {
+      icon:"⚠️",
+      title:"Account setup incomplete",
+      msg:"Your account was created but the profile setup did not complete.",
+      sub:"Please contact your administrator for assistance.",
+      color: "#c62828",
+      bg: "#ffebee",
+    },
+  };
   const handle = async(e) => {
     e.preventDefault(); setLoading(true); setErr("");
     try {
@@ -760,39 +785,34 @@ const LoginScreen = ({ onLogin }) => {
         const{error}=await supabase.auth.resetPasswordForEmail(email);
         if(error)throw error; setErr("✓ Reset link sent — check your email");
       } else if(mode==="signup"){
-        const{data:signUpData,error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
+        const{error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
         if(error)throw error;
-        // Sign out immediately — do NOT log the new user in automatically
         await supabase.auth.signOut();
-        setErr("✓ Account created — check your email to confirm, then wait for administrator approval before you can sign in.");
+        setPopup("signup");
         setMode("login");
-        return; // stop here — never call onLogin after signup
+        return;
       } else {
         const{data,error}=await supabase.auth.signInWithPassword({email,password:pw});
         if(error)throw error;
 
-        // ── Security gate: check profile status BEFORE granting access ──
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("status, role, email_confirmed_at")
-          .eq("id", data.user.id)
-          .single();
+        // Security gate — check profile status before granting access
+        const { data: prof, error: profErr } = await supabase
+          .from("profiles").select("status, role").eq("id", data.user.id).single();
 
-        // If profile doesn't exist yet (edge case), sign out and block
-        if(profileError || !profileData) {
+        if(profErr || !prof){
           await supabase.auth.signOut();
-          throw new Error("Account setup incomplete. Please contact your administrator.");
-        }
-
-        // Block if not approved — sign out immediately so no session lingers
-        if(profileData.status !== "approved") {
-          await supabase.auth.signOut();
-          setErr("⏳ Your account is pending administrator approval. You will be notified once access is granted.");
+          setPopup("noProfile");
           setLoading(false);
           return;
         }
 
-        // All checks passed — grant access
+        if(prof.status !== "approved"){
+          await supabase.auth.signOut();
+          setPopup("pending");
+          setLoading(false);
+          return;
+        }
+
         onLogin(data.user);
       }
     } catch(ex){setErr(ex.message);} setLoading(false);
@@ -802,6 +822,19 @@ const LoginScreen = ({ onLogin }) => {
       <GlobalStyle />
       {/* Sky horizon decoration */}
       <div style={{ position:"fixed", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})` }} />
+
+      {/* ── Popup overlay ── */}
+      {popup&&POPUPS[popup]&&(
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+          <div style={{ background:"#fff", borderRadius:16, padding:36, maxWidth:420, width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.2)", animation:"fadeIn 0.3s ease" }}>
+            <div style={{ fontSize:48, marginBottom:16 }}>{POPUPS[popup].icon}</div>
+            <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:20, color:POPUPS[popup].color, marginBottom:12 }}>{POPUPS[popup].title}</div>
+            <div style={{ fontSize:14, color:T.text, lineHeight:1.6, marginBottom:8 }}>{POPUPS[popup].msg}</div>
+            <div style={{ fontSize:12, color:T.muted, lineHeight:1.6, marginBottom:24, background:POPUPS[popup].bg, borderRadius:8, padding:"10px 14px" }}>{POPUPS[popup].sub}</div>
+            <Btn onClick={()=>setPopup(null)} style={{ width:"100%" }}>OK, got it</Btn>
+          </div>
+        </div>
+      )}
       <div style={{ width:400, animation:"fadeIn 0.5s ease" }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ width:64, height:64, borderRadius:16, background:`linear-gradient(135deg,${T.primary},${T.sky})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px", boxShadow:"0 4px 20px rgba(1,87,155,0.25)" }}>✈</div>
@@ -5505,40 +5538,11 @@ export default function App() {
   const showToast = useCallback((msg,type="success")=>setToast({message:msg,type}),[]);
 
   useEffect(()=>{
-    const{data:{subscription}}=supabase.auth.onAuthStateChange(async(event, session)=>{
-
-      // Any SIGNED_IN event — check profile status before allowing access
-      if(event === "SIGNED_IN" && session?.user){
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("status, role")
-          .eq("id", session.user.id)
-          .single();
-
-        // No profile or not approved — sign out and show pending message
-        if(!prof || prof.status !== "approved"){
-          await supabase.auth.signOut();
-          window.history.replaceState({}, document.title, window.location.pathname);
-          sessionStorage.setItem("aq_verified_msg", "✓ Email verified! Your account is pending administrator approval. You will be notified once access is granted.");
-          setShowLogin(true);
-          return;
-        }
-
-        // Approved — let them through (onLogin will be called by LoginScreen for manual logins)
-        return;
-      }
-
-      if(!session?.user){
-        setLoading(false);
-        setProfile(null);
-        setShowLogin(false);
-        setUser(null);
-      }
-    });
-
-    // Sign out any lingering session so user always starts at landing page
+    // Always start fresh — no auto session restore
     supabase.auth.signOut();
-
+    const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
+      if(!session?.user){setLoading(false);setProfile(null);setShowLogin(false);setUser(null);}
+    });
     return()=>subscription.unsubscribe();
   },[]);
 
