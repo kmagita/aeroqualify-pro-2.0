@@ -756,11 +756,40 @@ const LoginScreen = ({ onLogin }) => {
         const{error}=await supabase.auth.resetPasswordForEmail(email);
         if(error)throw error; setErr("✓ Reset link sent — check your email");
       } else if(mode==="signup"){
-        const{error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
-        if(error)throw error; setErr("✓ Account created — check your email to confirm, then wait for administrator approval before you can sign in."); setMode("login");
+        const{data:signUpData,error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
+        if(error)throw error;
+        // Sign out immediately — do NOT log the new user in automatically
+        await supabase.auth.signOut();
+        setErr("✓ Account created — check your email to confirm, then wait for administrator approval before you can sign in.");
+        setMode("login");
+        return; // stop here — never call onLogin after signup
       } else {
         const{data,error}=await supabase.auth.signInWithPassword({email,password:pw});
-        if(error)throw error; onLogin(data.user);
+        if(error)throw error;
+
+        // ── Security gate: check profile status BEFORE granting access ──
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("status, role, email_confirmed_at")
+          .eq("id", data.user.id)
+          .single();
+
+        // If profile doesn't exist yet (edge case), sign out and block
+        if(profileError || !profileData) {
+          await supabase.auth.signOut();
+          throw new Error("Account setup incomplete. Please contact your administrator.");
+        }
+
+        // Block if not approved — sign out immediately so no session lingers
+        if(profileData.status !== "approved") {
+          await supabase.auth.signOut();
+          setErr("⏳ Your account is pending administrator approval. You will be notified once access is granted.");
+          setLoading(false);
+          return;
+        }
+
+        // All checks passed — grant access
+        onLogin(data.user);
       }
     } catch(ex){setErr(ex.message);} setLoading(false);
   };
