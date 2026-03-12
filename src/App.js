@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
 import { supabase, TABLES, logChange, sendNotification, SUPABASE_URL, SUPABASE_ANON } from "./supabase";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import LandingPage from "./LandingPage";
 
 // ─── Global Styles ──────────────────────────────────────────
 const GlobalStyle = () => (
@@ -220,7 +221,7 @@ const LoginScreen = ({ onLogin }) => {
         if(error)throw error; setErr("✓ Reset link sent — check your email");
       } else if(mode==="signup"){
         const{error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
-        if(error)throw error; setErr("✓ Account created -- check your email to confirm");
+        if(error)throw error; setErr("✓ Account created — please check your email to confirm before signing in."); setMode("login");
       } else {
         const{data,error}=await supabase.auth.signInWithPassword({email,password:pw});
         if(error)throw error; onLogin(data.user);
@@ -4604,6 +4605,7 @@ const TABS = [
 // ─── Main App ─────────────────────────────────────────────────
 export default function App() {
   const [user,setUser]         = useState(null);
+  const [showLogin,setShowLogin] = useState(false);
   const [profile,setProfile]   = useState(null);
   const [managers,setManagers] = useState([]);
   const [data,setData]         = useState({cars:[],caps:[],verifications:[],documents:[],flightDocs:[],audits:[],contractors:[],changeLog:[],risks:[],auditSchedule:[]});
@@ -4620,7 +4622,7 @@ export default function App() {
       if(session?.user)setUser(session.user); else setLoading(false);
     });
     const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
-      setUser(session?.user||null); if(!session?.user){setLoading(false);setProfile(null);}
+      setUser(session?.user||null); if(!session?.user){setLoading(false);setProfile(null);setShowLogin(false);}
     });
     return()=>subscription.unsubscribe();
   },[]);
@@ -4697,7 +4699,15 @@ export default function App() {
     audits:    data.audits.filter(a=>a.status==="Scheduled"&&isOverdue(a.date)).length,
   };
 
-  if(!user) return <LoginScreen onLogin={setUser}/>;
+  if(!user) {
+    if(showLogin) return <LoginScreen onLogin={(u) => { setUser(u); setShowLogin(false); }}/>;
+    return (
+      <LandingPage
+        onShowLogin={() => setShowLogin(true)}
+        onShowSignup={() => setShowLogin(true)}
+      />
+    );
+  }
   if(loading) return (
     <div style={{ height:"100vh", background:"#eef2f7", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:14 }}>
       <GlobalStyle/>
