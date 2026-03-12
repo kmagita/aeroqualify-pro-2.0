@@ -5223,7 +5223,234 @@ const TABS = [
   {id:"managers",     label:"Managers",        icon:"👥", group:"settings"},
   {id:"changelog",    label:"Change Log",      icon:"📋", group:"settings"},
   {id:"about",        label:"About",           icon:"(i)", group:"settings"},
+  {id:"superadmin",   label:"Super Admin",     icon:"⚡",  group:"superadmin"},
 ];
+
+
+// ─── Super Admin Panel ────────────────────────────────────────
+const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
+  const [tab, setTab]           = useState("orgs");
+  const [newOrg, setNewOrg]     = useState({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
+  const [creating, setCreating] = useState(false);
+  const [editOrg, setEditOrg]   = useState(null);
+
+  const slugify = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+
+  const createOrg = async () => {
+    if(!newOrg.name.trim()) return;
+    setCreating(true);
+    const slug = newOrg.slug || slugify(newOrg.name);
+    const { error } = await supabase.from("organisations").insert({ ...newOrg, slug });
+    if(error){ showToast("Error: "+error.message,"error"); }
+    else { showToast("Organisation created","success"); setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" }); onRefresh(); }
+    setCreating(false);
+  };
+
+  const updateOrgStatus = async (orgId, status) => {
+    const { error } = await supabase.from("organisations").update({ status }).eq("id", orgId);
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast(status==="active"?"Organisation activated":"Organisation suspended","success");
+    onRefresh();
+  };
+
+  const assignUserToOrg = async (userId, orgId, role="viewer") => {
+    const { error } = await supabase.from("profiles").update({ org_id: orgId, status:"approved", role }).eq("id", userId);
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast("User assigned to organisation","success");
+    onRefresh();
+  };
+
+  const pendingUsers = orgUsers.filter(u => !u.org_id || u.status === "pending");
+  const approvedUsers = orgUsers.filter(u => u.status === "approved");
+
+  return (
+    <div>
+      <div style={{ marginBottom:24 }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:T.red, marginBottom:4 }}>⚡ Super Admin</div>
+        <div style={{ fontSize:13, color:T.muted }}>Manage all organisations and users across the platform</div>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display:"flex", gap:14, marginBottom:24, flexWrap:"wrap" }}>
+        {[
+          { label:"Total Organisations", value:orgs.length, color:T.primary, icon:"🏢" },
+          { label:"Active Orgs", value:orgs.filter(o=>o.status==="active").length, color:T.green, icon:"✅" },
+          { label:"Total Users", value:orgUsers.length, color:T.teal, icon:"👤" },
+          { label:"Pending Approval", value:pendingUsers.length, color:T.red, icon:"⏳" },
+        ].map(s=>(
+          <div key={s.label} className="card" style={{ flex:1, minWidth:140, padding:"16px 20px", borderTop:`3px solid ${s.color}` }}>
+            <div style={{ fontSize:28, fontFamily:"'Oxanium',sans-serif", fontWeight:800, color:s.color }}>{s.value}</div>
+            <div style={{ fontSize:12, color:T.text, fontWeight:600, marginTop:4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+        {[["orgs","🏢 Organisations"],["users","👤 Users"],["new","➕ New Organisation"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)}
+            style={{ padding:"8px 18px", borderRadius:7, border:`1px solid ${tab===id?T.primary:T.border}`, background:tab===id?T.primary:"#fff", color:tab===id?"#fff":T.muted, fontWeight:600, fontSize:13, cursor:"pointer" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Organisations list */}
+      {tab==="orgs"&&(
+        <div className="card" style={{ padding:0, overflow:"hidden" }}>
+          {orgs.length===0?(
+            <div style={{ padding:32, textAlign:"center", color:T.muted }}>No organisations yet. Create one to get started.</div>
+          ):(
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:"#f8fafc" }}>
+                  {["Organisation","Slug","Country","Contact","Status","Created","Actions"].map(h=>(
+                    <th key={h} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}`, textAlign:"left", fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orgs.map(o=>{
+                  const userCount = orgUsers.filter(u=>u.org_id===o.id).length;
+                  return (
+                    <tr key={o.id} className="row-hover">
+                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
+                        <div style={{ fontWeight:700, color:T.text, fontSize:13 }}>{o.name}</div>
+                        <div style={{ fontSize:11, color:T.muted }}>{userCount} user{userCount!==1?"s":""}</div>
+                      </td>
+                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}`, fontFamily:"monospace", fontSize:12, color:T.muted }}>{o.slug}</td>
+                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}`, fontSize:13, color:T.text }}>{o.country||"—"}</td>
+                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:12, color:T.text }}>{o.contact_name||"—"}</div>
+                        <div style={{ fontSize:11, color:T.muted }}>{o.contact_email||""}</div>
+                      </td>
+                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
+                        <span style={{ background:o.status==="active"?T.greenLt:T.redLt, color:o.status==="active"?T.green:T.red, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:600 }}>
+                          {o.status==="active"?"Active":"Suspended"}
+                        </span>
+                      </td>
+                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}`, fontSize:12, color:T.muted }}>{fmt(o.created_at)}</td>
+                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
+                        {o.slug!=="default"&&(
+                          o.status==="active"
+                            ? <Btn size="sm" variant="danger" onClick={()=>updateOrgStatus(o.id,"suspended")} style={{ fontSize:11 }}>Suspend</Btn>
+                            : <Btn size="sm" variant="success" onClick={()=>updateOrgStatus(o.id,"active")} style={{ fontSize:11 }}>Activate</Btn>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* ── Users list */}
+      {tab==="users"&&(
+        <div>
+          {pendingUsers.length>0&&(
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontWeight:700, fontSize:15, color:T.red, marginBottom:10 }}>⏳ Pending Approval ({pendingUsers.length})</div>
+              <div className="card" style={{ padding:0, overflow:"hidden" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead>
+                    <tr style={{ background:"#fff8f8" }}>
+                      {["Email","Name","Joined","Assign to Organisation + Role"].map(h=>(
+                        <th key={h} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}`, textAlign:"left", fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingUsers.map(u=>(
+                      <tr key={u.id} className="row-hover">
+                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.email}</td>
+                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.full_name||"—"}</td>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:T.muted, borderBottom:`1px solid ${T.border}` }}>{fmt(u.created_at)}</td>
+                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
+                          <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+                            <select style={{ padding:"5px 8px", border:`1px solid ${T.border}`, borderRadius:6, fontSize:12 }}
+                              onChange={e=>{
+                                const [orgId,role] = e.target.value.split("||");
+                                if(orgId&&role) assignUserToOrg(u.id, orgId, role);
+                              }}
+                              defaultValue="">
+                              <option value="">— Select org + role —</option>
+                              {orgs.filter(o=>o.status==="active").map(o=>(
+                                ["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
+                                  <option key={o.id+r} value={`${o.id}||${r}`}>{o.name} — {r.replace("_"," ")}</option>
+                                ))
+                              ))}
+                            </select>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          <div>
+            <div style={{ fontWeight:700, fontSize:15, color:T.text, marginBottom:10 }}>All Users ({orgUsers.length})</div>
+            <div className="card" style={{ padding:0, overflow:"hidden" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead>
+                  <tr style={{ background:"#f8fafc" }}>
+                    {["Email","Name","Organisation","Role","Status","Actions"].map(h=>(
+                      <th key={h} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}`, textAlign:"left", fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {orgUsers.map(u=>{
+                    const userOrg = orgs.find(o=>o.id===u.org_id);
+                    return (
+                      <tr key={u.id} className="row-hover">
+                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.email}</td>
+                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.full_name||"—"}</td>
+                        <td style={{ padding:"10px 14px", fontSize:12, color:T.muted, borderBottom:`1px solid ${T.border}` }}>{userOrg?.name||"— Unassigned —"}</td>
+                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}><Badge label={u.role||"viewer"}/></td>
+                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
+                          <span style={{ background:u.status==="approved"?T.greenLt:T.yellowLt, color:u.status==="approved"?T.green:T.yellow, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:600 }}>
+                            {u.status==="approved"?"Approved":"Pending"}
+                          </span>
+                        </td>
+                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
+                          {u.status==="approved"&&!u.is_super_admin&&(
+                            <Btn size="sm" variant="danger" onClick={async()=>{
+                              await supabase.from("profiles").update({status:"pending"}).eq("id",u.id);
+                              showToast("Access revoked","success"); onRefresh();
+                            }} style={{ fontSize:11 }}>Revoke</Btn>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create new organisation */}
+      {tab==="new"&&(
+        <div className="card" style={{ padding:28, maxWidth:560 }}>
+          <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:20 }}>Create New Organisation</div>
+          <Input label="Organisation Name *" value={newOrg.name} onChange={e=>setNewOrg(p=>({...p,name:e.target.value,slug:slugify(e.target.value)}))} placeholder="e.g. Precision Air Services" />
+          <Input label="Slug (auto-generated, must be unique)" value={newOrg.slug} onChange={e=>setNewOrg(p=>({...p,slug:e.target.value}))} placeholder="e.g. precision-air" />
+          <Input label="Country" value={newOrg.country} onChange={e=>setNewOrg(p=>({...p,country:e.target.value}))} placeholder="Kenya" />
+          <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name" />
+          <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com" />
+          <Btn onClick={createOrg} style={{ opacity:creating?0.7:1 }} disabled={!newOrg.name.trim()||creating}>
+            {creating?"Creating…":"Create Organisation"}
+          </Btn>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Main App ─────────────────────────────────────────────────
 export default function App() {
@@ -5235,6 +5462,10 @@ export default function App() {
   const [activeTab,setTab]     = useState("dashboard");
   const [toast,setToast]       = useState(null);
   const [loading,setLoading]   = useState(false);
+  const [org,setOrg]           = useState(null);
+  const [isSuperAdmin,setIsSuperAdmin] = useState(false);
+  const [orgs,setOrgs]         = useState([]);   // super admin: all orgs
+  const [orgUsers,setOrgUsers] = useState([]);   // super admin: all users
   const subs                   = useRef([]);
   const dataLoaded              = useRef(false);
 
@@ -5290,8 +5521,21 @@ export default function App() {
       });
       setManagers(mgrs.data||[]);
       setProfile(prof.data);
+      setIsSuperAdmin(prof.data?.is_super_admin||false);
       setLoading(false);
     });
+    // Load org details
+    if(prof.data?.org_id){
+      supabase.from("organisations").select("*").eq("id",prof.data.org_id).single()
+        .then(({data})=>{ if(data) setOrg(data); });
+    }
+    // Super admin: load all orgs and all users
+    if(prof.data?.is_super_admin){
+      supabase.from("organisations").select("*").order("name")
+        .then(({data})=>{ if(data) setOrgs(data); });
+      supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false})
+        .then(({data})=>{ if(data) setOrgUsers(data); });
+    }
   },[user]);
 
   useEffect(()=>{ loadAll(); },[loadAll]);
@@ -5305,9 +5549,9 @@ export default function App() {
     return()=>{subs.current.forEach(s=>s.unsubscribe());};
   },[user,loading,loadAll]);
 
-  const isAdmin  = profile?.role==="admin";
-  const isQM     = ["admin","quality_manager"].includes(profile?.role);
-  const canEdit  = ["admin","quality_manager","quality_auditor","manager"].includes(profile?.role);
+  const isAdmin  = profile?.role==="admin" || isSuperAdmin;
+  const isQM     = ["admin","quality_manager"].includes(profile?.role) || isSuperAdmin;
+  const canEdit  = ["admin","quality_manager","quality_auditor","manager"].includes(profile?.role) || isSuperAdmin;
 
   const alertItems = [
     ...data.cars.filter(c=>!["Closed","Completed"].includes(c.status)&&(isOverdue(c.due_date)||isApproaching(c.due_date))).map(c=>({id:c.id,due:c.due_date})),
@@ -5368,6 +5612,16 @@ export default function App() {
         {/* Nav */}
         <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto" }}>
           <div style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Main</div>
+          {isSuperAdmin&&(
+            <div>
+              <div style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Super Admin</div>
+              <button className={`nav-item${activeTab==="superadmin"?" active":""}`} onClick={()=>setTab("superadmin")}
+                style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:activeTab==="superadmin"?T.red:T.muted,fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:4,transition:"all 0.15s" }}>
+                <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
+                <span>Organisations</span>
+              </button>
+            </div>
+          )}
           {TABS.filter(t=>t.group==="main").map(t=>{
             const cnt=counts[t.id]; const active=activeTab===t.id;
             return (
@@ -5400,7 +5654,11 @@ export default function App() {
             </div>
             <div style={{ flex:1,overflow:"hidden" }}>
               <div style={{ fontSize:12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{profile?.full_name||user.email}</div>
-              <div style={{ marginTop:2 }}><Badge label={profile?.role||"viewer"}/></div>
+              <div style={{ marginTop:2, display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
+                <Badge label={profile?.role||"viewer"}/>
+                {isSuperAdmin&&<span style={{ background:T.redLt, color:T.red, borderRadius:20, padding:"1px 7px", fontSize:10, fontWeight:700 }}>Super Admin</span>}
+              </div>
+              {org&&<div style={{ fontSize:10, color:T.muted, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={org.name}>🏢 {org.name}</div>}
             </div>
           </div>
           <Btn variant="ghost" size="sm" onClick={()=>supabase.auth.signOut()} style={{ width:"100%",textAlign:"center" }}>Sign Out</Btn>
@@ -5444,6 +5702,16 @@ export default function App() {
           {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin}/>}
           {activeTab==="changelog" && <ChangeLogView logs={data.changeLog}/>}
           {activeTab==="about"     && <AboutView />}
+          {activeTab==="superadmin"&&isSuperAdmin&&(
+            <SuperAdminPanel
+              orgs={orgs} orgUsers={orgUsers}
+              onRefresh={()=>{
+                supabase.from("organisations").select("*").order("name").then(({data})=>{ if(data) setOrgs(data); });
+                supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false}).then(({data})=>{ if(data) setOrgUsers(data); });
+              }}
+              showToast={showToast}
+            />
+          )}
         </div>
       </div>
 
