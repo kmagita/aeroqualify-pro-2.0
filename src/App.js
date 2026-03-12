@@ -786,8 +786,10 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         const{error}=await supabase.auth.resetPasswordForEmail(email);
         if(error)throw error; setErr("✓ Reset link sent — check your email");
       } else if(mode==="signup"){
-        const{error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
-        if(error)throw error;
+        const{data:signUpData,error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
+        // Show exact error or response for debugging
+        if(error){ setErr("Signup error: "+error.message); setLoading(false); return; }
+        if(!signUpData?.user){ setErr("Signup failed: no user returned from Supabase. Please try again."); setLoading(false); return; }
         await supabase.auth.signOut();
         setMode("login");
         setLoading(false);
