@@ -229,7 +229,7 @@ export default function LandingPage({ onShowLogin, onShowSignup }) {
         </div>
         {/* Links */}
         <ul className="lp-nav-links-wrap" style={{ display: "flex", alignItems: "center", gap: 32, listStyle: "none", margin: 0, padding: 0 }}>
-          {[["Features","features"],["Why Us","problems"],["Pricing","pricing"]].map(([l,id]) => (
+          {[["Features","features"],["Why Us","problems"]].map(([l,id]) => (
             <li key={id}><button className="lp-nav-link" onClick={() => scrollTo(id)}>{l}</button></li>
           ))}
         </ul>
@@ -250,7 +250,7 @@ export default function LandingPage({ onShowLogin, onShowSignup }) {
             <span style={{ fontWeight: 700, color: C.navy }}>AeroQualify Pro</span>
             <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: C.slate }}>✕</button>
           </div>
-          {[["Features","features"],["Why Us","problems"],["Pricing","pricing"]].map(([l,id]) => (
+          {[["Features","features"],["Why Us","problems"]].map(([l,id]) => (
             <button key={id} className="lp-nav-link" onClick={() => scrollTo(id)} style={{ fontSize: "1rem", textAlign: "left" }}>{l}</button>
           ))}
           <button className="lp-btn-ghost" style={{ ...btnGhost, padding: "12px 0" }} onClick={() => { setMobileOpen(false); onShowLogin(); }}>Sign In</button>
@@ -407,61 +407,6 @@ export default function LandingPage({ onShowLogin, onShowSignup }) {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ── PRICING ──────────────────────────────────── */}
-      <section id="pricing" style={{ background: C.surface, padding: "96px 5%" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: C.sky, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 12 }}>Pricing</div>
-            <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "clamp(1.8rem,4vw,2.6rem)", color: C.navy, marginBottom: 14 }}>Simple, transparent pricing.</h2>
-            <p style={{ fontSize: "1rem", color: C.slate }}>Priced for East African aviation organisations. No setup fees. No long-term contracts.</p>
-          </div>
-          <div className="lp-pricing-grid" style={{ display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap" }}>
-            {[
-              {
-                name: "Starter", price: "$150", period: "/month",
-                desc: "Perfect for a single ATO or AOC getting started with digital QMS.",
-                features: ["Up to 5 users", "Full CAPA workflow", "Audit programme", "Document control", "Risk register", "PDF exports", "Email support"],
-                featured: false, cta: "Get Started",
-              },
-              {
-                name: "Professional", price: "$250", period: "/month",
-                desc: "For growing organisations with multiple auditors and complex compliance needs.",
-                features: ["Unlimited users", "Everything in Starter", "Multi-site support", "Advanced analytics", "Custom branding", "Priority support", "Onboarding training"],
-                featured: true, cta: "Request Access",
-              },
-            ].map(p => (
-              <div key={p.name} className={`lp-pricing-card${p.featured ? " featured" : ""}`} style={{ flex: 1, maxWidth: 380, minWidth: 280 }}>
-                {p.featured && (
-                  <div style={{ background: `linear-gradient(90deg,${C.sky},${C.skyDk})`, color: "#fff", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, padding: "5px 14px", borderRadius: 20, display: "inline-block", marginBottom: 16 }}>Most Popular</div>
-                )}
-                <div style={{ fontSize: "1.1rem", fontWeight: 700, color: C.navy, marginBottom: 8 }}>{p.name}</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 12 }}>
-                  <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: "2.8rem", color: C.navy, lineHeight: 1 }}>{p.price}</span>
-                  <span style={{ color: C.slateLight, fontSize: "0.9rem" }}>{p.period}</span>
-                </div>
-                <p style={{ fontSize: "0.87rem", color: C.slate, marginBottom: 24, lineHeight: 1.6 }}>{p.desc}</p>
-                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, marginBottom: 24 }}>
-                  {p.features.map(f => (
-                    <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <span style={{ color: C.green, fontWeight: 700, fontSize: "0.85rem" }}>✓</span>
-                      <span style={{ fontSize: "0.87rem", color: C.slate }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  className={p.featured ? "lp-btn-primary" : "lp-btn-outline"}
-                  style={{ ...(p.featured ? btnPrimary : btnOutline), width: "100%", textAlign: "center", padding: "12px 20px" }}
-                  onClick={() => setDemoModal(true)}
-                >{p.cta}</button>
-              </div>
-            ))}
-          </div>
-          <p style={{ textAlign: "center", fontSize: "0.82rem", color: C.slateLight, marginTop: 24 }}>
-            Currently accepting early access customers. Reach out to discuss custom pricing for government organisations.
-          </p>
         </div>
       </section>
 
