@@ -789,8 +789,9 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         const{error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
         if(error)throw error;
         await supabase.auth.signOut();
-        setPopup("signup");
         setMode("login");
+        setLoading(false);
+        setPopup("signup");
         return;
       } else {
         const{data,error}=await supabase.auth.signInWithPassword({email,password:pw});
@@ -801,16 +802,16 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           .from("profiles").select("status, role").eq("id", data.user.id).single();
 
         if(profErr || !prof){
-          await supabase.auth.signOut();
           setPopup("noProfile");
           setLoading(false);
+          await supabase.auth.signOut();
           return;
         }
 
         if(prof.status !== "approved"){
-          await supabase.auth.signOut();
           setPopup("pending");
           setLoading(false);
+          await supabase.auth.signOut();
           return;
         }
 
@@ -5543,7 +5544,14 @@ export default function App() {
     // Always start fresh — no auto session restore
     supabase.auth.signOut();
     const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
-      if(!session?.user){setLoading(false);setProfile(null);setShowLogin(false);setUser(null);}
+      if(!session?.user){
+        setLoading(false);
+        setProfile(null);
+        setUser(null);
+        // Do NOT reset showLogin — if we're already on the login screen
+        // (e.g. after deliberately signing out a pending user), keep it there
+        setShowLogin(prev => prev ? prev : false);
+      }
     });
     return()=>subscription.unsubscribe();
   },[]);
@@ -5634,12 +5642,30 @@ export default function App() {
   };
 
   if(!user) {
-    if(showLogin) return <LoginScreen onLogin={(u) => { setUser(u); setShowLogin(false); setAuthPopup(null); }} authPopup={authPopup} setAuthPopup={setAuthPopup}/>;
+    const POPUPS = {
+      signup: { icon:"📧", title:"Check your email", msg:"A verification link has been sent to your email address. Click the link to verify your account, then return here to sign in.", sub:"Once verified, your account will be reviewed by an administrator before you can access AeroQualify.", color:"#01579b", bg:"#e3f2fd" },
+      pending: { icon:"⏳", title:"Account pending approval", msg:"Your account has been successfully created and your email verified.", sub:"Please contact your administrator to request access to AeroQualify Pro.", color:"#e65100", bg:"#fff3e0" },
+      noProfile: { icon:"⚠️", title:"Account setup incomplete", msg:"Your account was created but the profile setup did not complete.", sub:"Please contact your administrator for assistance.", color:"#c62828", bg:"#ffebee" },
+    };
     return (
-      <LandingPage
-        onShowLogin={() => setShowLogin(true)}
-        onShowSignup={() => setShowLogin(true)}
-      />
+      <>
+        {/* Auth popup — shown above landing page or login screen */}
+        {authPopup&&POPUPS[authPopup]&&(
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+            <div style={{ background:"#fff", borderRadius:16, padding:36, maxWidth:420, width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.25)", animation:"fadeIn 0.3s ease" }}>
+              <div style={{ fontSize:48, marginBottom:16 }}>{POPUPS[authPopup].icon}</div>
+              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:20, color:POPUPS[authPopup].color, marginBottom:12 }}>{POPUPS[authPopup].title}</div>
+              <div style={{ fontSize:14, color:"#37474f", lineHeight:1.7, marginBottom:10 }}>{POPUPS[authPopup].msg}</div>
+              <div style={{ fontSize:12, color:"#607d8b", lineHeight:1.6, marginBottom:24, background:POPUPS[authPopup].bg, borderRadius:8, padding:"10px 14px" }}>{POPUPS[authPopup].sub}</div>
+              <button onClick={()=>setAuthPopup(null)} style={{ width:"100%", padding:"12px", background:"#01579b", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer" }}>OK, got it</button>
+            </div>
+          </div>
+        )}
+        {showLogin
+          ? <LoginScreen onLogin={(u) => { setUser(u); setShowLogin(false); setAuthPopup(null); }} authPopup={authPopup} setAuthPopup={setAuthPopup}/>
+          : <LandingPage onShowLogin={() => setShowLogin(true)} onShowSignup={() => setShowLogin(true)}/>
+        }
+      </>
     );
   }
   if(loading) return (
