@@ -716,6 +716,35 @@ function LandingPage({ onShowLogin, onShowSignup }) {
   );
 }
 
+
+// ─── Pending Approval Screen ──────────────────────────────────
+const PendingApprovalScreen = ({ user, onSignOut }) => (
+  <div style={{ minHeight:"100vh", background:`linear-gradient(135deg, #e3f2fd 0%, #f0f4f8 50%, #e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+    <GlobalStyle />
+    <div style={{ position:"fixed", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})` }} />
+    <div style={{ width:420, animation:"fadeIn 0.5s ease", textAlign:"center" }}>
+      <div style={{ width:64, height:64, borderRadius:16, background:`linear-gradient(135deg,${T.primary},${T.sky})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px", boxShadow:"0 4px 20px rgba(1,87,155,0.25)" }}>✈</div>
+      <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primaryDk, letterSpacing:1 }}>AeroQualify Pro</div>
+      <div className="card" style={{ padding:32, marginTop:24, textAlign:"left" }}>
+        <div style={{ textAlign:"center", marginBottom:20 }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>⏳</div>
+          <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:18, color:T.primaryDk }}>Account Pending Approval</div>
+        </div>
+        <p style={{ fontSize:13, color:T.muted, lineHeight:1.7, textAlign:"center", marginBottom:20 }}>
+          Your account <strong style={{ color:T.text }}>{user?.email}</strong> has been created and is awaiting administrator approval.<br/><br/>
+          You will be able to access the system once an administrator has verified and activated your account.
+        </p>
+        <div style={{ background:T.primaryLt, borderRadius:8, padding:"12px 16px", marginBottom:20, fontSize:12, color:T.primary, lineHeight:1.6 }}>
+          <strong>What happens next?</strong><br/>
+          An administrator will review your account and assign you the appropriate role. This is to ensure the security and integrity of the quality management system.
+        </div>
+        <Btn variant="ghost" onClick={onSignOut} style={{ width:"100%", textAlign:"center" }}>Sign Out</Btn>
+      </div>
+      <div style={{ marginTop:16, fontSize:11, color:T.muted }}>AeroQualify Pro · Aviation Quality Management</div>
+    </div>
+  </div>
+);
+
 // ─── Login ────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }) => {
   const [email,setEmail]=useState(""); const [pw,setPw]=useState("");
@@ -728,7 +757,7 @@ const LoginScreen = ({ onLogin }) => {
         if(error)throw error; setErr("✓ Reset link sent — check your email");
       } else if(mode==="signup"){
         const{error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
-        if(error)throw error; setErr("✓ Account created — please check your email to confirm before signing in."); setMode("login");
+        if(error)throw error; setErr("✓ Account created — check your email to confirm, then wait for administrator approval before you can sign in."); setMode("login");
       } else {
         const{data,error}=await supabase.auth.signInWithPassword({email,password:pw});
         if(error)throw error; onLogin(data.user);
@@ -2756,6 +2785,33 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
     if(error){showToast(`Error: ${error.message}`,"error");return;}
     showToast("Manager updated","success"); setEditing(null); onRefresh();
   };
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersTab, setUsersTab] = useState("pending");
+
+  useEffect(()=>{
+    if(!isAdmin) return;
+    supabase.from("profiles").select("*").order("created_at",{ascending:false}).then(({data})=>{
+      if(data){ setPendingUsers(data.filter(u=>u.status==="pending"||!u.status)); setAllUsers(data); }
+    });
+  },[isAdmin]);
+
+  const approveUser = async(userId, role="viewer") => {
+    const{error}=await supabase.from("profiles").update({status:"approved",role}).eq("id",userId);
+    if(error){showToast("Error: "+error.message,"error");return;}
+    showToast("User approved","success");
+    setPendingUsers(p=>p.filter(u=>u.id!==userId));
+    setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"approved",role}:u));
+  };
+
+  const revokeUser = async(userId) => {
+    const{error}=await supabase.from("profiles").update({status:"pending"}).eq("id",userId);
+    if(error){showToast("Error: "+error.message,"error");return;}
+    showToast("User access revoked","success");
+    setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"pending"}:u));
+    setPendingUsers(p=>[...p,allUsers.find(u=>u.id===userId)].filter(Boolean));
+  };
+
   return (
     <div>
       <SectionHeader title="Responsible Managers" subtitle="Assign names and email addresses to each role" />
@@ -2776,6 +2832,66 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
           </Card>
         ))}
       </div>
+      {isAdmin&&(
+        <div style={{ marginTop:32 }}>
+          <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:18, color:T.primaryDk, marginBottom:4 }}>User Access Management</div>
+          <div style={{ fontSize:13, color:T.muted, marginBottom:16 }}>Approve or revoke access for registered users</div>
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            {["pending","all"].map(tab=>(
+              <button key={tab} onClick={()=>setUsersTab(tab)}
+                style={{ padding:"7px 18px", borderRadius:7, border:`1px solid ${usersTab===tab?T.primary:T.border}`, background:usersTab===tab?T.primary:"#fff", color:usersTab===tab?"#fff":T.muted, fontWeight:600, fontSize:12, cursor:"pointer" }}>
+                {tab==="pending"?`Pending Approval${pendingUsers.length>0?` (${pendingUsers.length})`:""}` : "All Users"}
+              </button>
+            ))}
+          </div>
+          <div className="card" style={{ padding:0, overflow:"hidden" }}>
+            {(usersTab==="pending"?pendingUsers:allUsers).length===0?(
+              <div style={{ padding:24, textAlign:"center", color:T.muted, fontSize:13 }}>
+                {usersTab==="pending"?"No accounts pending approval":"No users registered yet"}
+              </div>
+            ):(
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead>
+                  <tr style={{ background:"#f8fafc" }}>
+                    {["Email","Name","Role","Status","Joined","Actions"].map(h=>(
+                      <th key={h} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}`, textAlign:"left", fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(usersTab==="pending"?pendingUsers:allUsers).map(u=>(
+                    <tr key={u.id} className="row-hover">
+                      <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.email||"—"}</td>
+                      <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.full_name||"—"}</td>
+                      <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}><Badge label={u.role||"—"}/></td>
+                      <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
+                        <span style={{ background:u.status==="approved"?T.greenLt:T.yellowLt, color:u.status==="approved"?T.green:T.yellow, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:600 }}>
+                          {u.status==="approved"?"Approved":"Pending"}
+                        </span>
+                      </td>
+                      <td style={{ padding:"10px 14px", fontSize:12, color:T.muted, borderBottom:`1px solid ${T.border}` }}>{fmt(u.created_at)}</td>
+                      <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
+                        {(u.status!=="approved")&&(
+                          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                            {["viewer","manager","quality_auditor","quality_manager"].map(role=>(
+                              <Btn key={role} size="sm" variant="outline" onClick={()=>approveUser(u.id,role)} style={{ fontSize:10, padding:"3px 8px" }}>
+                                ✓ {role.replace("_"," ")}
+                              </Btn>
+                            ))}
+                          </div>
+                        )}
+                        {u.status==="approved"&&u.role!=="admin"&&(
+                          <Btn size="sm" variant="danger" onClick={()=>revokeUser(u.id)} style={{ fontSize:11 }}>Revoke</Btn>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
       {editing&&(
         <ModalShell title={`Edit: ${editing.role_title}`} onClose={()=>setEditing(null)}>
           <Input label="Person's Name" value={editing.person_name||""} onChange={e=>setEditing(p=>({...p,person_name:e.target.value}))} placeholder="e.g. John Smith" />
@@ -5223,6 +5339,12 @@ export default function App() {
       <div style={{ width:32, height:32, border:`3px solid ${T.border}`, borderTop:`3px solid ${T.primary}`, borderRadius:"50%", animation:"spin 1s linear infinite" }} />
     </div>
   );
+
+  // Block access if account not yet approved by admin
+  if(user && profile && profile.status !== "approved" && profile.role !== "admin") {
+    return <PendingApprovalScreen user={user} onSignOut={async()=>{ await supabase.auth.signOut(); }} />;
+  }
+
 
   return (
     <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
