@@ -3,15 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 export const SUPABASE_URL = "https://lsgawxzpilototfsummm.supabase.co";
 export const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzZ2F3eHpwaWxvdG90ZnN1bW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMDU3MTcsImV4cCI6MjA4NzY4MTcxN30.HLCaCqZ-YjywEhNC2e6LtR3haLivuZ13ukit1AeZ0QM";
 
-// persistSession: false — disables localStorage session storage entirely.
-// Users must always sign in manually. No automatic re-login on page load.
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  }
-});
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 export const TABLES = {
   cars: 'cars', caps: 'caps', verifications: 'capa_verifications',
