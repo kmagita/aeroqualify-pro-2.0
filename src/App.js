@@ -1924,7 +1924,20 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
                                         <span>📎</span>
                                         <span style={{ fontSize:13,color:isRejected?"#c62828":T.green,fontWeight:600 }}>{f.name}</span>
                                       </div>
-                                      {f.url&&!f.url.startsWith("data:")&&<a href={f.url} target="_blank" rel="noreferrer" style={{ fontSize:12,color:T.primary,fontWeight:600 }}>🔗 View</a>}
+                                      <div style={{ display:"flex",gap:6 }}>
+                                        {f.url&&f.url.startsWith("data:")&&(
+                                          <a href={f.url} download={f.name}
+                                            style={{ fontSize:12,color:"#fff",fontWeight:600,background:T.primary,borderRadius:5,padding:"3px 10px",textDecoration:"none" }}>
+                                            ⬇ Download
+                                          </a>
+                                        )}
+                                        {f.url&&!f.url.startsWith("data:")&&(
+                                          <a href={f.url} target="_blank" rel="noreferrer"
+                                            style={{ fontSize:12,color:T.primary,fontWeight:600 }}>
+                                            🔗 View
+                                          </a>
+                                        )}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
