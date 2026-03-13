@@ -5633,7 +5633,8 @@ export default function App() {
     // If there is an existing session on refresh, restore it
     if(isRefresh){
       supabase.auth.getSession().then(({data:{session}})=>{
-        if(session?.user) setUser(session.user);
+        if(session?.user){ setLoading(true); setUser(session.user); }
+        else { setLoading(false); }
       });
     }
 
