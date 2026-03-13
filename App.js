@@ -5752,11 +5752,13 @@ export default function App() {
       </>
     );
   }
-  if(loading) return (
+  // Show loading screen while data is being fetched OR while profile hasn't arrived yet
+  // This prevents the "viewer" flash while the real role loads
+  if(loading || (user && !profile)) return (
     <div style={{ height:"100vh", background:"#eef2f7", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:14 }}>
       <GlobalStyle/>
       <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primary }}>AeroQualify Pro</div>
-      <div style={{ color:T.muted, fontSize:13 }}>Connecting to database…</div>
+      <div style={{ color:T.muted, fontSize:13 }}>{loading?"Connecting to database…":"Loading your profile…"}</div>
       <div style={{ width:32, height:32, border:`3px solid ${T.border}`, borderTop:`3px solid ${T.primary}`, borderRadius:"50%", animation:"spin 1s linear infinite" }} />
     </div>
   );
