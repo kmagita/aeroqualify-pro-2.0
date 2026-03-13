@@ -5439,6 +5439,102 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     setCreating(false);
   };
 
+  const seedDemoOrg = async (orgId) => {
+    if(!window.confirm("This will populate the selected organisation with realistic demo data. Continue?")) return;
+    showToast("Seeding demo data…","success");
+    const today = new Date();
+    const daysAgo = (n) => new Date(today-n*86400000).toISOString().slice(0,10);
+    const daysFromNow = (n) => new Date(today.getTime()+n*86400000).toISOString().slice(0,10);
+
+    // ── Responsible Managers ──
+    const managers = [
+      {id:`${orgId}-mgr-1`,org_id:orgId,role_title:"Accountable Manager",person_name:"James Mwangi",email:"accountable@demo-aviation.com",phone:"+254700000001"},
+      {id:`${orgId}-mgr-2`,org_id:orgId,role_title:"Quality Manager",person_name:"Sarah Ochieng",email:"qm@demo-aviation.com",phone:"+254700000002"},
+      {id:`${orgId}-mgr-3`,org_id:orgId,role_title:"Head of Training",person_name:"Capt. David Njoroge",email:"training@demo-aviation.com",phone:"+254700000003"},
+      {id:`${orgId}-mgr-4`,org_id:orgId,role_title:"Head of Maintenance",person_name:"Thomas Kamau",email:"maintenance@demo-aviation.com",phone:"+254700000004"},
+    ];
+    await supabase.from("responsible_managers").insert(managers);
+
+    // ── Audit Schedule ──
+    const auditSlots = [
+      {id:`${orgId}-aud-1`,org_id:orgId,year:2026,month:1,area:"Flight Operations",type:"Internal",planned_date:daysAgo(45),status:"Completed"},
+      {id:`${orgId}-aud-2`,org_id:orgId,year:2026,month:2,area:"Maintenance",type:"Internal",planned_date:daysAgo(20),status:"Completed"},
+      {id:`${orgId}-aud-3`,org_id:orgId,year:2026,month:3,area:"Safety",type:"Internal",planned_date:daysFromNow(10),status:"Scheduled"},
+      {id:`${orgId}-aud-4`,org_id:orgId,year:2026,month:4,area:"Quality",type:"Regulatory",planned_date:daysFromNow(30),status:"Scheduled"},
+      {id:`${orgId}-aud-5`,org_id:orgId,year:2026,month:6,area:"Training",type:"Surveillance",planned_date:daysFromNow(75),status:"Scheduled"},
+    ];
+    await supabase.from("audit_schedule").insert(auditSlots);
+
+    // ── Audits ──
+    const audits = [
+      {id:`${orgId}-audit-1`,org_id:orgId,title:"Q1 Flight Operations Internal Audit",type:"Internal",status:"Completed",lead:"Sarah Ochieng",scope:"Flight crew records, ops manual compliance, route authorisations",date:daysAgo(45),findings:3,obs:2},
+      {id:`${orgId}-audit-2`,org_id:orgId,title:"Maintenance Base Inspection",type:"Internal",status:"Completed",lead:"Sarah Ochieng",scope:"AMM compliance, tooling calibration, technician licensing",date:daysAgo(20),findings:1,obs:4},
+      {id:`${orgId}-audit-3`,org_id:orgId,title:"Safety Management System Review",type:"Internal",status:"Scheduled",lead:"Sarah Ochieng",scope:"SMS documentation, hazard reporting, safety promotion",date:daysFromNow(10),findings:0,obs:0},
+    ];
+    await supabase.from("audits").insert(audits);
+
+    // ── CARs ──
+    const cars = [
+      {id:`DEMO-QMS-001-${daysAgo(45).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Flight crew training records found incomplete — simulator hours not logged for 3 crew members",qms_clause:"Ops Manual Section 4.2 — Crew Training Records",severity:"Major",status:"Closed",department:"Training",date_raised:daysAgo(45),due_date:daysAgo(15),responsible_manager:"Head of Training",raised_by_name:"Sarah Ochieng",audit_ref:`DEMO-QMS-001-${daysAgo(45).replace(/-/g,"")}`},
+      {id:`DEMO-QMS-002-${daysAgo(40).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Aircraft maintenance logbook entries missing for 2 routine inspections",qms_clause:"Maintenance Manual AMM 5.20 — Maintenance Records",severity:"Critical",status:"Closed",department:"Maintenance",date_raised:daysAgo(40),due_date:daysAgo(10),responsible_manager:"Head of Maintenance",raised_by_name:"Sarah Ochieng",audit_ref:`DEMO-QMS-002-${daysAgo(40).replace(/-/g,"")}`},
+      {id:`DEMO-QMS-003-${daysAgo(30).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Emergency equipment checklist not completed for 4 consecutive flights",qms_clause:"Ops Manual Section 8.1 — Emergency Equipment",severity:"Critical",status:"Pending Verification",department:"Flight Operations",date_raised:daysAgo(30),due_date:daysFromNow(5),responsible_manager:"Head of Training",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-004-${daysAgo(20).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Contractor approval documentation expired for two ground handling service providers",qms_clause:"QMS Clause 8.4 — Control of Externally Provided Services",severity:"Major",status:"In Progress",department:"Administration",date_raised:daysAgo(20),due_date:daysFromNow(10),responsible_manager:"Accountable Manager",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-005-${daysAgo(10).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"KCAA operating certificate renewal overdue by 15 days",qms_clause:"Regulatory Compliance — AOC Certificate Validity",severity:"Critical",status:"Open",department:"Quality",date_raised:daysAgo(10),due_date:daysFromNow(7),responsible_manager:"Accountable Manager",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-006-${daysAgo(5).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Fuel quality test records incomplete for Wilson Airport refuelling point",qms_clause:"Ops Manual Section 6.3 — Fuel Management",severity:"Minor",status:"Open",department:"Flight Operations",date_raised:daysAgo(5),due_date:daysFromNow(20),responsible_manager:"Head of Training",raised_by_name:"James Mwangi"},
+    ];
+    await supabase.from("cars").insert(cars);
+
+    // ── CAPs for closed CARs ──
+    const caps = [
+      {id:`${orgId}-cap-1`,org_id:orgId,car_id:cars[0].id,immediate_action:"All affected crew members identified and simulator sessions scheduled within 48 hours",root_cause_analysis:"Training coordinator departure left a gap in the record-keeping process — no handover procedure was in place",corrective_action:"Simulator hours logged and verified for all 3 crew members. Training coordinator role formally documented.",preventive_action:"Digital training record system implemented. Monthly QM review of training logs introduced.",submitted_by_name:"Capt. David Njoroge",submitted_at:new Date(today-30*86400000).toISOString(),status:"Complete"},
+      {id:`${orgId}-cap-2`,org_id:orgId,car_id:cars[1].id,immediate_action:"Missing logbook entries reconstructed from engineer work orders and signed off by Lead Engineer",root_cause_analysis:"Paper-based dual-entry system prone to omission when engineers are under time pressure",corrective_action:"All missing entries completed and verified. Engineer briefing conducted.",preventive_action:"Electronic maintenance logbook system introduced. Pre-flight QA check added to sign-off procedure.",submitted_by_name:"Thomas Kamau",submitted_at:new Date(today-25*86400000).toISOString(),status:"Complete"},
+      {id:`${orgId}-cap-3`,org_id:orgId,car_id:cars[2].id,immediate_action:"Affected crew briefed and emergency equipment checks reinstated immediately",root_cause_analysis:"Checklist item inadvertently removed during a manual revision — not caught in the review process",corrective_action:"Ops Manual revised and emergency checklist item restored. All crew re-briefed.",preventive_action:"Document control procedure updated to require QM sign-off on all checklist changes.",submitted_by_name:"Capt. David Njoroge",submitted_at:new Date(today-10*86400000).toISOString(),status:"Complete"},
+    ];
+    await supabase.from("caps").insert(caps);
+
+    // ── Verifications for closed CARs ──
+    const verifs = [
+      {id:`${orgId}-verif-1`,org_id:orgId,car_id:cars[0].id,immediate_action_ok:true,root_cause_ok:true,corrective_action_ok:true,preventive_action_ok:true,evidence_ok:true,recurrence_prevented:true,effectiveness_rating:"Effective",status:"Closed",verified_by_name:"Sarah Ochieng",verified_at:new Date(today-20*86400000).toISOString(),verifier_comments:"All training records verified as complete. Digital system confirmed operational. Finding closed."},
+      {id:`${orgId}-verif-2`,org_id:orgId,car_id:cars[1].id,immediate_action_ok:true,root_cause_ok:true,corrective_action_ok:true,preventive_action_ok:true,evidence_ok:true,recurrence_prevented:true,effectiveness_rating:"Effective",status:"Closed",verified_by_name:"Sarah Ochieng",verified_at:new Date(today-15*86400000).toISOString(),verifier_comments:"Electronic logbook system verified. All entries complete and signed. Finding closed."},
+    ];
+    await supabase.from("capa_verifications").insert(verifs);
+
+    // ── Update closed CAR statuses ──
+    await supabase.from("cars").update({status:"Closed"}).eq("id",cars[0].id);
+    await supabase.from("cars").update({status:"Closed"}).eq("id",cars[1].id);
+
+    // ── Risk Register ──
+    const risks = [
+      {id:`${orgId}-risk-1`,org_id:orgId,hazard_description:"Bird strike on approach to Wilson Airport",category:"Flight Operations",severity:4,likelihood:3,residual_severity:3,residual_likelihood:2,treatment:"Bird scaring equipment installed. Crew briefed on bird activity reporting. Liaison with KAA bird control unit.",status:"Monitoring",owner:"Head of Training",target_date:daysFromNow(60)},
+      {id:`${orgId}-risk-2`,org_id:orgId,hazard_description:"Key maintenance engineer resignation without knowledge transfer",category:"Maintenance",severity:3,likelihood:2,residual_severity:2,residual_likelihood:1,treatment:"Cross-training programme initiated. Maintenance manuals updated and accessible to all engineers.",status:"Open",owner:"Head of Maintenance",target_date:daysFromNow(30)},
+      {id:`${orgId}-risk-3`,org_id:orgId,hazard_description:"KCAA regulatory requirement changes without adequate notice",category:"Regulatory Compliance",severity:4,likelihood:2,residual_severity:3,residual_likelihood:1,treatment:"QM subscribed to KCAA regulatory update mailing list. Monthly regulatory review meeting established.",status:"Monitoring",owner:"Accountable Manager",target_date:daysFromNow(90)},
+      {id:`${orgId}-risk-4`,org_id:orgId,hazard_description:"Fuel contamination at third-party refuelling point",category:"Flight Operations",severity:5,likelihood:1,residual_severity:4,residual_likelihood:1,treatment:"Fuel testing procedure implemented at all refuelling points. Contractor approval requires fuel quality certification.",status:"Open",owner:"Head of Training",target_date:daysFromNow(45)},
+      {id:`${orgId}-risk-5`,org_id:orgId,hazard_description:"Loss of critical QMS documentation in system failure",category:"Organisational",severity:3,likelihood:2,residual_severity:2,residual_likelihood:1,treatment:"Cloud backup of all QMS documents. AeroQualify Pro used as system of record. Weekly backup verification.",status:"Closed",owner:"Accountable Manager",target_date:daysAgo(5)},
+    ];
+    await supabase.from("risk_register").insert(risks);
+
+    // ── Company Documents ──
+    const docs = [
+      {id:`${orgId}-doc-1`,org_id:orgId,title:"Operations Manual Part A",doc_number:"OPS/A/001",rev:"Rev 4",category:"Core QMS",status:"Approved",date:daysAgo(60),expiry_date:daysFromNow(305),issue_date:daysAgo(60),issuing_authority:"KCAA"},
+      {id:`${orgId}-doc-2`,org_id:orgId,title:"Air Operator Certificate",doc_number:"AOC/KE/042",rev:"Rev 1",category:"Regulatory",status:"Valid",date:daysAgo(180),expiry_date:daysFromNow(12),issue_date:daysAgo(180),issuing_authority:"KCAA"},
+      {id:`${orgId}-doc-3`,org_id:orgId,title:"Safety Management System Manual",doc_number:"SMS/001",rev:"Rev 2",category:"Safety",status:"Approved",date:daysAgo(90),expiry_date:daysFromNow(275),issue_date:daysAgo(90),issuing_authority:"Internal"},
+      {id:`${orgId}-doc-4`,org_id:orgId,title:"Maintenance Organisation Exposition",doc_number:"MOE/001",rev:"Rev 3",category:"Maintenance",status:"Approved",date:daysAgo(120),expiry_date:daysFromNow(245),issue_date:daysAgo(120),issuing_authority:"KCAA"},
+      {id:`${orgId}-doc-5`,org_id:orgId,title:"Emergency Response Plan",doc_number:"ERP/001",rev:"Rev 1",category:"Safety",status:"Under Review",date:daysAgo(200),expiry_date:daysFromNow(8),issue_date:daysAgo(200),issuing_authority:"Internal"},
+    ];
+    await supabase.from("flight_school_docs").insert(docs);
+
+    // ── Contractors ──
+    const contractors = [
+      {id:`${orgId}-con-1`,org_id:orgId,name:"Kenyan Avionics Services Ltd",category:"Avionics & Instruments",status:"Approved",rating:"A",contact:"info@kenyanavionics.co.ke",country:"Kenya",last_audit:daysAgo(90),next_audit:daysFromNow(275)},
+      {id:`${orgId}-con-2`,org_id:orgId,name:"Wilson Ground Handling Co.",category:"Ground Handling",status:"Conditional",rating:"B",contact:"ops@wilsonground.co.ke",country:"Kenya",last_audit:daysAgo(30),next_audit:daysFromNow(60)},
+      {id:`${orgId}-con-3`,org_id:orgId,name:"AfricaFuel Services",category:"Fuel Supplier",status:"Approved",rating:"A+",contact:"quality@africafuel.co.ke",country:"Kenya",last_audit:daysAgo(60),next_audit:daysFromNow(120)},
+    ];
+    await supabase.from("contractors").insert(contractors);
+
+    showToast("Demo data seeded successfully!","success");
+    onRefresh();
+  };
+
   const updateOrgStatus = async (orgId, status) => {
     const { error } = await supabase.from("organisations").update({ status }).eq("id", orgId);
     if(error){ showToast("Error: "+error.message,"error"); return; }
@@ -5524,11 +5620,18 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                       </td>
                       <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}`, fontSize:12, color:T.muted }}>{fmt(o.created_at)}</td>
                       <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
-                        {o.slug!=="default"&&(
-                          o.status==="active"
-                            ? <Btn size="sm" variant="danger" onClick={()=>updateOrgStatus(o.id,"suspended")} style={{ fontSize:11 }}>Suspend</Btn>
-                            : <Btn size="sm" variant="success" onClick={()=>updateOrgStatus(o.id,"active")} style={{ fontSize:11 }}>Activate</Btn>
-                        )}
+                        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                          {o.slug!=="default"&&(
+                            o.status==="active"
+                              ? <Btn size="sm" variant="danger" onClick={()=>updateOrgStatus(o.id,"suspended")} style={{ fontSize:11 }}>Suspend</Btn>
+                              : <Btn size="sm" variant="success" onClick={()=>updateOrgStatus(o.id,"active")} style={{ fontSize:11 }}>Activate</Btn>
+                          )}
+                          <Btn size="sm" variant="ghost" onClick={()=>seedDemoOrg(o.id)}
+                            style={{ fontSize:11, color:"#6a1b9a", border:"1px solid #ce93d8" }}
+                            title="Auto-populate with realistic demo data">
+                            🌱 Seed
+                          </Btn>
+                        </div>
                       </td>
                     </tr>
                   );
