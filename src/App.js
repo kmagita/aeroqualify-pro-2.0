@@ -2356,7 +2356,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
         doc.setFillColor(255,235,238); doc.rect(margin,y,col,10,"F");
         doc.setDrawColor(198,40,40); doc.rect(margin,y,col,10,"S");
         doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(198,40,40);
-        doc.text("⚠ This CAP submission was reviewed and RETURNED FOR RESUBMISSION by the Quality Manager.",margin+4,y+6.5);
+        doc.text("! This CAP submission was reviewed and RETURNED FOR RESUBMISSION by the Quality Manager.",margin+4,y+6.5);
         y+=12;
       }
 
@@ -2464,18 +2464,20 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
     y+=40;
 
     // ── Attach all evidence files as final pages ──────────────────
-    // Collect from ALL cap submissions (resubmissions included), deduplicated by url+name
+    // Collect from ALL cap submissions (resubmissions included), deduplicated by name
     let pdfEvidenceFiles=[];
     const seenKeys=new Set();
     for(const c of allCapsForCar){
       let files=[];
       try{files=JSON.parse(c.evidence_files||"[]");}catch{}
       if(!c.evidence_files&&c.evidence_filename) files=[{name:c.evidence_filename,url:c.evidence_url}];
+      console.log("[PDF EVIDENCE] CAP",c.id,"has",files.length,"files:",files.map(f=>f.name));
       for(const f of files){
-        const key=(f.url||"")+"|"+(f.name||"");
+        const key=f.name||f.url||"";
         if(!seenKeys.has(key)&&(f.url||f.name)){seenKeys.add(key);pdfEvidenceFiles.push(f);}
       }
     }
+    console.log("[PDF EVIDENCE] Total evidence files to attach:",pdfEvidenceFiles.length, pdfEvidenceFiles.map(f=>({name:f.name,hasUrl:!!f.url})));
     // fallback: if no allCaps data, try single cap
     if(pdfEvidenceFiles.length===0){
       try{pdfEvidenceFiles=JSON.parse(cap?.evidence_files||"[]");}catch{}
@@ -5750,11 +5752,13 @@ export default function App() {
       </>
     );
   }
-  if(loading) return (
+  // Show loading screen while data is being fetched OR while profile hasn't arrived yet
+  // This prevents the "viewer" flash while the real role loads
+  if(loading || (user && !profile)) return (
     <div style={{ height:"100vh", background:"#eef2f7", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:14 }}>
       <GlobalStyle/>
       <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primary }}>AeroQualify Pro</div>
-      <div style={{ color:T.muted, fontSize:13 }}>Connecting to database…</div>
+      <div style={{ color:T.muted, fontSize:13 }}>{loading?"Connecting to database…":"Loading your profile…"}</div>
       <div style={{ width:32, height:32, border:`3px solid ${T.border}`, borderTop:`3px solid ${T.primary}`, borderRadius:"50%", animation:"spin 1s linear infinite" }} />
     </div>
   );
