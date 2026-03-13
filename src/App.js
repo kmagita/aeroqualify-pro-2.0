@@ -2131,14 +2131,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
     const{jsPDF}=await import("jspdf");
     const{default:autoTable}=await import("jspdf-autotable");
     const cap=getCAP(car.id); const verif=getVerif(car.id);
-    // Debug: log what data is available at PDF generation time
-    console.log("[PDF DEBUG] car.id:", car.id);
-    console.log("[PDF DEBUG] data.caps count:", data.caps?.length);
-    console.log("[PDF DEBUG] caps for this car:", data.caps?.filter(c=>c.car_id===car.id));
-    console.log("[PDF DEBUG] data.verifications count:", data.verifications?.length);
-    console.log("[PDF DEBUG] verifs for this car:", data.verifications?.filter(v=>v.car_id===car.id));
     const allCapsForCar=getAllCAPs(car.id);
-    console.log("[PDF DEBUG] allCapsForCar:", allCapsForCar);
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const W=210; const margin=14; const col=W-margin*2;
 
@@ -2340,12 +2333,14 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
       const roundNum=ci+1;
       const isLastRound=ci===allCapsForCar.length-1;
       // Find the verification that corresponds to this CAP round
-      // Match by order — first verif goes with first CAP, second verif with second CAP etc.
       const allVerifsForCar=getAllVerifs(car.id);
       const thisVerif=allVerifsForCar[ci]||null;
 
       // Was this CAP returned? Check if there's a next CAP (meaning this one was rejected)
       const wasReturned=!isLastRound;
+
+      // Force a new page before each round after the first — ensures nothing gets clipped
+      if(ci>0){ doc.addPage(); y=20; }
 
       // ── Section 2.N: CAP Submission ──
       y=needPage(y,12);
