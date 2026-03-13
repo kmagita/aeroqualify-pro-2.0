@@ -2490,25 +2490,18 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
 
     for(let fi=0;fi<pdfEvidenceFiles.length;fi++){
       const evFile=pdfEvidenceFiles[fi];
-      if(!evFile?.url) continue;
+      if(!evFile?.url&&!evFile?.name) continue;
       try{
         const ext=(evFile.name.split(".").pop()||"").toLowerCase();
         const isImage=["jpg","jpeg","png","gif","webp"].includes(ext);
-        const isInline=evFile.url.startsWith("data:");
+        const isInline=evFile.url&&evFile.url.startsWith("data:");
+        const isPDF=ext==="pdf";
 
-        if(isImage){
-          let dataUrl=evFile.url;
-          if(!isInline){
-            const resp=await fetch(evFile.url);
-            if(!resp.ok) throw new Error("fetch failed");
-            const blob=await resp.blob();
-            dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(blob);});
-          }
+        // Helper to draw the standard evidence page header
+        const drawEvHeader=()=>{
           doc.addPage();
           const pg=doc.getNumberOfPages();
           evidencePageMap[pg]={fileIndex:fi+1,fileName:evFile.name,fileTotal:pdfEvidenceFiles.length};
-
-          // Dark header bar
           doc.setFillColor(26,35,50); doc.rect(0,0,W,18,"F");
           doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
           doc.text(`EVIDENCE OF CLOSURE — File ${fi+1} of ${pdfEvidenceFiles.length}`,margin,8);
@@ -2516,8 +2509,19 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
           doc.text(evFile.name,W-margin,8,{align:"right"});
           doc.setFontSize(7); doc.setTextColor(160,180,200);
           doc.text(`CAR: ${car.id}  |  Evidence of Closure`,margin,14);
+          return doc.getNumberOfPages();
+        };
 
-          // Image centred between header and footer
+        if(isImage){
+          // ── Images: embed directly (works for both inline data: and remote URLs) ──
+          let dataUrl=evFile.url;
+          if(!isInline){
+            const resp=await fetch(evFile.url);
+            if(!resp.ok) throw new Error("fetch failed");
+            const blob=await resp.blob();
+            dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(blob);});
+          }
+          drawEvHeader();
           const imgTop=22; const imgBottom=284;
           const maxW=W-margin*2; const maxH=imgBottom-imgTop;
           const imgProps=doc.getImageProperties(dataUrl);
@@ -2526,49 +2530,85 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
           iw*=scale; ih*=scale;
           doc.addImage(dataUrl,ext==="png"?"PNG":"JPEG",margin+(maxW-iw)/2,imgTop+(maxH-ih)/2,iw,ih);
 
-        } else if(ext==="pdf"&&!isInline){
-          // Queue PDF files for pdf-lib merge
+        } else if(isPDF){
+          // ── PDF files: merge using pdf-lib (works for both inline and remote) ──
           try{
             if(!window._pdfMergeQueue) window._pdfMergeQueue=[];
-            const resp=await fetch(evFile.url);
-            if(resp.ok) window._pdfMergeQueue.push({
-              name:evFile.name, bytes:await resp.arrayBuffer(),
+            let bytes;
+            if(isInline){
+              // Convert base64 data URL to ArrayBuffer
+              const base64=evFile.url.split(",")[1];
+              const binary=atob(base64);
+              bytes=new Uint8Array(binary.length);
+              for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+              bytes=bytes.buffer;
+            } else {
+              const resp=await fetch(evFile.url);
+              if(!resp.ok) throw new Error("fetch failed");
+              bytes=await resp.arrayBuffer();
+            }
+            window._pdfMergeQueue.push({
+              name:evFile.name, bytes,
               index:fi+1, total:pdfEvidenceFiles.length, carId:car.id
             });
           } catch(e){
-            // Fallback reference page
-            doc.addPage();
-            const pg=doc.getNumberOfPages();
-            evidencePageMap[pg]={fileIndex:fi+1,fileName:evFile.name,fileTotal:pdfEvidenceFiles.length};
-            doc.setFillColor(26,35,50); doc.rect(0,0,W,18,"F");
-            doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
-            doc.text(`EVIDENCE OF CLOSURE -- File ${fi+1} of ${pdfEvidenceFiles.length}`,margin,8);
-            doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(200,210,220);
-            doc.text(evFile.name,W-margin,8,{align:"right"});
-            doc.setFontSize(7); doc.setTextColor(160,180,200);
-            doc.text(`CAR: ${car.id}  |  Evidence of Closure`,margin,14);
-            doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
-            doc.text(evFile.name+" (PDF — open separately via link below)",margin,32);
-            doc.setTextColor(1,87,155); doc.textWithLink("Click to open",margin,42,{url:evFile.url});
+            // Fallback: reference page with note
+            drawEvHeader();
+            doc.setFillColor(245,248,252); doc.rect(margin,24,col,40,"F");
+            doc.setDrawColor(221,227,234); doc.rect(margin,24,col,40,"S");
+            doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(26,35,50);
+            doc.text("PDF Evidence: "+evFile.name,margin+4,36);
+            doc.setFont("helvetica","italic"); doc.setFontSize(8); doc.setTextColor(95,114,133);
+            doc.text("This PDF evidence file could not be embedded automatically.",margin+4,46);
+            doc.text("Please retrieve it from AeroQualify Pro to view the full document.",margin+4,54);
           }
+
         } else {
-          // Other file types -- reference page
-          doc.addPage();
-          const pg=doc.getNumberOfPages();
-          evidencePageMap[pg]={fileIndex:fi+1,fileName:evFile.name,fileTotal:pdfEvidenceFiles.length};
-          doc.setFillColor(26,35,50); doc.rect(0,0,W,18,"F");
-          doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
-          doc.text(`EVIDENCE OF CLOSURE — File ${fi+1} of ${pdfEvidenceFiles.length}`,margin,8);
-          doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(200,210,220);
-          doc.text(evFile.name,W-margin,8,{align:"right"});
-          doc.setFontSize(7); doc.setTextColor(160,180,200);
-          doc.text(`CAR: ${car.id}  |  Evidence of Closure`,margin,14);
-          doc.setFillColor(245,248,252); doc.rect(margin,24,col,36,"F");
-          doc.setDrawColor(221,227,234); doc.rect(margin,24,col,36,"S");
-          doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(26,35,50);
-          doc.text("Attached File: "+evFile.name,margin+4,36);
-          if(!isInline){doc.setTextColor(1,87,155);doc.textWithLink("Click to open / download",margin+4,48,{url:evFile.url});}
-          else{doc.setFont("helvetica","italic");doc.setFontSize(8);doc.setTextColor(95,114,133);doc.text("(Stored inline — download from AeroQualify Pro)",margin+4,48);}
+          // ── Other files (docx, xlsx, txt etc): show a formatted evidence page ──
+          // We cannot render Word/Excel inside a PDF, so we show a clear evidence record page
+          drawEvHeader();
+          // Evidence record box
+          doc.setFillColor(245,248,252); doc.rect(margin,24,col,80,"F");
+          doc.setDrawColor(221,227,234); doc.rect(margin,24,col,80,"S");
+          // File type badge
+          const badgeColors={"docx":[0,120,215],"doc":[0,120,215],"xlsx":[33,115,70],"xls":[33,115,70],"txt":[95,114,133]};
+          const bc=badgeColors[ext]||[95,114,133];
+          doc.setFillColor(...bc); doc.rect(margin+4,28,18,8,"F");
+          doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
+          doc.text(ext.toUpperCase(),margin+13,33.5,{align:"center"});
+          // File name
+          doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(26,35,50);
+          doc.text(evFile.name,margin+26,34);
+          // Divider
+          doc.setDrawColor(221,227,234); doc.setLineWidth(0.3);
+          doc.line(margin+4,40,margin+col-4,40);
+          // Details
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(55,71,79);
+          doc.text("File Type:",margin+4,50); doc.setFont("helvetica","bold"); doc.text(ext.toUpperCase()+" Document",margin+40,50);
+          doc.setFont("helvetica","normal");
+          doc.text("Evidence For:",margin+4,60); doc.setFont("helvetica","bold"); doc.text("CAR: "+car.id,margin+40,60);
+          doc.setFont("helvetica","normal");
+          doc.text("Submission:",margin+4,70); doc.setFont("helvetica","bold");
+          const capForFile=allCapsForCar.find(c=>{
+            let fs=[];try{fs=JSON.parse(c.evidence_files||"[]");}catch{}
+            if(!c.evidence_files&&c.evidence_filename) fs=[{name:c.evidence_filename}];
+            return fs.some(f=>f.name===evFile.name);
+          });
+          doc.text(capForFile?`CAP submitted ${new Date(capForFile.submitted_at).toLocaleDateString("en-GB")} by ${capForFile.submitted_by_name||"—"}`:"—",margin+40,70);
+          doc.setFont("helvetica","normal");
+          // Note about file type
+          doc.setFillColor(255,243,224); doc.rect(margin+4,78,col-8,18,"F");
+          doc.setDrawColor(255,152,0); doc.rect(margin+4,78,col-8,18,"S");
+          doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(230,81,0);
+          doc.text("Note:",margin+8,86);
+          doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(55,71,79);
+          doc.text(`This ${ext.toUpperCase()} file cannot be rendered inside a PDF. The document has been logged as evidence.`,margin+22,86);
+          doc.text("Access the original file through AeroQualify Pro CAPA module for full document review.",margin+8,92);
+          // If it has a remote URL, add a clickable link
+          if(evFile.url&&!isInline){
+            doc.setTextColor(1,87,155);
+            doc.textWithLink("Click here to open the original file",margin+4,106,{url:evFile.url});
+          }
         }
       } catch(evErr){ console.warn("Evidence page failed for",evFile.name,evErr); }
     }
