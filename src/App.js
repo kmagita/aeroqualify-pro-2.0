@@ -2018,7 +2018,7 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 
 
 // ─── CARs Table View ──────────────────────────────────────────
-const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
+const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
   const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify'
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
@@ -6040,7 +6040,7 @@ export default function App() {
         {/* Content */}
         <div style={{ flex:1,overflowY:"auto",padding:24 }}>
           {activeTab==="dashboard" && <Dashboard data={data}/>}
-          {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
