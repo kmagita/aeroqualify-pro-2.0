@@ -1129,7 +1129,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
     if(!slotId){ set("audit_ref",""); set("id",`CAR-${String(Date.now()).slice(-6)}`); return; }
     const slot = (auditSchedule||[]).find(s=>s.id===slotId);
     if(!slot) return;
-    const ref = getAuditRef(slot);
+    const ref = getAuditRef(slot, orgPrefix);
     const count = (allCars||[]).filter(c=>c.audit_ref===ref && (!car||c.id!==car.id)).length;
     const num = String(count+1).padStart(3,"0");
     set("audit_ref", ref);
@@ -1144,7 +1144,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
         <div style={{ gridColumn:"1/-1" }}>
           <Select label="Link to Audit (optional)" value={selectedAuditId} onChange={e=>handleAuditChange(e.target.value)}>
             <option value="">— Standalone CAR (not linked to audit) —</option>
-            {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s)} · {s.area} · {s.year}</option>)}
+            {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix)} · {s.area} · {s.year}</option>)}
           </Select>
         </div>
         <Input label="CAR Number" value={form.id||""} onChange={e=>set("id",e.target.value)} />
@@ -1165,7 +1165,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
         </Select>
         <Select label="Department" value={form.department||""} onChange={e=>set("department",e.target.value)}>
           <option value="">Select…</option>
-          {["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"].map(o=><option key={o}>{o}</option>)}
+          {(auditAreas||["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]).map(o=><option key={o}>{o}</option>)}
         </Select>
         <Input label="Due Date" type="date" value={form.due_date||""} onChange={e=>set("due_date",e.target.value)} />
         <div style={{ gridColumn:"1/-1" }}>
@@ -2842,7 +2842,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
         </table>
       </div>
 
-      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} />}
+      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} />}
       {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast}/>}
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
       {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} />}
@@ -5413,6 +5413,7 @@ const TABS = [
   {id:"risks",        label:"Risk Register",   icon:"⚠️", group:"main"},
   {id:"rca",          label:"Root Cause Analysis", icon:"🧠", group:"main"},
   {id:"managers",     label:"Managers",        icon:"👥", group:"settings"},
+  {id:"orgsettings",  label:"Org Settings",    icon:"⚙️",  group:"settings"},
   {id:"changelog",    label:"Change Log",      icon:"📋", group:"settings"},
   {id:"about",        label:"About",           icon:"(i)", group:"settings"},
   {id:"superadmin",   label:"Super Admin",     icon:"⚡",  group:"superadmin"},
@@ -5645,6 +5646,120 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
 };
 
 // ─── Main App ─────────────────────────────────────────────────
+// ─── Org Settings Page ───────────────────────────────────────
+const OrgSettingsPage = ({ org, onSave }) => {
+  const [prefix, setPrefix]     = useState(org?.car_prefix||"ORG");
+  const [areas,  setAreas]      = useState(()=>{
+    try{ return JSON.parse(org?.audit_areas||"null") || [
+      "Flight Operations","Maintenance","Training","Safety",
+      "Quality","Administration","Engineering","Ground Operations"
+    ]; }catch{ return [
+      "Flight Operations","Maintenance","Training","Safety",
+      "Quality","Administration","Engineering","Ground Operations"
+    ]; }
+  });
+  const [newArea, setNewArea]   = useState("");
+  const [saving,  setSaving]    = useState(false);
+
+  const addArea = () => {
+    const trimmed = newArea.trim();
+    if(!trimmed || areas.includes(trimmed)) return;
+    setAreas(prev=>[...prev, trimmed]);
+    setNewArea("");
+  };
+  const removeArea = (a) => setAreas(prev=>prev.filter(x=>x!==a));
+  const moveArea = (idx, dir) => {
+    const next = [...areas];
+    const swap = idx+dir;
+    if(swap<0||swap>=next.length) return;
+    [next[idx],next[swap]]=[next[swap],next[idx]];
+    setAreas(next);
+  };
+
+  const save = async() => {
+    if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
+    setSaving(true);
+    await onSave({ car_prefix: prefix.trim().toUpperCase(), audit_areas: JSON.stringify(areas) });
+    setSaving(false);
+  };
+
+  const sectionHead = (title,sub) => (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontWeight:700, fontSize:15, color:"#1a2332" }}>{title}</div>
+      <div style={{ fontSize:12, color:"#5f7285", marginTop:2 }}>{sub}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth:700, margin:"0 auto", display:"flex", flexDirection:"column", gap:28 }}>
+
+      {/* CAR Naming Convention */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28 }}>
+        {sectionHead("CAR Naming Convention","Set the prefix used to generate CAR and CAPA reference numbers for your organisation.")}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+          <div style={{ flex:1 }}>
+            <label style={{ fontSize:11, fontWeight:700, color:"#5f7285", letterSpacing:0.8, textTransform:"uppercase", display:"block", marginBottom:6 }}>Organisation Prefix</label>
+            <input value={prefix} onChange={e=>setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))}
+              style={{ width:"100%", padding:"9px 12px", border:"1.5px solid #dde3ea", borderRadius:8, fontSize:14, fontFamily:"monospace", fontWeight:700, letterSpacing:1 }}
+              maxLength={6} placeholder="e.g. PGF, KQA, AMO" />
+            <div style={{ fontSize:11, color:"#8a9ab0", marginTop:4 }}>2–6 uppercase letters/numbers. No spaces or special characters.</div>
+          </div>
+        </div>
+        {/* Live preview */}
+        <div style={{ background:"#f0f4f8", borderRadius:8, padding:"12px 16px" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#5f7285", textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Preview</div>
+          <div style={{ fontFamily:"monospace", fontSize:13, color:"#1a2332" }}>
+            <div>CAR ID: <strong>{prefix||"ORG"}-QMS-001-13032026-CAPA001</strong></div>
+            <div style={{ marginTop:4 }}>Audit Ref: <strong>{prefix||"ORG"}-QMS-007-13032026</strong></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Audit Areas */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28 }}>
+        {sectionHead("Audit Areas & Departments","Customise the list of audit areas used in CAR forms and audit scheduling for your organisation.")}
+
+        {/* Current areas */}
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:16 }}>
+          {areas.map((a,i)=>(
+            <div key={a} style={{ display:"flex", alignItems:"center", gap:8, background:"#f5f8fc", borderRadius:8, padding:"8px 12px", border:"1px solid #dde3ea" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                <button onClick={()=>moveArea(i,-1)} disabled={i===0}
+                  style={{ background:"none", border:"none", cursor:i===0?"default":"pointer", color:i===0?"#ccc":"#5f7285", fontSize:10, padding:0, lineHeight:1 }}>▲</button>
+                <button onClick={()=>moveArea(i,1)} disabled={i===areas.length-1}
+                  style={{ background:"none", border:"none", cursor:i===areas.length-1?"default":"pointer", color:i===areas.length-1?"#ccc":"#5f7285", fontSize:10, padding:0, lineHeight:1 }}>▼</button>
+              </div>
+              <span style={{ flex:1, fontSize:13, color:"#1a2332", fontWeight:500 }}>{a}</span>
+              <span style={{ fontSize:10, color:"#8a9ab0", background:"#e8edf2", borderRadius:4, padding:"2px 7px" }}>#{i+1}</span>
+              <button onClick={()=>removeArea(a)}
+                style={{ background:"#ffebee", border:"none", borderRadius:6, color:"#c62828", fontWeight:700, fontSize:12, cursor:"pointer", padding:"3px 9px" }}>✕</button>
+            </div>
+          ))}
+          {areas.length===0&&<div style={{ fontSize:13, color:"#8a9ab0", fontStyle:"italic", padding:8 }}>No areas defined — add one below.</div>}
+        </div>
+
+        {/* Add new area */}
+        <div style={{ display:"flex", gap:8 }}>
+          <input value={newArea} onChange={e=>setNewArea(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&addArea()}
+            style={{ flex:1, padding:"9px 12px", border:"1.5px solid #dde3ea", borderRadius:8, fontSize:13 }}
+            placeholder="Add new area (e.g. Line Maintenance, Avionics)…" />
+          <button onClick={addArea}
+            style={{ background:"#01579b", color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontWeight:700, fontSize:13, cursor:"pointer" }}>+ Add</button>
+        </div>
+      </div>
+
+      {/* Save button */}
+      <div style={{ display:"flex", justifyContent:"flex-end" }}>
+        <button onClick={save} disabled={saving}
+          style={{ background:"#01579b", color:"#fff", border:"none", borderRadius:8, padding:"12px 32px", fontWeight:700, fontSize:14, cursor:saving?"wait":"pointer", opacity:saving?0.7:1 }}>
+          {saving?"Saving…":"Save Settings"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [user,setUser]         = useState(null);
   const [showLogin,setShowLogin] = useState(false);
@@ -5933,6 +6048,12 @@ export default function App() {
           {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="rca"      && <RCAView data={data} user={user} profile={profile}/>}
           {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin}/>}
+          {activeTab==="orgsettings" && isAdmin && <OrgSettingsPage org={org} onSave={async(updates)=>{
+            const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
+            if(error){showToast("Error saving settings: "+error.message,"error");return;}
+            setOrg(prev=>({...prev,...updates}));
+            showToast("Organisation settings saved","success");
+          }} />}
           {activeTab==="changelog" && <ChangeLogView logs={data.changeLog}/>}
           {activeTab==="about"     && <AboutView />}
           {activeTab==="superadmin"&&isSuperAdmin&&(
