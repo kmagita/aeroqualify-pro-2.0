@@ -2131,7 +2131,14 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
     const{jsPDF}=await import("jspdf");
     const{default:autoTable}=await import("jspdf-autotable");
     const cap=getCAP(car.id); const verif=getVerif(car.id);
+    // Debug: log what data is available at PDF generation time
+    console.log("[PDF DEBUG] car.id:", car.id);
+    console.log("[PDF DEBUG] data.caps count:", data.caps?.length);
+    console.log("[PDF DEBUG] caps for this car:", data.caps?.filter(c=>c.car_id===car.id));
+    console.log("[PDF DEBUG] data.verifications count:", data.verifications?.length);
+    console.log("[PDF DEBUG] verifs for this car:", data.verifications?.filter(v=>v.car_id===car.id));
     const allCapsForCar=getAllCAPs(car.id);
+    console.log("[PDF DEBUG] allCapsForCar:", allCapsForCar);
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const W=210; const margin=14; const col=W-margin*2;
 
