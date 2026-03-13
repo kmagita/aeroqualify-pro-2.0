@@ -573,7 +573,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
               <em style={{ color: C.sky }}>Nothing it doesn't.</em>
             </h2>
             <p style={{ fontSize: "1rem", color: C.slate, maxWidth: 500, margin: "0 auto" }}>
-              Built for aviation organisations — ATOs, AOCs and AMOs — everything in one system.
+              Built for aviation organisations — ATOs, AOCs and AMOs — one system for every approval type.
             </p>
           </div>
           <div className="lp-features-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
@@ -948,7 +948,7 @@ const Dashboard = ({ data }) => {
     {label:"Pend. Verif.",  value:pendVerif,  color:T.purple, icon:"🔍", sub:"Awaiting QM review"},
     {label:"Closed",        value:closedCARs, color:T.green,  icon:"✅", sub:"Verified closed"},
     {label:"Upcoming Audits",value:upAudits,  color:T.teal,   icon:"📅", sub:"Scheduled"},
-    {label:"Expiring Docs", value:expDocs,    color:T.yellow, icon:"📄", sub:"Within 14 days"},
+    {label:"Expiring Docs", value:expDocs,    color:T.yellow, icon:"📂", sub:"Within 14 days"},
   ];
 
   return (
@@ -1095,17 +1095,17 @@ const AREA_CODES_CAR = {
   "Ground School Training":"007","Flight Training Records":"008",
   "Company Manuals & Documents":"009","Base Training Facilities":"010",
   "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
-  "Ground & Flight Instructor Records":"014","Quality Management":"016",
+  "Personnel Records & Qualifications":"014","Quality Management":"016",
   "Safety Management Systems":"017","Fuel Supplier":"022",
 };
-const getAuditRef = (slot) => {
+const getAuditRef = (slot, prefix="PGF") => {
   const code = AREA_CODES_CAR[slot.area]||"000";
   const d = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
   const dd=String(d.getDate()).padStart(2,"0"), mm=String(d.getMonth()+1).padStart(2,"0"), yyyy=d.getFullYear();
-  return `PGF-QMS-${code}-${dd}${mm}${yyyy}`;
+  return `${prefix}-QMS-${code}-${dd}${mm}${yyyy}`;
 };
 
-const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule }) => {
+const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas }) => {
   const [selectedAuditId, setSelectedAuditId] = useState(car?.audit_ref||"");
   const auditRef = selectedAuditId || car?.audit_ref || "";
 
@@ -1165,7 +1165,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule }) =>
         </Select>
         <Select label="Department" value={form.department||""} onChange={e=>set("department",e.target.value)}>
           <option value="">Select…</option>
-          {["Training","Safety","Quality","Administration","Maintenance"].map(o=><option key={o}>{o}</option>)}
+          {["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"].map(o=><option key={o}>{o}</option>)}
         </Select>
         <Input label="Due Date" type="date" value={form.due_date||""} onChange={e=>set("due_date",e.target.value)} />
         <div style={{ gridColumn:"1/-1" }}>
@@ -3117,10 +3117,10 @@ const AboutView = () => {
       { clause:"6.2",    text:"Quality objectives register", ok:false },
       { clause:"7.1.5",  text:"Calibration and measurement resources register", ok:false },
     ]},
-    { std:"KCAA ATO Regulatory Requirements", color:"#2e7d32", bg:"#e8f5e9", items:[
+    { std:"Regulatory Document Compliance", color:"#2e7d32", bg:"#e8f5e9", items:[
       { clause:"CAP Tracking",  text:"System for tracking internal and KCAA-issued CAPs", ok:true },
       { clause:"Doc Control",   text:"Quality Manual and associated document control", ok:true },
-      { clause:"Cert Tracking", text:"ATO certificate, approvals and regulatory document expiry", ok:true },
+      { clause:"Cert Tracking", text:"Certificates, approvals and regulatory document expiry tracking", ok:true },
       { clause:"Contractors",   text:"Approved maintenance and service provider register", ok:true },
       { clause:"Audit Trail",   text:"Record of all quality-related actions and decisions", ok:true },
       { clause:"QM Amendment",  text:"System referenced in Quality Manual — amendment pending", ok:"partial" },
@@ -3158,7 +3158,7 @@ const AboutView = () => {
             </div>
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:6, fontWeight:300 }}>Aviation Quality Management System</div>
             <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-              {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA ATO"].map(b=>(
+              {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA"].map(b=>(
                 <span key={b} style={{ fontSize:10, fontWeight:700, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, padding:"3px 9px", letterSpacing:0.5 }}>{b}</span>
               ))}
             </div>
@@ -3377,7 +3377,7 @@ const RISK_LIKELIHOOD = [
   {value:2,label:"Improbable",            desc:"Very unlikely to occur"},
   {value:1,label:"Extremely Improbable",  desc:"Almost inconceivable"},
 ];
-const RISK_CATEGORIES = ["Flight Operations","Ground Operations","Training","Maintenance","Security","Environmental","Organisational"];
+const RISK_CATEGORIES = ["Flight Operations","Ground Operations","Maintenance","Training","Safety","Security","Environmental","Organisational","Engineering","Regulatory Compliance"];
 
 const riskRating=(s,l)=>{
   const idx=s*l;
@@ -3712,7 +3712,7 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast 
 // ─── Annual Audit Schedule Builder ────────────────────────────
 const AUDIT_AREAS = [
   "Management Personnel Records",
-  "Ground and Flight Instructor Records",
+  "Personnel Records & Qualifications",
   "Ground School Training Records",
   "Flight Training Records",
   "Company Manuals and Relevant Documents",
@@ -5407,7 +5407,7 @@ const TABS = [
   {id:"dashboard",    label:"Dashboard",       icon:"▦",  group:"main"},
   {id:"cars",         label:"CARs",            icon:"📋", group:"main"},
   {id:"documents",    label:"Documents",       icon:"📄", group:"main"},
-  {id:"flightdocs",   label:"Flight School Docs",icon:"🏫",group:"main"},
+  {id:"flightdocs",   label:"Company Documents",icon:"📂",group:"main"},
   {id:"audits",       label:"Audits",          icon:"🔍", group:"main"},
   {id:"contractors",  label:"Contractors",     icon:"🔧", group:"main"},
   {id:"risks",        label:"Risk Register",   icon:"⚠️", group:"main"},
@@ -5927,7 +5927,7 @@ export default function App() {
           {activeTab==="dashboard" && <Dashboard data={data}/>}
           {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="flightdocs" && <GenericPage title="Flight School Documents" subtitle="Approvals, certificates and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Flight School Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="contractors" && <GenericPage title="Contractors" subtitle="Approved contractor register" table="contractors" columns={CONTRACTOR_COLS} modalFields={CONTRACTOR_FIELDS} modalTitle="Contractor" modalDefaults={{status:"Approved",rating:"A"}} data={data} canEdit={isAdmin} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
