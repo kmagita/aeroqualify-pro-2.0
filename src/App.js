@@ -2309,28 +2309,75 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
     y=needPage(y,14); y=boxRow([["Responsible Manager",car.responsible_manager],["Raised By",car.raised_by_name]],margin,y,col);
     y+=4;
 
-    // ── Section 2: CAP ──
-    y=needPage(y,12);
-    y=sectionTitle("SECTION 2 -- CORRECTIVE ACTION PLAN (CAP)",y,[0,105,92]);
-    if(cap){
+    // ── Sections 2+3: Loop through ALL CAP submissions and their verifications ──
+    // This handles resubmission cycles — each CAP round gets its own section pair.
+    if(allCapsForCar.length===0){
+      y=needPage(y,12);
+      y=sectionTitle("SECTION 2 — CORRECTIVE ACTION PLAN (CAP)",y,[0,105,92]);
+      y=needPage(y,14);
+      doc.setFillColor(255,243,224); doc.rect(margin,y,col,10,"F");
+      doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(230,81,0);
+      doc.text("CAP not yet submitted by the responsible manager.",margin+4,y+6.5); y+=12;
+      y+=4;
+      y=needPage(y,12);
+      y=sectionTitle("SECTION 3 — CAPA VERIFICATION",y,[69,39,160]);
+      y=needPage(y,14);
+      doc.setFillColor(227,242,253); doc.rect(margin,y,col,10,"F");
+      doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(1,87,155);
+      doc.text("Verification not yet completed by the Quality Manager.",margin+4,y+6.5); y+=12;
+      y+=8;
+    }
+
+    for(let ci=0;ci<allCapsForCar.length;ci++){
+      const thisCap=allCapsForCar[ci];
+      const roundNum=ci+1;
+      const isLastRound=ci===allCapsForCar.length-1;
+      // Find the verification that corresponds to this CAP round
+      // Match by order — first verif goes with first CAP, second verif with second CAP etc.
+      const allVerifsForCar=getAllVerifs(car.id);
+      const thisVerif=allVerifsForCar[ci]||null;
+
+      // Was this CAP returned? Check if there's a next CAP (meaning this one was rejected)
+      const wasReturned=!isLastRound;
+
+      // ── Section 2.N: CAP Submission ──
+      y=needPage(y,12);
+      const capSectionColor=wasReturned?[183,28,28]:[0,105,92];
+      const capSectionLabel=allCapsForCar.length>1
+        ?`SECTION 2.${roundNum} — CORRECTIVE ACTION PLAN (SUBMISSION ${roundNum} OF ${allCapsForCar.length})${wasReturned?" — RETURNED FOR RESUBMISSION":""}`
+        :"SECTION 2 — CORRECTIVE ACTION PLAN (CAP)";
+      y=sectionTitle(capSectionLabel,y,capSectionColor);
+
+      // If returned, show a banner
+      if(wasReturned){
+        y=needPage(y,12);
+        doc.setFillColor(255,235,238); doc.rect(margin,y,col,10,"F");
+        doc.setDrawColor(198,40,40); doc.rect(margin,y,col,10,"S");
+        doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(198,40,40);
+        doc.text("⚠ This CAP submission was reviewed and RETURNED FOR RESUBMISSION by the Quality Manager.",margin+4,y+6.5);
+        y+=12;
+      }
+
       const cap2Fields=[
-        ["Immediate Corrective Action",cap.immediate_action],
-        ["Root Cause Analysis",cap.root_cause_analysis],
-        ["Corrective Action",cap.corrective_action],
-        ["Preventive Action",cap.preventive_action],
+        ["Immediate Corrective Action",thisCap.immediate_action],
+        ["Root Cause Analysis",thisCap.root_cause_analysis],
+        ["Corrective Action",thisCap.corrective_action],
+        ["Preventive Action",thisCap.preventive_action],
       ];
       cap2Fields.forEach(([label,val])=>{
         y=needPage(y,estBoxH(val,col));
         y=box(label,val,margin,y,col);
       });
+
+      // Evidence files for this CAP submission
       let evFiles2=[];
-      try{evFiles2=JSON.parse(cap.evidence_files||"[]");}catch{}
-      if(!cap.evidence_files&&cap.evidence_filename) evFiles2=[{name:cap.evidence_filename,url:cap.evidence_url}];
+      try{evFiles2=JSON.parse(thisCap.evidence_files||"[]");}catch{}
+      if(!thisCap.evidence_files&&thisCap.evidence_filename) evFiles2=[{name:thisCap.evidence_filename,url:thisCap.evidence_url}];
       const evVal=evFiles2.length>0
         ?evFiles2.map((f,i)=>`${i+1}. ${f.name}`).join("\n")
-        :"\u2014 No evidence uploaded";
+        :"— No evidence uploaded";
       y=needPage(y,estBoxH(evVal,col)+4);
-      y=box(`Evidence of Closure (${evFiles2.length} file${evFiles2.length!==1?"s":""})`,evVal,margin,y,col);
+      y=box(`Evidence Files (${evFiles2.length} file${evFiles2.length!==1?"s":""})`,evVal,margin,y,col);
       evFiles2.forEach(f=>{
         if(f.url&&!f.url.startsWith("data:")){
           y=needPage(y,6);
@@ -2340,39 +2387,54 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
         }
       });
       y=needPage(y,14);
-      y=boxRow([["Submitted By",cap.submitted_by_name||"—"],["Submitted At",cap.submitted_at?new Date(cap.submitted_at).toLocaleString():"—"]],margin,y,col);
-    } else {
-      y=needPage(y,14);
-      doc.setFillColor(255,243,224); doc.rect(margin,y,col,10,"F");
-      doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(230,81,0);
-      doc.text("CAP not yet submitted by the responsible manager.",margin+4,y+6.5); y+=12;
-    }
-    y+=4;
+      y=boxRow([["Submitted By",thisCap.submitted_by_name||"—"],["Submitted At",thisCap.submitted_at?new Date(thisCap.submitted_at).toLocaleString():"—"]],margin,y,col);
+      y+=4;
 
-    // ── Section 3: Verification ──
-    y=needPage(y,12);
-    y=sectionTitle("SECTION 3 — CAPA VERIFICATION",y,[69,39,160]);
-    if(verif){
-      const checks=[
-        ["Immediate action was adequate and implemented",verif.immediate_action_ok],
-        ["Root cause has been correctly identified",verif.root_cause_ok],
-        ["Corrective action addresses the root cause",verif.corrective_action_ok],
-        ["Preventive action prevents recurrence",verif.preventive_action_ok],
-        ["Evidence of closure is satisfactory",verif.evidence_ok],
-        ["Recurrence of the finding is prevented",verif.recurrence_prevented],
-      ];
-      checks.forEach(([label,ok])=>{ y=needPage(y,9); y=checkRow(label,ok,margin,y,col); });
-      y+=2;
-      y=needPage(y,14); y=boxRow([["Effectiveness Rating",verif.effectiveness_rating||"—"],["Final Status",verif.status||"—"]],margin,y,col);
-      y=needPage(y,14); y=boxRow([["Verified By",verif.verified_by_name||"—"],["Verified At",verif.verified_at?new Date(verif.verified_at).toLocaleString():"--"]],margin,y,col);
-      if(verif.verifier_comments){ y=needPage(y,estBoxH(verif.verifier_comments,col)); y=box("Verifier Comments",verif.verifier_comments,margin,y,col); }
-    } else {
-      y=needPage(y,14);
-      doc.setFillColor(227,242,253); doc.rect(margin,y,col,10,"F");
-      doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(1,87,155);
-      doc.text("Verification not yet completed by the Quality Manager.",margin+4,y+6.5); y+=12;
+      // ── Section 3.N: Verification for this round ──
+      y=needPage(y,12);
+      const verifSectionLabel=allCapsForCar.length>1
+        ?`SECTION 3.${roundNum} — VERIFICATION OF SUBMISSION ${roundNum}${wasReturned?" (CAP RETURNED)":""}`
+        :"SECTION 3 — CAPA VERIFICATION";
+      const verifColor=wasReturned?[183,28,28]:[69,39,160];
+      y=sectionTitle(verifSectionLabel,y,verifColor);
+
+      if(thisVerif){
+        // If this verif resulted in a return, show banner
+        if(wasReturned){
+          y=needPage(y,12);
+          doc.setFillColor(255,235,238); doc.rect(margin,y,col,10,"F");
+          doc.setDrawColor(198,40,40); doc.rect(margin,y,col,10,"S");
+          doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(198,40,40);
+          doc.text("Quality Manager reviewed this submission and returned it for resubmission.",margin+4,y+6.5);
+          y+=12;
+        }
+        const checks=[
+          ["Immediate action was adequate and implemented",thisVerif.immediate_action_ok],
+          ["Root cause has been correctly identified",thisVerif.root_cause_ok],
+          ["Corrective action addresses the root cause",thisVerif.corrective_action_ok],
+          ["Preventive action prevents recurrence",thisVerif.preventive_action_ok],
+          ["Evidence of closure is satisfactory",thisVerif.evidence_ok],
+          ["Recurrence of the finding is prevented",thisVerif.recurrence_prevented],
+        ];
+        checks.forEach(([label,ok])=>{ y=needPage(y,9); y=checkRow(label,ok,margin,y,col); });
+        y+=2;
+        y=needPage(y,14); y=boxRow([["Effectiveness Rating",thisVerif.effectiveness_rating||"—"],["Final Status",thisVerif.status||"—"]],margin,y,col);
+        y=needPage(y,14); y=boxRow([["Verified By",thisVerif.verified_by_name||"—"],["Verified At",thisVerif.verified_at?new Date(thisVerif.verified_at).toLocaleString():"—"]],margin,y,col);
+        if(thisVerif.verifier_comments){ y=needPage(y,estBoxH(thisVerif.verifier_comments,col)); y=box("Verifier Comments",thisVerif.verifier_comments,margin,y,col); }
+      } else if(!isLastRound){
+        // No verif yet for this round but there's a next round (shouldn't happen but handle gracefully)
+        y=needPage(y,14);
+        doc.setFillColor(227,242,253); doc.rect(margin,y,col,10,"F");
+        doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(1,87,155);
+        doc.text("Verification record not found for this submission.",margin+4,y+6.5); y+=12;
+      } else {
+        y=needPage(y,14);
+        doc.setFillColor(227,242,253); doc.rect(margin,y,col,10,"F");
+        doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(1,87,155);
+        doc.text("Verification not yet completed by the Quality Manager.",margin+4,y+6.5); y+=12;
+      }
+      y+=8;
     }
-    y+=8;
 
     // ── Signature Section ──
     y=needPage(y,50);
