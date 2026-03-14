@@ -6227,7 +6227,7 @@ export default function App() {
       supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false})
         .then(({data})=>{ if(data) setOrgUsers(data); });
     }
-  },[user]);
+  },[user,loginOrgOverride]);
 
   useEffect(()=>{ loadAll(); },[loadAll]);
 
