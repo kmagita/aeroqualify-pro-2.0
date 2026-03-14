@@ -897,7 +897,20 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         if(orgSlug.trim()){
           const { data: orgData } = await supabase.from("organisations").select("id,name,status").eq("slug", orgSlug.trim().toLowerCase()).single();
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
-          if(orgData.status !== "active"){ setErr("This organisation account is currently suspended."); await supabase.auth.signOut(); setLoading(false); return; }
+          if(orgData.status !== "active"){
+            // Check if it's a demo expiry
+            if(orgData.demo_expires_at && new Date(orgData.demo_expires_at) < new Date()){
+              setErr("Your demo account has expired. Please contact AeroQualify to activate a full account.");
+            } else {
+              setErr("This organisation account is currently suspended. Please contact your administrator.");
+            }
+            await supabase.auth.signOut(); setLoading(false); return;
+          }
+          // Also check if demo is expired even if not yet suspended (race condition before cron runs)
+          if(orgData.demo_expires_at && new Date(orgData.demo_expires_at) < new Date()){
+            setErr("Your demo account has expired. Please contact AeroQualify to activate a full account.");
+            await supabase.auth.signOut(); setLoading(false); return;
+          }
           // Verify user belongs to this org
           if(prof.org_id !== orgData.id){
             // Check user_organisations junction table for multi-org members
@@ -5568,6 +5581,9 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     const today = new Date();
     const daysAgo = (n) => new Date(today-n*86400000).toISOString().slice(0,10);
     const daysFromNow = (n) => new Date(today.getTime()+n*86400000).toISOString().slice(0,10);
+    // Set 7-day demo expiry
+    const demoExpiry = new Date(today.getTime()+7*86400000).toISOString();
+    await supabase.from("organisations").update({ demo_expires_at: demoExpiry }).eq("id", orgId);
     const managers = [
       {id:`${orgId}-mgr-1`,org_id:orgId,role_title:"Accountable Manager",person_name:"James Mwangi",email:"accountable@demo-aviation.com",phone:"+254700000001"},
       {id:`${orgId}-mgr-2`,org_id:orgId,role_title:"Quality Manager",person_name:"Sarah Ochieng",email:"qm@demo-aviation.com",phone:"+254700000002"},
@@ -5752,9 +5768,16 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                       </td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8",fontFamily:"monospace",fontSize:13,fontWeight:700,color:"#01579b" }}>{o.car_prefix||"ORG"}</td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
-                        <span style={{ background:o.status==="active"?"#e8f5e9":"#ffebee",color:o.status==="active"?"#2e7d32":"#c62828",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600 }}>
-                          {o.status==="active"?"● Active":"○ Suspended"}
-                        </span>
+                        <div style={{ display:"flex",flexDirection:"column",gap:3 }}>
+                          <span style={{ background:o.status==="active"?"#e8f5e9":"#ffebee",color:o.status==="active"?"#2e7d32":"#c62828",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,display:"inline-block",width:"fit-content" }}>
+                            {o.status==="active"?"● Active":"○ Suspended"}
+                          </span>
+                          {o.demo_expires_at&&(()=>{
+                            const daysLeft=Math.ceil((new Date(o.demo_expires_at)-new Date())/86400000);
+                            if(daysLeft>0) return <span style={{ fontSize:10,color:"#e65100",fontWeight:600 }}>⏱ Demo: {daysLeft}d left</span>;
+                            return <span style={{ fontSize:10,color:"#c62828",fontWeight:600 }}>⏱ Demo expired</span>;
+                          })()}
+                        </div>
                       </td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#8a9ab0" }}>{fmt(o.created_at)}</td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
@@ -5827,9 +5850,16 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                       </td>
                       <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8",fontFamily:"monospace",fontSize:13,fontWeight:700,color:"#01579b" }}>{o.car_prefix||"ORG"}</td>
                       <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8" }}>
-                        <span style={{ background:o.status==="active"?"#e8f5e9":"#ffebee",color:o.status==="active"?"#2e7d32":"#c62828",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:600 }}>
-                          {o.status==="active"?"Active":"Suspended"}
-                        </span>
+                        <div style={{ display:"flex",flexDirection:"column",gap:3 }}>
+                          <span style={{ background:o.status==="active"?"#e8f5e9":"#ffebee",color:o.status==="active"?"#2e7d32":"#c62828",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:600,display:"inline-block",width:"fit-content" }}>
+                            {o.status==="active"?"Active":"Suspended"}
+                          </span>
+                          {o.demo_expires_at&&(()=>{
+                            const daysLeft=Math.ceil((new Date(o.demo_expires_at)-new Date())/86400000);
+                            if(daysLeft>0) return <span style={{ fontSize:10,color:"#e65100",fontWeight:600 }}>⏱ {daysLeft}d demo left</span>;
+                            return <span style={{ fontSize:10,color:"#c62828",fontWeight:600 }}>⏱ Expired</span>;
+                          })()}
+                        </div>
                       </td>
                       <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#8a9ab0" }}>{fmt(o.created_at)}</td>
                       <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8" }}>
