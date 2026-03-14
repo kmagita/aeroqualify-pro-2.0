@@ -746,88 +746,182 @@ const PendingApprovalScreen = ({ user, onSignOut }) => (
 );
 
 // ─── Login ────────────────────────────────────────────────────
+// ─── Org Switcher Modal ──────────────────────────────────────
+const OrgSwitcherModal = ({ userId, currentOrgId, onSwitch, onClose }) => {
+  const [memberships, setMemberships] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    const load = async () => {
+      // Get all orgs this user belongs to via profiles + user_organisations
+      const [profRes, memberRes] = await Promise.all([
+        supabase.from("profiles").select("org_id").eq("id", userId).single(),
+        supabase.from("user_organisations").select("org_id,role,status").eq("user_id", userId).eq("status","approved"),
+      ]);
+      const orgIds = new Set();
+      if(profRes.data?.org_id) orgIds.add(profRes.data.org_id);
+      (memberRes.data||[]).forEach(m=>orgIds.add(m.org_id));
+      if(orgIds.size > 0){
+        const { data: orgs } = await supabase.from("organisations").select("id,name,slug,car_prefix").in("id",[...orgIds]);
+        setMemberships(orgs||[]);
+      }
+      setLoading(false);
+    };
+    load();
+  },[userId]);
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24 }}>
+      <div style={{ background:"#fff",borderRadius:16,padding:28,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif",fontWeight:800,fontSize:17,color:"#1a2332",marginBottom:4 }}>Switch Organisation</div>
+        <div style={{ fontSize:12,color:"#8a9ab0",marginBottom:20 }}>Select the organisation dashboard to load.</div>
+        {loading?(
+          <div style={{ textAlign:"center",padding:20,color:"#8a9ab0" }}>Loading…</div>
+        ):(
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {memberships.map(o=>(
+              <button key={o.id} onClick={()=>onSwitch(o)}
+                style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",border:`2px solid ${o.id===currentOrgId?"#01579b":"#dde3ea"}`,borderRadius:10,background:o.id===currentOrgId?"#e3f2fd":"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.15s" }}>
+                <div style={{ width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#01579b,#0288d1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0 }}>🏢</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700,fontSize:13,color:"#1a2332" }}>{o.name}</div>
+                  <div style={{ fontSize:11,color:"#8a9ab0",fontFamily:"monospace" }}>{o.slug} · {o.car_prefix||"ORG"}</div>
+                </div>
+                {o.id===currentOrgId&&<span style={{ fontSize:11,color:"#01579b",fontWeight:700 }}>Current</span>}
+              </button>
+            ))}
+            {memberships.length===0&&(
+              <div style={{ textAlign:"center",padding:20,color:"#8a9ab0",fontSize:13 }}>You are only a member of one organisation.</div>
+            )}
+          </div>
+        )}
+        <button onClick={onClose} style={{ marginTop:16,width:"100%",padding:"10px",border:"1px solid #dde3ea",borderRadius:8,background:"#f5f8fc",color:"#5f7285",fontWeight:600,fontSize:13,cursor:"pointer" }}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
 const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
-  const [email,setEmail]=useState(""); const [pw,setPw]=useState("");
-  const [loading,setLoading]=useState(false); const [err,setErr]=useState("");
-  const [mode,setMode]=useState("login");
-  const popup = authPopup;
+  const [email,   setEmail]   = useState("");
+  const [pw,      setPw]      = useState("");
+  const [orgSlug, setOrgSlug] = useState("");
+  const [fullName,setFullName]= useState("");
+  const [loading, setLoading] = useState(false);
+  const [err,     setErr]     = useState("");
+  const [mode,    setMode]    = useState("login");
+  const [orgHint, setOrgHint] = useState(null); // {name, id} when slug is resolved
+  const popup    = authPopup;
   const setPopup = setAuthPopup;
 
-  const POPUPS = {
-    signup: {
-      icon:"📧",
-      title:"Check your email",
-      msg:"A verification link has been sent to your email address. Click the link to verify your account, then return here to sign in.",
-      sub:"Once verified, your account will be reviewed by an administrator before you can access AeroQualify.",
-      color: "#01579b",
-      bg: "#e3f2fd",
-    },
-    pending: {
-      icon:"⏳",
-      title:"Account pending approval",
-      msg:"Your account has been successfully created and your email verified.",
-      sub:"Please contact your administrator to request access to AeroQualify Pro.",
-      color: "#e65100",
-      bg: "#fff3e0",
-    },
-    noProfile: {
-      icon:"⚠️",
-      title:"Account setup incomplete",
-      msg:"Your account was created but the profile setup did not complete.",
-      sub:"Please contact your administrator for assistance.",
-      color: "#c62828",
-      bg: "#ffebee",
-    },
+  // Live-resolve org slug as user types
+  const resolveSlug = async (slug) => {
+    if(!slug.trim()){ setOrgHint(null); return; }
+    const { data } = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toLowerCase()).single();
+    setOrgHint(data || false); // false = not found, null = not typed yet
   };
+
+  const POPUPS = {
+    signup: { icon:"📧", title:"Check your email", msg:"A verification link has been sent to your email address. Click the link to verify your account, then return here to sign in.", sub:"Once verified, your account will be reviewed by an administrator before you can access AeroQualify.", color:"#01579b", bg:"#e3f2fd" },
+    pending: { icon:"⏳", title:"Account pending approval", msg:"Your account has been successfully created and your email verified.", sub:"Please contact your administrator to request access to AeroQualify Pro.", color:"#e65100", bg:"#fff3e0" },
+    noProfile: { icon:"⚠️", title:"Account setup incomplete", msg:"Your account was created but the profile setup did not complete.", sub:"Please contact your administrator for assistance.", color:"#c62828", bg:"#ffebee" },
+    newOrgAssigned: { icon:"✅", title:"Organisation access requested", msg:"Your account has been linked to the organisation. An administrator will review and approve your access.", sub:"You will be able to sign in once approved.", color:"#2e7d32", bg:"#e8f5e9" },
+  };
+
   const handle = async(e) => {
     e.preventDefault(); setLoading(true); setErr("");
     try {
       if(mode==="reset"){
         const{error}=await supabase.auth.resetPasswordForEmail(email);
-        if(error)throw error; setErr("✓ Reset link sent — check your email");
+        if(error) throw error;
+        setErr("✓ Reset link sent — check your email");
+
       } else if(mode==="signup"){
-        const{data:signUpData,error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
-        // Show exact error or response for debugging
+        // Resolve org from slug if provided
+        let resolvedOrgId = null;
+        if(orgSlug.trim()){
+          const { data: orgData } = await supabase.from("organisations").select("id,name").eq("slug", orgSlug.trim().toLowerCase()).single();
+          if(!orgData){ setErr("Organisation ID not found. Please check and try again."); setLoading(false); return; }
+          resolvedOrgId = orgData.id;
+        }
+        // Check if user already exists
+        const { data: existingProf } = await supabase.from("profiles").select("id,org_id,status").eq("email", email.trim().toLowerCase()).single();
+        if(existingProf){
+          // User exists — add to new org via user_organisations junction table
+          if(!resolvedOrgId){ setErr("Please enter an Organisation ID to join an additional organisation."); setLoading(false); return; }
+          const { error: joinErr } = await supabase.from("user_organisations").upsert({
+            user_id: existingProf.id, org_id: resolvedOrgId, role:"viewer", status:"pending"
+          });
+          if(joinErr){ setErr("Error: "+joinErr.message); setLoading(false); return; }
+          await supabase.auth.signOut();
+          setMode("login");
+          setLoading(false);
+          setPopup("newOrgAssigned");
+          return;
+        }
+        // New user signup
+        const{data:signUpData,error}=await supabase.auth.signUp({
+          email, password:pw,
+          options:{ data:{ full_name: fullName||email.split("@")[0], org_slug: orgSlug.trim().toLowerCase() } }
+        });
         if(error){ setErr("Signup error: "+error.message); setLoading(false); return; }
-        if(!signUpData?.user){ setErr("Signup failed: no user returned from Supabase. Please try again."); setLoading(false); return; }
+        if(!signUpData?.user){ setErr("Signup failed: no user returned. Please try again."); setLoading(false); return; }
+        // If org slug provided, store the intended org on the profile
+        if(resolvedOrgId){
+          await supabase.from("profiles").update({ org_id: resolvedOrgId }).eq("id", signUpData.user.id);
+        }
         await supabase.auth.signOut();
         setMode("login");
         setLoading(false);
         setPopup("signup");
         return;
+
       } else {
+        // ── Sign in ──
         const{data,error}=await supabase.auth.signInWithPassword({email,password:pw});
-        if(error)throw error;
+        if(error) throw error;
 
-        // Security gate — check profile status before granting access
+        // Check profile
         const { data: prof, error: profErr } = await supabase
-          .from("profiles").select("status, role").eq("id", data.user.id).single();
+          .from("profiles").select("status,role,org_id,is_super_admin").eq("id", data.user.id).single();
+        if(profErr || !prof){ setPopup("noProfile"); setLoading(false); await supabase.auth.signOut(); return; }
+        if(prof.status !== "approved"){ setPopup("pending"); setLoading(false); await supabase.auth.signOut(); return; }
 
-        if(profErr || !prof){
-          setPopup("noProfile");
+        // Super admin with no org slug → platform portal
+        if(prof.is_super_admin && !orgSlug.trim()){
+          onLogin(data.user, null, true); // null orgId, isSuperAdminMode=true
           setLoading(false);
-          await supabase.auth.signOut();
           return;
         }
 
-        if(prof.status !== "approved"){
-          setPopup("pending");
+        // Resolve org slug if provided
+        if(orgSlug.trim()){
+          const { data: orgData } = await supabase.from("organisations").select("id,name,status").eq("slug", orgSlug.trim().toLowerCase()).single();
+          if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
+          if(orgData.status !== "active"){ setErr("This organisation account is currently suspended."); await supabase.auth.signOut(); setLoading(false); return; }
+          // Verify user belongs to this org
+          if(prof.org_id !== orgData.id){
+            // Check user_organisations junction table for multi-org members
+            const { data: membership } = await supabase.from("user_organisations")
+              .select("status,role").eq("user_id", data.user.id).eq("org_id", orgData.id).single();
+            if(!membership){ setErr("You do not have access to this organisation. Contact your administrator."); await supabase.auth.signOut(); setLoading(false); return; }
+            if(membership.status !== "approved"){ setErr("Your access to this organisation is pending approval."); await supabase.auth.signOut(); setLoading(false); return; }
+          }
+          onLogin(data.user, orgData.id, false);
           setLoading(false);
-          await supabase.auth.signOut();
           return;
         }
 
-        onLogin(data.user);
+        onLogin(data.user, null, false);
       }
-    } catch(ex){setErr(ex.message);} setLoading(false);
+    } catch(ex){ setErr(ex.message); }
+    setLoading(false);
   };
+
   return (
-    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg, #e3f2fd 0%, #f0f4f8 50%, #e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,#e3f2fd 0%,#f0f4f8 50%,#e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
       <GlobalStyle />
-      {/* Sky horizon decoration */}
       <div style={{ position:"fixed", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})` }} />
 
-      {/* ── Popup overlay ── */}
       {popup&&POPUPS[popup]&&(
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:"#fff", borderRadius:16, padding:36, maxWidth:420, width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.2)", animation:"fadeIn 0.3s ease" }}>
@@ -839,12 +933,14 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           </div>
         </div>
       )}
-      <div style={{ width:400, animation:"fadeIn 0.5s ease" }}>
+
+      <div style={{ width:420, animation:"fadeIn 0.5s ease" }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ width:64, height:64, borderRadius:16, background:`linear-gradient(135deg,${T.primary},${T.sky})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px", boxShadow:"0 4px 20px rgba(1,87,155,0.25)" }}>✈</div>
           <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primaryDk, letterSpacing:1 }}>AeroQualify Pro</div>
           <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>Aviation Quality Management System</div>
         </div>
+
         <div className="card" style={{ padding:32 }}>
           <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:22 }}>
             {mode==="login"?"Sign In":mode==="signup"?"Create Account":"Reset Password"}
@@ -852,12 +948,37 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           <form onSubmit={handle}>
             <Input label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" required />
             {mode!=="reset"&&<Input label="Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" required />}
+            {mode==="signup"&&(
+              <Input label="Full Name" value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Your full name" />
+            )}
+            {mode!=="reset"&&(
+              <div style={{ marginBottom:16 }}>
+                <Input label="Organisation ID" value={orgSlug}
+                  onChange={e=>{ setOrgSlug(e.target.value); resolveSlug(e.target.value); }}
+                  placeholder={mode==="login"?"e.g. pegasus (leave blank for super admin)":"e.g. pegasus"}
+                />
+                {/* Live org resolution feedback */}
+                {orgSlug.trim()&&orgHint===null&&<div style={{ fontSize:11, color:T.muted, marginTop:-10, marginBottom:8 }}>Checking…</div>}
+                {orgSlug.trim()&&orgHint&&<div style={{ fontSize:11, color:T.green, marginTop:-10, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>✓ {orgHint.name}</div>}
+                {orgSlug.trim()&&orgHint===false&&<div style={{ fontSize:11, color:T.red, marginTop:-10, marginBottom:8 }}>✗ Organisation not found</div>}
+                <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                  {mode==="login"
+                    ? "Enter your organisation's ID to load the correct dashboard."
+                    : "Enter the organisation ID provided by your administrator."}
+                </div>
+              </div>
+            )}
             {err&&<div style={{ fontSize:12, color:err.startsWith("✓")?T.green:T.red, marginBottom:14, padding:"8px 12px", background:err.startsWith("✓")?T.greenLt:T.redLt, borderRadius:6 }}>{err}</div>}
-            <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>{loading?"Please wait…":mode==="login"?"Sign In":mode==="signup"?"Create Account":"Send Reset Link"}</Btn>
+            <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>
+              {loading?"Please wait…":mode==="login"?"Sign In":mode==="signup"?"Create Account":"Send Reset Link"}
+            </Btn>
           </form>
           <div style={{ display:"flex", justifyContent:"space-between", marginTop:16 }}>
-            <button onClick={()=>setMode(mode==="login"?"signup":"login")} style={{ background:"none",border:"none",color:T.primary,fontSize:12 }}>{mode==="login"?"Create account":"Back to sign in"}</button>
-            {mode==="login"&&<button onClick={()=>setMode("reset")} style={{ background:"none",border:"none",color:T.muted,fontSize:12 }}>Forgot password?</button>}
+            <button onClick={()=>{ setMode(mode==="login"?"signup":"login"); setErr(""); setOrgHint(null); }}
+              style={{ background:"none",border:"none",color:T.primary,fontSize:12,cursor:"pointer" }}>
+              {mode==="login"?"Create account":"Back to sign in"}
+            </button>
+            {mode==="login"&&<button onClick={()=>setMode("reset")} style={{ background:"none",border:"none",color:T.muted,fontSize:12,cursor:"pointer" }}>Forgot password?</button>}
           </div>
         </div>
         <div style={{ textAlign:"center", marginTop:16, fontSize:11, color:T.muted }}>AS9100D · ISO 9001:2015 · AS9110</div>
@@ -6001,7 +6122,8 @@ const OrgSettingsPage = ({ org, onSave }) => {
 
 export default function App() {
   const [user,setUser]         = useState(null);
-  const [showLogin,setShowLogin] = useState(false);
+  const [showLogin,setShowLogin]           = useState(false);
+  const [showOrgSwitcher,setShowOrgSwitcher] = useState(false);
   const [authPopup,setAuthPopup] = useState(null); // "signup" | "pending" | "noProfile"
   const [profile,setProfile]   = useState(null);
   const [managers,setManagers] = useState([]);
@@ -6010,6 +6132,7 @@ export default function App() {
   const [toast,setToast]       = useState(null);
   const [loading,setLoading]   = useState(false);
   const [org,setOrg]           = useState(null);
+  const [loginOrgOverride,setLoginOrgOverride] = useState(null); // org ID forced at login
   const [isSuperAdmin,setIsSuperAdmin] = useState(false);
   const [orgs,setOrgs]         = useState([]);   // super admin: all orgs
   const [orgUsers,setOrgUsers] = useState([]);   // super admin: all users
@@ -6091,9 +6214,10 @@ export default function App() {
       setIsSuperAdmin(prof.data?.is_super_admin||false);
       setLoading(false);
     });
-    // Load org details
-    if(prof.data?.org_id){
-      supabase.from("organisations").select("*").eq("id",prof.data.org_id).single()
+    // Load org details — use login override if provided, otherwise use profile org_id
+    const orgIdToLoad = loginOrgOverride || prof.data?.org_id;
+    if(orgIdToLoad){
+      supabase.from("organisations").select("*").eq("id",orgIdToLoad).single()
         .then(({data})=>{ if(data) setOrg(data); });
     }
     // Super admin: load all orgs and all users
@@ -6154,7 +6278,15 @@ export default function App() {
           </div>
         )}
         {showLogin
-          ? <LoginScreen onLogin={(u) => { setUser(u); setShowLogin(false); setAuthPopup(null); }} authPopup={authPopup} setAuthPopup={setAuthPopup}/>
+          ? <LoginScreen
+              onLogin={(u, orgIdOverride, superAdminMode) => {
+                setUser(u);
+                setShowLogin(false);
+                setAuthPopup(null);
+                if(superAdminMode){ setIsSuperAdmin(true); setActiveTab("superadmin"); }
+                if(orgIdOverride){ setLoginOrgOverride(orgIdOverride); }
+              }}
+              authPopup={authPopup} setAuthPopup={setAuthPopup}/>
           : <LandingPage onShowLogin={() => setShowLogin(true)} onShowSignup={() => setShowLogin(true)}/>
         }
       </>
@@ -6245,7 +6377,14 @@ export default function App() {
                 <Badge label={profile?.role||"viewer"}/>
                 {isSuperAdmin&&<span style={{ background:T.redLt, color:T.red, borderRadius:20, padding:"1px 7px", fontSize:10, fontWeight:700 }}>Super Admin</span>}
               </div>
-              {org&&<div style={{ fontSize:10, color:T.muted, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={org.name}>🏢 {org.name}</div>}
+              {org&&(
+                <div style={{ fontSize:10, color:T.muted, marginTop:3, display:"flex", alignItems:"center", gap:4, overflow:"hidden" }}>
+                  <span>🏢</span>
+                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={org.name}>{org.name}</span>
+                  <button onClick={()=>setShowOrgSwitcher(true)} title="Switch organisation"
+                    style={{ background:"none",border:"none",cursor:"pointer",color:T.primary,fontSize:11,padding:0,flexShrink:0,fontWeight:700 }}>⇄</button>
+                </div>
+              )}
             </div>
           </div>
           <Btn variant="ghost" size="sm" onClick={()=>supabase.auth.signOut()} style={{ width:"100%",textAlign:"center" }}>Sign Out</Btn>
@@ -6309,6 +6448,20 @@ export default function App() {
       </div>
 
       {toast&&<Toast message={toast.message} type={toast.type} onDone={()=>setToast(null)}/>}
+      {showOrgSwitcher&&user&&(
+        <OrgSwitcherModal
+          userId={user.id}
+          currentOrgId={org?.id}
+          onSwitch={(newOrg)=>{
+            setOrg(newOrg);
+            setLoginOrgOverride(newOrg.id);
+            setShowOrgSwitcher(false);
+            // Reload all data for the new org
+            setTimeout(()=>loadAll(),100);
+          }}
+          onClose={()=>setShowOrgSwitcher(false)}
+        />
+      )}
     </div>
   );
 }
