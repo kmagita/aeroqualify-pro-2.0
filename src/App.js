@@ -6283,7 +6283,7 @@ export default function App() {
                 setUser(u);
                 setShowLogin(false);
                 setAuthPopup(null);
-                if(superAdminMode){ setIsSuperAdmin(true); setActiveTab("superadmin"); }
+                if(superAdminMode){ setIsSuperAdmin(true); setTab("superadmin"); }
                 if(orgIdOverride){ setLoginOrgOverride(orgIdOverride); }
               }}
               authPopup={authPopup} setAuthPopup={setAuthPopup}/>
