@@ -573,7 +573,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
               <em style={{ color: C.sky }}>Nothing it doesn't.</em>
             </h2>
             <p style={{ fontSize: "1rem", color: C.slate, maxWidth: 500, margin: "0 auto" }}>
-              Built for aviation organisations — ATOs, AOCs and AMOs — everything in one system.
+              Built for aviation organisations — ATOs, AOCs and AMOs — one system for every approval type.
             </p>
           </div>
           <div className="lp-features-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
@@ -746,88 +746,182 @@ const PendingApprovalScreen = ({ user, onSignOut }) => (
 );
 
 // ─── Login ────────────────────────────────────────────────────
+// ─── Org Switcher Modal ──────────────────────────────────────
+const OrgSwitcherModal = ({ userId, currentOrgId, onSwitch, onClose }) => {
+  const [memberships, setMemberships] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    const load = async () => {
+      // Get all orgs this user belongs to via profiles + user_organisations
+      const [profRes, memberRes] = await Promise.all([
+        supabase.from("profiles").select("org_id").eq("id", userId).single(),
+        supabase.from("user_organisations").select("org_id,role,status").eq("user_id", userId).eq("status","approved"),
+      ]);
+      const orgIds = new Set();
+      if(profRes.data?.org_id) orgIds.add(profRes.data.org_id);
+      (memberRes.data||[]).forEach(m=>orgIds.add(m.org_id));
+      if(orgIds.size > 0){
+        const { data: orgs } = await supabase.from("organisations").select("id,name,slug,car_prefix").in("id",[...orgIds]);
+        setMemberships(orgs||[]);
+      }
+      setLoading(false);
+    };
+    load();
+  },[userId]);
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24 }}>
+      <div style={{ background:"#fff",borderRadius:16,padding:28,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif",fontWeight:800,fontSize:17,color:"#1a2332",marginBottom:4 }}>Switch Organisation</div>
+        <div style={{ fontSize:12,color:"#8a9ab0",marginBottom:20 }}>Select the organisation dashboard to load.</div>
+        {loading?(
+          <div style={{ textAlign:"center",padding:20,color:"#8a9ab0" }}>Loading…</div>
+        ):(
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {memberships.map(o=>(
+              <button key={o.id} onClick={()=>onSwitch(o)}
+                style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 16px",border:`2px solid ${o.id===currentOrgId?"#01579b":"#dde3ea"}`,borderRadius:10,background:o.id===currentOrgId?"#e3f2fd":"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.15s" }}>
+                <div style={{ width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#01579b,#0288d1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0 }}>🏢</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700,fontSize:13,color:"#1a2332" }}>{o.name}</div>
+                  <div style={{ fontSize:11,color:"#8a9ab0",fontFamily:"monospace" }}>{o.slug} · {o.car_prefix||"ORG"}</div>
+                </div>
+                {o.id===currentOrgId&&<span style={{ fontSize:11,color:"#01579b",fontWeight:700 }}>Current</span>}
+              </button>
+            ))}
+            {memberships.length===0&&(
+              <div style={{ textAlign:"center",padding:20,color:"#8a9ab0",fontSize:13 }}>You are only a member of one organisation.</div>
+            )}
+          </div>
+        )}
+        <button onClick={onClose} style={{ marginTop:16,width:"100%",padding:"10px",border:"1px solid #dde3ea",borderRadius:8,background:"#f5f8fc",color:"#5f7285",fontWeight:600,fontSize:13,cursor:"pointer" }}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
 const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
-  const [email,setEmail]=useState(""); const [pw,setPw]=useState("");
-  const [loading,setLoading]=useState(false); const [err,setErr]=useState("");
-  const [mode,setMode]=useState("login");
-  const popup = authPopup;
+  const [email,   setEmail]   = useState("");
+  const [pw,      setPw]      = useState("");
+  const [orgSlug, setOrgSlug] = useState("");
+  const [fullName,setFullName]= useState("");
+  const [loading, setLoading] = useState(false);
+  const [err,     setErr]     = useState("");
+  const [mode,    setMode]    = useState("login");
+  const [orgHint, setOrgHint] = useState(null); // {name, id} when slug is resolved
+  const popup    = authPopup;
   const setPopup = setAuthPopup;
 
-  const POPUPS = {
-    signup: {
-      icon:"📧",
-      title:"Check your email",
-      msg:"A verification link has been sent to your email address. Click the link to verify your account, then return here to sign in.",
-      sub:"Once verified, your account will be reviewed by an administrator before you can access AeroQualify.",
-      color: "#01579b",
-      bg: "#e3f2fd",
-    },
-    pending: {
-      icon:"⏳",
-      title:"Account pending approval",
-      msg:"Your account has been successfully created and your email verified.",
-      sub:"Please contact your administrator to request access to AeroQualify Pro.",
-      color: "#e65100",
-      bg: "#fff3e0",
-    },
-    noProfile: {
-      icon:"⚠️",
-      title:"Account setup incomplete",
-      msg:"Your account was created but the profile setup did not complete.",
-      sub:"Please contact your administrator for assistance.",
-      color: "#c62828",
-      bg: "#ffebee",
-    },
+  // Live-resolve org slug as user types
+  const resolveSlug = async (slug) => {
+    if(!slug.trim()){ setOrgHint(null); return; }
+    const { data } = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toLowerCase()).single();
+    setOrgHint(data || false); // false = not found, null = not typed yet
   };
+
+  const POPUPS = {
+    signup: { icon:"📧", title:"Check your email", msg:"A verification link has been sent to your email address. Click the link to verify your account, then return here to sign in.", sub:"Once verified, your account will be reviewed by an administrator before you can access AeroQualify.", color:"#01579b", bg:"#e3f2fd" },
+    pending: { icon:"⏳", title:"Account pending approval", msg:"Your account has been successfully created and your email verified.", sub:"Please contact your administrator to request access to AeroQualify Pro.", color:"#e65100", bg:"#fff3e0" },
+    noProfile: { icon:"⚠️", title:"Account setup incomplete", msg:"Your account was created but the profile setup did not complete.", sub:"Please contact your administrator for assistance.", color:"#c62828", bg:"#ffebee" },
+    newOrgAssigned: { icon:"✅", title:"Organisation access requested", msg:"Your account has been linked to the organisation. An administrator will review and approve your access.", sub:"You will be able to sign in once approved.", color:"#2e7d32", bg:"#e8f5e9" },
+  };
+
   const handle = async(e) => {
     e.preventDefault(); setLoading(true); setErr("");
     try {
       if(mode==="reset"){
         const{error}=await supabase.auth.resetPasswordForEmail(email);
-        if(error)throw error; setErr("✓ Reset link sent — check your email");
+        if(error) throw error;
+        setErr("✓ Reset link sent — check your email");
+
       } else if(mode==="signup"){
-        const{data:signUpData,error}=await supabase.auth.signUp({email,password:pw,options:{data:{full_name:email.split("@")[0]}}});
-        // Show exact error or response for debugging
+        // Resolve org from slug if provided
+        let resolvedOrgId = null;
+        if(orgSlug.trim()){
+          const { data: orgData } = await supabase.from("organisations").select("id,name").eq("slug", orgSlug.trim().toLowerCase()).single();
+          if(!orgData){ setErr("Organisation ID not found. Please check and try again."); setLoading(false); return; }
+          resolvedOrgId = orgData.id;
+        }
+        // Check if user already exists
+        const { data: existingProf } = await supabase.from("profiles").select("id,org_id,status").eq("email", email.trim().toLowerCase()).single();
+        if(existingProf){
+          // User exists — add to new org via user_organisations junction table
+          if(!resolvedOrgId){ setErr("Please enter an Organisation ID to join an additional organisation."); setLoading(false); return; }
+          const { error: joinErr } = await supabase.from("user_organisations").upsert({
+            user_id: existingProf.id, org_id: resolvedOrgId, role:"viewer", status:"pending"
+          });
+          if(joinErr){ setErr("Error: "+joinErr.message); setLoading(false); return; }
+          await supabase.auth.signOut();
+          setMode("login");
+          setLoading(false);
+          setPopup("newOrgAssigned");
+          return;
+        }
+        // New user signup
+        const{data:signUpData,error}=await supabase.auth.signUp({
+          email, password:pw,
+          options:{ data:{ full_name: fullName||email.split("@")[0], org_slug: orgSlug.trim().toLowerCase() } }
+        });
         if(error){ setErr("Signup error: "+error.message); setLoading(false); return; }
-        if(!signUpData?.user){ setErr("Signup failed: no user returned from Supabase. Please try again."); setLoading(false); return; }
+        if(!signUpData?.user){ setErr("Signup failed: no user returned. Please try again."); setLoading(false); return; }
+        // If org slug provided, store the intended org on the profile
+        if(resolvedOrgId){
+          await supabase.from("profiles").update({ org_id: resolvedOrgId }).eq("id", signUpData.user.id);
+        }
         await supabase.auth.signOut();
         setMode("login");
         setLoading(false);
         setPopup("signup");
         return;
+
       } else {
+        // ── Sign in ──
         const{data,error}=await supabase.auth.signInWithPassword({email,password:pw});
-        if(error)throw error;
+        if(error) throw error;
 
-        // Security gate — check profile status before granting access
+        // Check profile
         const { data: prof, error: profErr } = await supabase
-          .from("profiles").select("status, role").eq("id", data.user.id).single();
+          .from("profiles").select("status,role,org_id,is_super_admin").eq("id", data.user.id).single();
+        if(profErr || !prof){ setPopup("noProfile"); setLoading(false); await supabase.auth.signOut(); return; }
+        if(prof.status !== "approved"){ setPopup("pending"); setLoading(false); await supabase.auth.signOut(); return; }
 
-        if(profErr || !prof){
-          setPopup("noProfile");
+        // Super admin with no org slug → platform portal
+        if(prof.is_super_admin && !orgSlug.trim()){
+          onLogin(data.user, null, true); // null orgId, isSuperAdminMode=true
           setLoading(false);
-          await supabase.auth.signOut();
           return;
         }
 
-        if(prof.status !== "approved"){
-          setPopup("pending");
+        // Resolve org slug if provided
+        if(orgSlug.trim()){
+          const { data: orgData } = await supabase.from("organisations").select("id,name,status").eq("slug", orgSlug.trim().toLowerCase()).single();
+          if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
+          if(orgData.status !== "active"){ setErr("This organisation account is currently suspended."); await supabase.auth.signOut(); setLoading(false); return; }
+          // Verify user belongs to this org
+          if(prof.org_id !== orgData.id){
+            // Check user_organisations junction table for multi-org members
+            const { data: membership } = await supabase.from("user_organisations")
+              .select("status,role").eq("user_id", data.user.id).eq("org_id", orgData.id).single();
+            if(!membership){ setErr("You do not have access to this organisation. Contact your administrator."); await supabase.auth.signOut(); setLoading(false); return; }
+            if(membership.status !== "approved"){ setErr("Your access to this organisation is pending approval."); await supabase.auth.signOut(); setLoading(false); return; }
+          }
+          onLogin(data.user, orgData.id, false);
           setLoading(false);
-          await supabase.auth.signOut();
           return;
         }
 
-        onLogin(data.user);
+        onLogin(data.user, null, false);
       }
-    } catch(ex){setErr(ex.message);} setLoading(false);
+    } catch(ex){ setErr(ex.message); }
+    setLoading(false);
   };
+
   return (
-    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg, #e3f2fd 0%, #f0f4f8 50%, #e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,#e3f2fd 0%,#f0f4f8 50%,#e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
       <GlobalStyle />
-      {/* Sky horizon decoration */}
       <div style={{ position:"fixed", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})` }} />
 
-      {/* ── Popup overlay ── */}
       {popup&&POPUPS[popup]&&(
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
           <div style={{ background:"#fff", borderRadius:16, padding:36, maxWidth:420, width:"100%", textAlign:"center", boxShadow:"0 20px 60px rgba(0,0,0,0.2)", animation:"fadeIn 0.3s ease" }}>
@@ -839,12 +933,14 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           </div>
         </div>
       )}
-      <div style={{ width:400, animation:"fadeIn 0.5s ease" }}>
+
+      <div style={{ width:420, animation:"fadeIn 0.5s ease" }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ width:64, height:64, borderRadius:16, background:`linear-gradient(135deg,${T.primary},${T.sky})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px", boxShadow:"0 4px 20px rgba(1,87,155,0.25)" }}>✈</div>
           <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primaryDk, letterSpacing:1 }}>AeroQualify Pro</div>
           <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>Aviation Quality Management System</div>
         </div>
+
         <div className="card" style={{ padding:32 }}>
           <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:22 }}>
             {mode==="login"?"Sign In":mode==="signup"?"Create Account":"Reset Password"}
@@ -852,12 +948,37 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           <form onSubmit={handle}>
             <Input label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" required />
             {mode!=="reset"&&<Input label="Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" required />}
+            {mode==="signup"&&(
+              <Input label="Full Name" value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Your full name" />
+            )}
+            {mode!=="reset"&&(
+              <div style={{ marginBottom:16 }}>
+                <Input label="Organisation ID" value={orgSlug}
+                  onChange={e=>{ setOrgSlug(e.target.value); resolveSlug(e.target.value); }}
+                  placeholder={mode==="login"?"Ask your organisation admin for the code":"Ask your organisation admin for the code"}
+                />
+                {/* Live org resolution feedback */}
+                {orgSlug.trim()&&orgHint===null&&<div style={{ fontSize:11, color:T.muted, marginTop:-10, marginBottom:8 }}>Checking…</div>}
+                {orgSlug.trim()&&orgHint&&<div style={{ fontSize:11, color:T.green, marginTop:-10, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>✓ {orgHint.name}</div>}
+                {orgSlug.trim()&&orgHint===false&&<div style={{ fontSize:11, color:T.red, marginTop:-10, marginBottom:8 }}>✗ Organisation not found</div>}
+                <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
+                  {mode==="login"
+                    ? "Enter your organisation's ID to load the correct dashboard."
+                    : "Enter the organisation ID provided by your administrator."}
+                </div>
+              </div>
+            )}
             {err&&<div style={{ fontSize:12, color:err.startsWith("✓")?T.green:T.red, marginBottom:14, padding:"8px 12px", background:err.startsWith("✓")?T.greenLt:T.redLt, borderRadius:6 }}>{err}</div>}
-            <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>{loading?"Please wait…":mode==="login"?"Sign In":mode==="signup"?"Create Account":"Send Reset Link"}</Btn>
+            <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>
+              {loading?"Please wait…":mode==="login"?"Sign In":mode==="signup"?"Create Account":"Send Reset Link"}
+            </Btn>
           </form>
           <div style={{ display:"flex", justifyContent:"space-between", marginTop:16 }}>
-            <button onClick={()=>setMode(mode==="login"?"signup":"login")} style={{ background:"none",border:"none",color:T.primary,fontSize:12 }}>{mode==="login"?"Create account":"Back to sign in"}</button>
-            {mode==="login"&&<button onClick={()=>setMode("reset")} style={{ background:"none",border:"none",color:T.muted,fontSize:12 }}>Forgot password?</button>}
+            <button onClick={()=>{ setMode(mode==="login"?"signup":"login"); setErr(""); setOrgHint(null); }}
+              style={{ background:"none",border:"none",color:T.primary,fontSize:12,cursor:"pointer" }}>
+              {mode==="login"?"Create account":"Back to sign in"}
+            </button>
+            {mode==="login"&&<button onClick={()=>setMode("reset")} style={{ background:"none",border:"none",color:T.muted,fontSize:12,cursor:"pointer" }}>Forgot password?</button>}
           </div>
         </div>
         <div style={{ textAlign:"center", marginTop:16, fontSize:11, color:T.muted }}>AS9100D · ISO 9001:2015 · AS9110</div>
@@ -948,7 +1069,7 @@ const Dashboard = ({ data }) => {
     {label:"Pend. Verif.",  value:pendVerif,  color:T.purple, icon:"🔍", sub:"Awaiting QM review"},
     {label:"Closed",        value:closedCARs, color:T.green,  icon:"✅", sub:"Verified closed"},
     {label:"Upcoming Audits",value:upAudits,  color:T.teal,   icon:"📅", sub:"Scheduled"},
-    {label:"Expiring Docs", value:expDocs,    color:T.yellow, icon:"📄", sub:"Within 14 days"},
+    {label:"Expiring Docs", value:expDocs,    color:T.yellow, icon:"📂", sub:"Within 14 days"},
   ];
 
   return (
@@ -1095,17 +1216,17 @@ const AREA_CODES_CAR = {
   "Ground School Training":"007","Flight Training Records":"008",
   "Company Manuals & Documents":"009","Base Training Facilities":"010",
   "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
-  "Ground & Flight Instructor Records":"014","Quality Management":"016",
+  "Personnel Records & Qualifications":"014","Quality Management":"016",
   "Safety Management Systems":"017","Fuel Supplier":"022",
 };
-const getAuditRef = (slot) => {
+const getAuditRef = (slot, prefix="PGF") => {
   const code = AREA_CODES_CAR[slot.area]||"000";
   const d = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
   const dd=String(d.getDate()).padStart(2,"0"), mm=String(d.getMonth()+1).padStart(2,"0"), yyyy=d.getFullYear();
-  return `PGF-QMS-${code}-${dd}${mm}${yyyy}`;
+  return `${prefix}-QMS-${code}-${dd}${mm}${yyyy}`;
 };
 
-const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule }) => {
+const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas }) => {
   const [selectedAuditId, setSelectedAuditId] = useState(car?.audit_ref||"");
   const auditRef = selectedAuditId || car?.audit_ref || "";
 
@@ -1129,7 +1250,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule }) =>
     if(!slotId){ set("audit_ref",""); set("id",`CAR-${String(Date.now()).slice(-6)}`); return; }
     const slot = (auditSchedule||[]).find(s=>s.id===slotId);
     if(!slot) return;
-    const ref = getAuditRef(slot);
+    const ref = getAuditRef(slot, orgPrefix);
     const count = (allCars||[]).filter(c=>c.audit_ref===ref && (!car||c.id!==car.id)).length;
     const num = String(count+1).padStart(3,"0");
     set("audit_ref", ref);
@@ -1144,7 +1265,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule }) =>
         <div style={{ gridColumn:"1/-1" }}>
           <Select label="Link to Audit (optional)" value={selectedAuditId} onChange={e=>handleAuditChange(e.target.value)}>
             <option value="">— Standalone CAR (not linked to audit) —</option>
-            {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s)} · {s.area} · {s.year}</option>)}
+            {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix)} · {s.area} · {s.year}</option>)}
           </Select>
         </div>
         <Input label="CAR Number" value={form.id||""} onChange={e=>set("id",e.target.value)} />
@@ -1165,7 +1286,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule }) =>
         </Select>
         <Select label="Department" value={form.department||""} onChange={e=>set("department",e.target.value)}>
           <option value="">Select…</option>
-          {["Training","Safety","Quality","Administration","Maintenance"].map(o=><option key={o}>{o}</option>)}
+          {(auditAreas||["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]).map(o=><option key={o}>{o}</option>)}
         </Select>
         <Input label="Due Date" type="date" value={form.due_date||""} onChange={e=>set("due_date",e.target.value)} />
         <div style={{ gridColumn:"1/-1" }}>
@@ -1924,7 +2045,20 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
                                         <span>📎</span>
                                         <span style={{ fontSize:13,color:isRejected?"#c62828":T.green,fontWeight:600 }}>{f.name}</span>
                                       </div>
-                                      {f.url&&!f.url.startsWith("data:")&&<a href={f.url} target="_blank" rel="noreferrer" style={{ fontSize:12,color:T.primary,fontWeight:600 }}>🔗 View</a>}
+                                      <div style={{ display:"flex",gap:6 }}>
+                                        {f.url&&f.url.startsWith("data:")&&(
+                                          <a href={f.url} download={f.name}
+                                            style={{ fontSize:12,color:"#fff",fontWeight:600,background:T.primary,borderRadius:5,padding:"3px 10px",textDecoration:"none" }}>
+                                            ⬇ Download
+                                          </a>
+                                        )}
+                                        {f.url&&!f.url.startsWith("data:")&&(
+                                          <a href={f.url} target="_blank" rel="noreferrer"
+                                            style={{ fontSize:12,color:T.primary,fontWeight:600 }}>
+                                            🔗 View
+                                          </a>
+                                        )}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -2005,7 +2139,7 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 
 
 // ─── CARs Table View ──────────────────────────────────────────
-const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
+const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
   const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify'
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
@@ -2829,7 +2963,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
         </table>
       </div>
 
-      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} />}
+      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} />}
       {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast}/>}
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
       {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} />}
@@ -3104,10 +3238,10 @@ const AboutView = () => {
       { clause:"6.2",    text:"Quality objectives register", ok:false },
       { clause:"7.1.5",  text:"Calibration and measurement resources register", ok:false },
     ]},
-    { std:"KCAA ATO Regulatory Requirements", color:"#2e7d32", bg:"#e8f5e9", items:[
+    { std:"Regulatory Document Compliance", color:"#2e7d32", bg:"#e8f5e9", items:[
       { clause:"CAP Tracking",  text:"System for tracking internal and KCAA-issued CAPs", ok:true },
       { clause:"Doc Control",   text:"Quality Manual and associated document control", ok:true },
-      { clause:"Cert Tracking", text:"ATO certificate, approvals and regulatory document expiry", ok:true },
+      { clause:"Cert Tracking", text:"Certificates, approvals and regulatory document expiry tracking", ok:true },
       { clause:"Contractors",   text:"Approved maintenance and service provider register", ok:true },
       { clause:"Audit Trail",   text:"Record of all quality-related actions and decisions", ok:true },
       { clause:"QM Amendment",  text:"System referenced in Quality Manual — amendment pending", ok:"partial" },
@@ -3145,7 +3279,7 @@ const AboutView = () => {
             </div>
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:6, fontWeight:300 }}>Aviation Quality Management System</div>
             <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-              {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA ATO"].map(b=>(
+              {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA"].map(b=>(
                 <span key={b} style={{ fontSize:10, fontWeight:700, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, padding:"3px 9px", letterSpacing:0.5 }}>{b}</span>
               ))}
             </div>
@@ -3364,7 +3498,7 @@ const RISK_LIKELIHOOD = [
   {value:2,label:"Improbable",            desc:"Very unlikely to occur"},
   {value:1,label:"Extremely Improbable",  desc:"Almost inconceivable"},
 ];
-const RISK_CATEGORIES = ["Flight Operations","Ground Operations","Training","Maintenance","Security","Environmental","Organisational"];
+const RISK_CATEGORIES = ["Flight Operations","Ground Operations","Maintenance","Training","Safety","Security","Environmental","Organisational","Engineering","Regulatory Compliance"];
 
 const riskRating=(s,l)=>{
   const idx=s*l;
@@ -3699,7 +3833,7 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast 
 // ─── Annual Audit Schedule Builder ────────────────────────────
 const AUDIT_AREAS = [
   "Management Personnel Records",
-  "Ground and Flight Instructor Records",
+  "Personnel Records & Qualifications",
   "Ground School Training Records",
   "Flight Training Records",
   "Company Manuals and Relevant Documents",
@@ -5394,12 +5528,13 @@ const TABS = [
   {id:"dashboard",    label:"Dashboard",       icon:"▦",  group:"main"},
   {id:"cars",         label:"CARs",            icon:"📋", group:"main"},
   {id:"documents",    label:"Documents",       icon:"📄", group:"main"},
-  {id:"flightdocs",   label:"Flight School Docs",icon:"🏫",group:"main"},
+  {id:"flightdocs",   label:"Company Documents",icon:"📂",group:"main"},
   {id:"audits",       label:"Audits",          icon:"🔍", group:"main"},
   {id:"contractors",  label:"Contractors",     icon:"🔧", group:"main"},
   {id:"risks",        label:"Risk Register",   icon:"⚠️", group:"main"},
   {id:"rca",          label:"Root Cause Analysis", icon:"🧠", group:"main"},
   {id:"managers",     label:"Managers",        icon:"👥", group:"settings"},
+  {id:"orgsettings",  label:"Org Settings",    icon:"⚙️",  group:"settings"},
   {id:"changelog",    label:"Change Log",      icon:"📋", group:"settings"},
   {id:"about",        label:"About",           icon:"(i)", group:"settings"},
   {id:"superadmin",   label:"Super Admin",     icon:"⚡",  group:"superadmin"},
@@ -5408,10 +5543,12 @@ const TABS = [
 
 // ─── Super Admin Panel ────────────────────────────────────────
 const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
-  const [tab, setTab]           = useState("orgs");
+  const [tab, setTab]           = useState("dashboard");
   const [newOrg, setNewOrg]     = useState({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
   const [creating, setCreating] = useState(false);
-  const [editOrg, setEditOrg]   = useState(null);
+  const [selectedOrg, setSelectedOrg] = useState(null);
+  const [activityLog, setActivityLog] = useState([]);
+  const [loadingLog,  setLoadingLog]  = useState(false);
 
   const slugify = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 
@@ -5421,8 +5558,83 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     const slug = newOrg.slug || slugify(newOrg.name);
     const { error } = await supabase.from("organisations").insert({ ...newOrg, slug });
     if(error){ showToast("Error: "+error.message,"error"); }
-    else { showToast("Organisation created","success"); setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" }); onRefresh(); }
+    else { showToast("Organisation created","success"); setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" }); onRefresh(); setTab("orgs"); }
     setCreating(false);
+  };
+
+  const seedDemoOrg = async (orgId) => {
+    if(!window.confirm("This will populate the selected organisation with realistic demo data. Continue?")) return;
+    showToast("Seeding demo data…","success");
+    const today = new Date();
+    const daysAgo = (n) => new Date(today-n*86400000).toISOString().slice(0,10);
+    const daysFromNow = (n) => new Date(today.getTime()+n*86400000).toISOString().slice(0,10);
+    const managers = [
+      {id:`${orgId}-mgr-1`,org_id:orgId,role_title:"Accountable Manager",person_name:"James Mwangi",email:"accountable@demo-aviation.com",phone:"+254700000001"},
+      {id:`${orgId}-mgr-2`,org_id:orgId,role_title:"Quality Manager",person_name:"Sarah Ochieng",email:"qm@demo-aviation.com",phone:"+254700000002"},
+      {id:`${orgId}-mgr-3`,org_id:orgId,role_title:"Head of Training",person_name:"Capt. David Njoroge",email:"training@demo-aviation.com",phone:"+254700000003"},
+      {id:`${orgId}-mgr-4`,org_id:orgId,role_title:"Head of Maintenance",person_name:"Thomas Kamau",email:"maintenance@demo-aviation.com",phone:"+254700000004"},
+    ];
+    await supabase.from("responsible_managers").insert(managers);
+    const auditSlots = [
+      {id:`${orgId}-aud-1`,org_id:orgId,year:2026,month:1,area:"Flight Operations",type:"Internal",planned_date:daysAgo(45),status:"Completed"},
+      {id:`${orgId}-aud-2`,org_id:orgId,year:2026,month:2,area:"Maintenance",type:"Internal",planned_date:daysAgo(20),status:"Completed"},
+      {id:`${orgId}-aud-3`,org_id:orgId,year:2026,month:3,area:"Safety",type:"Internal",planned_date:daysFromNow(10),status:"Scheduled"},
+      {id:`${orgId}-aud-4`,org_id:orgId,year:2026,month:4,area:"Quality",type:"Regulatory",planned_date:daysFromNow(30),status:"Scheduled"},
+      {id:`${orgId}-aud-5`,org_id:orgId,year:2026,month:6,area:"Training",type:"Surveillance",planned_date:daysFromNow(75),status:"Scheduled"},
+    ];
+    await supabase.from("audit_schedule").insert(auditSlots);
+    const audits = [
+      {id:`${orgId}-audit-1`,org_id:orgId,title:"Q1 Flight Operations Internal Audit",type:"Internal",status:"Completed",lead:"Sarah Ochieng",scope:"Flight crew records, ops manual compliance, route authorisations",date:daysAgo(45),findings:3,obs:2},
+      {id:`${orgId}-audit-2`,org_id:orgId,title:"Maintenance Base Inspection",type:"Internal",status:"Completed",lead:"Sarah Ochieng",scope:"AMM compliance, tooling calibration, technician licensing",date:daysAgo(20),findings:1,obs:4},
+      {id:`${orgId}-audit-3`,org_id:orgId,title:"Safety Management System Review",type:"Internal",status:"Scheduled",lead:"Sarah Ochieng",scope:"SMS documentation, hazard reporting, safety promotion",date:daysFromNow(10),findings:0,obs:0},
+    ];
+    await supabase.from("audits").insert(audits);
+    const cars = [
+      {id:`DEMO-QMS-001-${daysAgo(45).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Flight crew training records found incomplete — simulator hours not logged for 3 crew members",qms_clause:"Ops Manual Section 4.2 — Crew Training Records",severity:"Major",status:"Closed",department:"Training",date_raised:daysAgo(45),due_date:daysAgo(15),responsible_manager:"Head of Training",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-002-${daysAgo(40).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Aircraft maintenance logbook entries missing for 2 routine inspections",qms_clause:"Maintenance Manual AMM 5.20 — Maintenance Records",severity:"Critical",status:"Closed",department:"Maintenance",date_raised:daysAgo(40),due_date:daysAgo(10),responsible_manager:"Head of Maintenance",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-003-${daysAgo(30).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Emergency equipment checklist not completed for 4 consecutive flights",qms_clause:"Ops Manual Section 8.1 — Emergency Equipment",severity:"Critical",status:"Pending Verification",department:"Flight Operations",date_raised:daysAgo(30),due_date:daysFromNow(5),responsible_manager:"Head of Training",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-004-${daysAgo(20).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Contractor approval documentation expired for two ground handling providers",qms_clause:"QMS Clause 8.4 — Control of Externally Provided Services",severity:"Major",status:"In Progress",department:"Administration",date_raised:daysAgo(20),due_date:daysFromNow(10),responsible_manager:"Accountable Manager",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-005-${daysAgo(10).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"KCAA operating certificate renewal overdue by 15 days",qms_clause:"Regulatory Compliance — AOC Certificate Validity",severity:"Critical",status:"Open",department:"Quality",date_raised:daysAgo(10),due_date:daysFromNow(7),responsible_manager:"Accountable Manager",raised_by_name:"Sarah Ochieng"},
+      {id:`DEMO-QMS-006-${daysAgo(5).replace(/-/g,"")}-CAPA001`,org_id:orgId,finding_description:"Fuel quality test records incomplete for Wilson Airport refuelling point",qms_clause:"Ops Manual Section 6.3 — Fuel Management",severity:"Minor",status:"Open",department:"Flight Operations",date_raised:daysAgo(5),due_date:daysFromNow(20),responsible_manager:"Head of Training",raised_by_name:"James Mwangi"},
+    ];
+    await supabase.from("cars").insert(cars);
+    const caps = [
+      {id:`${orgId}-cap-1`,org_id:orgId,car_id:cars[0].id,immediate_action:"All affected crew members identified and simulator sessions scheduled within 48 hours",root_cause_analysis:"Training coordinator departure left a gap in record-keeping — no handover procedure was in place",corrective_action:"Simulator hours logged and verified for all 3 crew members. Training coordinator role formally documented.",preventive_action:"Digital training record system implemented. Monthly QM review of training logs introduced.",submitted_by_name:"Capt. David Njoroge",submitted_at:new Date(today-30*86400000).toISOString(),status:"Complete"},
+      {id:`${orgId}-cap-2`,org_id:orgId,car_id:cars[1].id,immediate_action:"Missing logbook entries reconstructed from engineer work orders and signed off by Lead Engineer",root_cause_analysis:"Paper-based dual-entry system prone to omission when engineers are under time pressure",corrective_action:"All missing entries completed and verified. Engineer briefing conducted.",preventive_action:"Electronic maintenance logbook system introduced. Pre-flight QA check added to sign-off procedure.",submitted_by_name:"Thomas Kamau",submitted_at:new Date(today-25*86400000).toISOString(),status:"Complete"},
+      {id:`${orgId}-cap-3`,org_id:orgId,car_id:cars[2].id,immediate_action:"Affected crew briefed and emergency equipment checks reinstated immediately",root_cause_analysis:"Checklist item inadvertently removed during a manual revision — not caught in the review process",corrective_action:"Ops Manual revised and emergency checklist item restored. All crew re-briefed.",preventive_action:"Document control procedure updated to require QM sign-off on all checklist changes.",submitted_by_name:"Capt. David Njoroge",submitted_at:new Date(today-10*86400000).toISOString(),status:"Complete"},
+    ];
+    await supabase.from("caps").insert(caps);
+    const verifs = [
+      {id:`${orgId}-verif-1`,org_id:orgId,car_id:cars[0].id,immediate_action_ok:true,root_cause_ok:true,corrective_action_ok:true,preventive_action_ok:true,evidence_ok:true,recurrence_prevented:true,effectiveness_rating:"Effective",status:"Closed",verified_by_name:"Sarah Ochieng",verified_at:new Date(today-20*86400000).toISOString(),verifier_comments:"All training records verified as complete. Digital system confirmed operational. Finding closed."},
+      {id:`${orgId}-verif-2`,org_id:orgId,car_id:cars[1].id,immediate_action_ok:true,root_cause_ok:true,corrective_action_ok:true,preventive_action_ok:true,evidence_ok:true,recurrence_prevented:true,effectiveness_rating:"Effective",status:"Closed",verified_by_name:"Sarah Ochieng",verified_at:new Date(today-15*86400000).toISOString(),verifier_comments:"Electronic logbook system verified. All entries complete and signed. Finding closed."},
+    ];
+    await supabase.from("capa_verifications").insert(verifs);
+    await supabase.from("cars").update({status:"Closed"}).eq("id",cars[0].id);
+    await supabase.from("cars").update({status:"Closed"}).eq("id",cars[1].id);
+    const risks = [
+      {id:`${orgId}-risk-1`,org_id:orgId,hazard_description:"Bird strike on approach to Wilson Airport",category:"Flight Operations",severity:4,likelihood:3,residual_severity:3,residual_likelihood:2,treatment:"Bird scaring equipment installed. Crew briefed on bird activity reporting.",status:"Monitoring",owner:"Head of Training",target_date:daysFromNow(60)},
+      {id:`${orgId}-risk-2`,org_id:orgId,hazard_description:"Key maintenance engineer resignation without knowledge transfer",category:"Maintenance",severity:3,likelihood:2,residual_severity:2,residual_likelihood:1,treatment:"Cross-training programme initiated. Maintenance manuals updated.",status:"Open",owner:"Head of Maintenance",target_date:daysFromNow(30)},
+      {id:`${orgId}-risk-3`,org_id:orgId,hazard_description:"KCAA regulatory requirement changes without adequate notice",category:"Regulatory Compliance",severity:4,likelihood:2,residual_severity:3,residual_likelihood:1,treatment:"QM subscribed to KCAA regulatory update mailing list. Monthly regulatory review meeting established.",status:"Monitoring",owner:"Accountable Manager",target_date:daysFromNow(90)},
+      {id:`${orgId}-risk-4`,org_id:orgId,hazard_description:"Fuel contamination at third-party refuelling point",category:"Flight Operations",severity:5,likelihood:1,residual_severity:4,residual_likelihood:1,treatment:"Fuel testing procedure implemented at all refuelling points.",status:"Open",owner:"Head of Training",target_date:daysFromNow(45)},
+      {id:`${orgId}-risk-5`,org_id:orgId,hazard_description:"Loss of critical QMS documentation in system failure",category:"Organisational",severity:3,likelihood:2,residual_severity:2,residual_likelihood:1,treatment:"Cloud backup of all QMS documents. AeroQualify Pro used as system of record.",status:"Closed",owner:"Accountable Manager",target_date:daysAgo(5)},
+    ];
+    await supabase.from("risk_register").insert(risks);
+    const fdocs = [
+      {id:`${orgId}-doc-1`,org_id:orgId,title:"Operations Manual Part A",doc_number:"OPS/A/001",rev:"Rev 4",category:"Core QMS",status:"Valid",date:daysAgo(60),expiry_date:daysFromNow(305),issue_date:daysAgo(60),issuing_authority:"KCAA"},
+      {id:`${orgId}-doc-2`,org_id:orgId,title:"Air Operator Certificate",doc_number:"AOC/KE/042",rev:"Rev 1",category:"Regulatory",status:"Valid",date:daysAgo(180),expiry_date:daysFromNow(12),issue_date:daysAgo(180),issuing_authority:"KCAA"},
+      {id:`${orgId}-doc-3`,org_id:orgId,title:"Safety Management System Manual",doc_number:"SMS/001",rev:"Rev 2",category:"Safety",status:"Valid",date:daysAgo(90),expiry_date:daysFromNow(275),issue_date:daysAgo(90),issuing_authority:"Internal"},
+      {id:`${orgId}-doc-4`,org_id:orgId,title:"Maintenance Organisation Exposition",doc_number:"MOE/001",rev:"Rev 3",category:"Maintenance",status:"Valid",date:daysAgo(120),expiry_date:daysFromNow(245),issue_date:daysAgo(120),issuing_authority:"KCAA"},
+      {id:`${orgId}-doc-5`,org_id:orgId,title:"Emergency Response Plan",doc_number:"ERP/001",rev:"Rev 1",category:"Safety",status:"Pending Renewal",date:daysAgo(200),expiry_date:daysFromNow(8),issue_date:daysAgo(200),issuing_authority:"Internal"},
+    ];
+    await supabase.from("flight_school_docs").insert(fdocs);
+    const contractors = [
+      {id:`${orgId}-con-1`,org_id:orgId,name:"Kenyan Avionics Services Ltd",category:"Avionics & Instruments",status:"Approved",rating:"A",contact:"info@kenyanavionics.co.ke",country:"Kenya",last_audit:daysAgo(90),next_audit:daysFromNow(275)},
+      {id:`${orgId}-con-2`,org_id:orgId,name:"Wilson Ground Handling Co.",category:"Ground Handling",status:"Conditional",rating:"B",contact:"ops@wilsonground.co.ke",country:"Kenya",last_audit:daysAgo(30),next_audit:daysFromNow(60)},
+      {id:`${orgId}-con-3`,org_id:orgId,name:"AfricaFuel Services",category:"Fuel Supplier",status:"Approved",rating:"A+",contact:"quality@africafuel.co.ke",country:"Kenya",last_audit:daysAgo(60),next_audit:daysFromNow(120)},
+    ];
+    await supabase.from("contractors").insert(contractors);
+    showToast("Demo data seeded successfully!","success");
+    onRefresh();
   };
 
   const updateOrgStatus = async (orgId, status) => {
@@ -5432,89 +5644,203 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     onRefresh();
   };
 
-  const assignUserToOrg = async (userId, orgId, role="viewer") => {
-    const { error } = await supabase.from("profiles").update({ org_id: orgId, status:"approved", role }).eq("id", userId);
+  const assignUser = async (userId, orgId, role) => {
+    if(!orgId||!role) return;
+    const { error } = await supabase.from("profiles").update({ org_id:orgId, role, status:"approved" }).eq("id", userId);
     if(error){ showToast("Error: "+error.message,"error"); return; }
-    showToast("User assigned to organisation","success");
+    showToast("User assigned and approved","success");
     onRefresh();
   };
 
-  const pendingUsers = orgUsers.filter(u => !u.org_id || u.status === "pending");
-  const approvedUsers = orgUsers.filter(u => u.status === "approved");
+  const loadActivity = async () => {
+    setLoadingLog(true);
+    const { data } = await supabase.from("change_log").select("*").order("created_at",{ascending:false}).limit(50);
+    setActivityLog(data||[]);
+    setLoadingLog(false);
+  };
+
+  // Computed stats
+  const activeOrgs   = orgs.filter(o=>o.status==="active").length;
+  const totalUsers   = orgUsers.length;
+  const pendingUsers = orgUsers.filter(u=>u.status==="pending");
+  const approvedUsers= orgUsers.filter(u=>u.status==="approved").length;
+
+  const TABS = [
+    {id:"dashboard", label:"📊 Dashboard", },
+    {id:"orgs",      label:"🏢 Organisations"},
+    {id:"users",     label:`👥 Users${pendingUsers.length>0?` (${pendingUsers.length} pending)`:""}` },
+    {id:"new",       label:"➕ New Org"},
+    {id:"activity",  label:"📋 Activity Log"},
+  ];
+
+  const StatCard = ({icon,label,value,sub,color="#01579b",bg="#e3f2fd"}) => (
+    <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:"20px 24px",display:"flex",alignItems:"center",gap:16 }}>
+      <div style={{ width:48,height:48,borderRadius:12,background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize:26,fontWeight:800,color,fontFamily:"'Oxanium',sans-serif",lineHeight:1 }}>{value}</div>
+        <div style={{ fontSize:12,fontWeight:600,color:"#1a2332",marginTop:2 }}>{label}</div>
+        {sub&&<div style={{ fontSize:11,color:"#8a9ab0",marginTop:1 }}>{sub}</div>}
+      </div>
+    </div>
+  );
 
   return (
-    <div>
-      <div style={{ marginBottom:24 }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:T.red, marginBottom:4 }}>⚡ Super Admin</div>
-        <div style={{ fontSize:13, color:T.muted }}>Manage all organisations and users across the platform</div>
-      </div>
+    <div style={{ display:"flex",flexDirection:"column",gap:0,height:"100%",minHeight:0 }}>
 
-      {/* Stats row */}
-      <div style={{ display:"flex", gap:14, marginBottom:24, flexWrap:"wrap" }}>
-        {[
-          { label:"Total Organisations", value:orgs.length, color:T.primary, icon:"🏢" },
-          { label:"Active Orgs", value:orgs.filter(o=>o.status==="active").length, color:T.green, icon:"✅" },
-          { label:"Total Users", value:orgUsers.length, color:T.teal, icon:"👤" },
-          { label:"Pending Approval", value:pendingUsers.length, color:T.red, icon:"⏳" },
-        ].map(s=>(
-          <div key={s.label} className="card" style={{ flex:1, minWidth:140, padding:"16px 20px", borderTop:`3px solid ${s.color}` }}>
-            <div style={{ fontSize:28, fontFamily:"'Oxanium',sans-serif", fontWeight:800, color:s.color }}>{s.value}</div>
-            <div style={{ fontSize:12, color:T.text, fontWeight:600, marginTop:4 }}>{s.label}</div>
+      {/* ── Header ── */}
+      <div style={{ background:"linear-gradient(135deg,#0d1b2a,#1a3a5c)",borderRadius:12,padding:"24px 28px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+        <div>
+          <div style={{ fontFamily:"'Oxanium',sans-serif",fontSize:22,fontWeight:800,color:"#fff",display:"flex",alignItems:"center",gap:10 }}>
+            <span style={{ fontSize:28 }}>⚡</span> AeroQualify Super Admin
           </div>
-        ))}
+          <div style={{ fontSize:13,color:"#90b4d4",marginTop:4 }}>Platform control centre — manage all organisations, users and system health</div>
+        </div>
+        <div style={{ textAlign:"right" }}>
+          <div style={{ fontSize:11,color:"#90b4d4" }}>Platform</div>
+          <div style={{ fontWeight:700,color:"#fff",fontSize:14 }}>aeroqualify.co.ke</div>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display:"flex", gap:8, marginBottom:20 }}>
-        {[["orgs","🏢 Organisations"],["users","👤 Users"],["new","➕ New Organisation"]].map(([id,label])=>(
-          <button key={id} onClick={()=>setTab(id)}
-            style={{ padding:"8px 18px", borderRadius:7, border:`1px solid ${tab===id?T.primary:T.border}`, background:tab===id?T.primary:"#fff", color:tab===id?"#fff":T.muted, fontWeight:600, fontSize:13, cursor:"pointer" }}>
+      {/* ── Nav Tabs ── */}
+      <div style={{ display:"flex",gap:6,marginBottom:20,flexWrap:"wrap" }}>
+        {TABS.map(({id,label})=>(
+          <button key={id} onClick={()=>{ setTab(id); if(id==="activity") loadActivity(); }}
+            style={{ padding:"9px 18px",borderRadius:8,border:`1.5px solid ${tab===id?"#01579b":"#dde3ea"}`,background:tab===id?"#01579b":"#fff",color:tab===id?"#fff":"#5f7285",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all 0.15s" }}>
             {label}
           </button>
         ))}
       </div>
 
-      {/* ── Organisations list */}
-      {tab==="orgs"&&(
-        <div className="card" style={{ padding:0, overflow:"hidden" }}>
-          {orgs.length===0?(
-            <div style={{ padding:32, textAlign:"center", color:T.muted }}>No organisations yet. Create one to get started.</div>
-          ):(
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+      {/* ── Dashboard Tab ── */}
+      {tab==="dashboard"&&(
+        <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+          {/* Stat cards */}
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14 }}>
+            <StatCard icon="🏢" label="Active Organisations" value={activeOrgs} sub={`${orgs.length} total`} color="#01579b" bg="#e3f2fd"/>
+            <StatCard icon="👥" label="Total Users" value={totalUsers} sub={`${approvedUsers} approved`} color="#2e7d32" bg="#e8f5e9"/>
+            <StatCard icon="⏳" label="Pending Approvals" value={pendingUsers.length} sub="Awaiting admin review" color={pendingUsers.length>0?"#c62828":"#2e7d32"} bg={pendingUsers.length>0?"#ffebee":"#e8f5e9"}/>
+            <StatCard icon="🌐" label="Platform" value="Live" sub="aeroqualify.co.ke" color="#6a1b9a" bg="#f3e5f5"/>
+          </div>
+
+          {/* Org health table */}
+          <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
+            <div style={{ padding:"16px 20px",borderBottom:"1px solid #dde3ea",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+              <div style={{ fontWeight:700,fontSize:15,color:"#1a2332" }}>Organisation Health</div>
+              <button onClick={onRefresh} style={{ background:"none",border:"1px solid #dde3ea",borderRadius:6,padding:"4px 12px",fontSize:12,color:"#5f7285",cursor:"pointer" }}>↻ Refresh</button>
+            </div>
+            <table style={{ width:"100%",borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f8fafc" }}>
-                  {["Organisation","Slug","Country","Contact","Status","Created","Actions"].map(h=>(
-                    <th key={h} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}`, textAlign:"left", fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{h}</th>
+                  {["Organisation","Users","CAR Prefix","Status","Created","Actions"].map(h=>(
+                    <th key={h} style={{ padding:"10px 16px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {orgs.map(o=>{
-                  const userCount = orgUsers.filter(u=>u.org_id===o.id).length;
+                  const uCount=orgUsers.filter(u=>u.org_id===o.id).length;
+                  const pending=orgUsers.filter(u=>u.org_id===o.id&&u.status==="pending").length;
+                  return (
+                    <tr key={o.id} style={{ cursor:"pointer" }} onClick={()=>setSelectedOrg(selectedOrg?.id===o.id?null:o)}>
+                      <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
+                        <div style={{ fontWeight:700,color:"#1a2332",fontSize:13 }}>{o.name}</div>
+                        <div style={{ fontSize:11,color:"#8a9ab0" }}>{o.slug} · {o.country||"—"}</div>
+                      </td>
+                      <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
+                        <div style={{ fontSize:13,color:"#1a2332",fontWeight:600 }}>{uCount}</div>
+                        {pending>0&&<div style={{ fontSize:11,color:"#c62828",fontWeight:600 }}>⚠ {pending} pending</div>}
+                      </td>
+                      <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8",fontFamily:"monospace",fontSize:13,fontWeight:700,color:"#01579b" }}>{o.car_prefix||"ORG"}</td>
+                      <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
+                        <span style={{ background:o.status==="active"?"#e8f5e9":"#ffebee",color:o.status==="active"?"#2e7d32":"#c62828",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600 }}>
+                          {o.status==="active"?"● Active":"○ Suspended"}
+                        </span>
+                      </td>
+                      <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#8a9ab0" }}>{fmt(o.created_at)}</td>
+                      <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
+                        <div style={{ display:"flex",gap:6 }}>
+                          {o.slug!=="default"&&(
+                            o.status==="active"
+                              ?<button onClick={e=>{e.stopPropagation();updateOrgStatus(o.id,"suspended");}} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Suspend</button>
+                              :<button onClick={e=>{e.stopPropagation();updateOrgStatus(o.id,"active");}} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
+                          )}
+                          <button onClick={e=>{e.stopPropagation();seedDemoOrg(o.id);}} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pending approvals quick action */}
+          {pendingUsers.length>0&&(
+            <div style={{ background:"#fff8e1",border:"1px solid #ffe082",borderRadius:12,padding:"16px 20px" }}>
+              <div style={{ fontWeight:700,fontSize:14,color:"#e65100",marginBottom:12 }}>⏳ {pendingUsers.length} user{pendingUsers.length!==1?"s":""} awaiting approval</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {pendingUsers.slice(0,5).map(u=>(
+                  <div key={u.id} style={{ display:"flex",alignItems:"center",gap:12,background:"#fff",borderRadius:8,padding:"10px 14px",border:"1px solid #ffe082" }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13,fontWeight:600,color:"#1a2332" }}>{u.full_name||u.email}</div>
+                      <div style={{ fontSize:11,color:"#8a9ab0" }}>{u.email}</div>
+                    </div>
+                    <button onClick={()=>setTab("users")} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>Review →</button>
+                  </div>
+                ))}
+                {pendingUsers.length>5&&<div style={{ fontSize:12,color:"#8a9ab0",padding:"4px 0" }}>+{pendingUsers.length-5} more — go to Users tab</div>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Organisations Tab ── */}
+      {tab==="orgs"&&(
+        <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
+          <div style={{ padding:"16px 20px",borderBottom:"1px solid #dde3ea",fontWeight:700,fontSize:15,color:"#1a2332" }}>All Organisations</div>
+          {orgs.length===0?(
+            <div style={{ padding:32,textAlign:"center",color:"#8a9ab0" }}>No organisations yet. Create one to get started.</div>
+          ):(
+            <table style={{ width:"100%",borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:"#f8fafc" }}>
+                  {["Organisation","Slug","Country","Contact","CAR Prefix","Status","Created","Actions"].map(h=>(
+                    <th key={h} style={{ padding:"10px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orgs.map(o=>{
+                  const userCount=orgUsers.filter(u=>u.org_id===o.id).length;
                   return (
                     <tr key={o.id} className="row-hover">
-                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
-                        <div style={{ fontWeight:700, color:T.text, fontSize:13 }}>{o.name}</div>
-                        <div style={{ fontSize:11, color:T.muted }}>{userCount} user{userCount!==1?"s":""}</div>
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                        <div style={{ fontWeight:700,color:"#1a2332",fontSize:13 }}>{o.name}</div>
+                        <div style={{ fontSize:11,color:"#8a9ab0" }}>{userCount} user{userCount!==1?"s":""}</div>
                       </td>
-                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}`, fontFamily:"monospace", fontSize:12, color:T.muted }}>{o.slug}</td>
-                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}`, fontSize:13, color:T.text }}>{o.country||"—"}</td>
-                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
-                        <div style={{ fontSize:12, color:T.text }}>{o.contact_name||"—"}</div>
-                        <div style={{ fontSize:11, color:T.muted }}>{o.contact_email||""}</div>
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8",fontFamily:"monospace",fontSize:12,color:"#8a9ab0" }}>{o.slug}</td>
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13 }}>{o.country||"—"}</td>
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                        <div style={{ fontSize:12,color:"#1a2332" }}>{o.contact_name||"—"}</div>
+                        <div style={{ fontSize:11,color:"#8a9ab0" }}>{o.contact_email||""}</div>
                       </td>
-                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
-                        <span style={{ background:o.status==="active"?T.greenLt:T.redLt, color:o.status==="active"?T.green:T.red, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:600 }}>
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8",fontFamily:"monospace",fontSize:13,fontWeight:700,color:"#01579b" }}>{o.car_prefix||"ORG"}</td>
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                        <span style={{ background:o.status==="active"?"#e8f5e9":"#ffebee",color:o.status==="active"?"#2e7d32":"#c62828",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:600 }}>
                           {o.status==="active"?"Active":"Suspended"}
                         </span>
                       </td>
-                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}`, fontSize:12, color:T.muted }}>{fmt(o.created_at)}</td>
-                      <td style={{ padding:"12px 14px", borderBottom:`1px solid ${T.border}` }}>
-                        {o.slug!=="default"&&(
-                          o.status==="active"
-                            ? <Btn size="sm" variant="danger" onClick={()=>updateOrgStatus(o.id,"suspended")} style={{ fontSize:11 }}>Suspend</Btn>
-                            : <Btn size="sm" variant="success" onClick={()=>updateOrgStatus(o.id,"active")} style={{ fontSize:11 }}>Activate</Btn>
-                        )}
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#8a9ab0" }}>{fmt(o.created_at)}</td>
+                      <td style={{ padding:"12px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                        <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                          {o.slug!=="default"&&(
+                            o.status==="active"
+                              ?<button onClick={()=>updateOrgStatus(o.id,"suspended")} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Suspend</button>
+                              :<button onClick={()=>updateOrgStatus(o.id,"active")} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
+                          )}
+                          <button onClick={()=>seedDemoOrg(o.id)} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -5525,116 +5851,279 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
         </div>
       )}
 
-      {/* ── Users list */}
+      {/* ── Users Tab ── */}
       {tab==="users"&&(
-        <div>
+        <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
           {pendingUsers.length>0&&(
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontWeight:700, fontSize:15, color:T.red, marginBottom:10 }}>⏳ Pending Approval ({pendingUsers.length})</div>
-              <div className="card" style={{ padding:0, overflow:"hidden" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                  <thead>
-                    <tr style={{ background:"#fff8f8" }}>
-                      {["Email","Name","Joined","Assign to Organisation + Role"].map(h=>(
-                        <th key={h} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}`, textAlign:"left", fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingUsers.map(u=>(
-                      <tr key={u.id} className="row-hover">
-                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.email}</td>
-                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.full_name||"—"}</td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:T.muted, borderBottom:`1px solid ${T.border}` }}>{fmt(u.created_at)}</td>
-                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
-                          <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                            <select style={{ padding:"5px 8px", border:`1px solid ${T.border}`, borderRadius:6, fontSize:12 }}
-                              onChange={e=>{
-                                const [orgId,role] = e.target.value.split("||");
-                                if(orgId&&role) assignUserToOrg(u.id, orgId, role);
-                              }}
-                              defaultValue="">
-                              <option value="">— Select org + role —</option>
-                              {orgs.filter(o=>o.status==="active").map(o=>(
-                                ["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
-                                  <option key={o.id+r} value={`${o.id}||${r}`}>{o.name} — {r.replace("_"," ")}</option>
-                                ))
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          <div>
-            <div style={{ fontWeight:700, fontSize:15, color:T.text, marginBottom:10 }}>All Users ({orgUsers.length})</div>
-            <div className="card" style={{ padding:0, overflow:"hidden" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <div style={{ background:"#fff",borderRadius:12,border:"1.5px solid #ffe082",overflow:"hidden" }}>
+              <div style={{ padding:"14px 20px",background:"#fff8e1",borderBottom:"1px solid #ffe082",fontWeight:700,fontSize:14,color:"#e65100" }}>⏳ Pending Approval ({pendingUsers.length})</div>
+              <table style={{ width:"100%",borderCollapse:"collapse" }}>
                 <thead>
-                  <tr style={{ background:"#f8fafc" }}>
-                    {["Email","Name","Organisation","Role","Status","Actions"].map(h=>(
-                      <th key={h} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}`, textAlign:"left", fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{h}</th>
+                  <tr style={{ background:"#fffde7" }}>
+                    {["Email","Name","Joined","Assign Organisation","Role","Action"].map(h=>(
+                      <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #ffe082",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {orgUsers.map(u=>{
-                    const userOrg = orgs.find(o=>o.id===u.org_id);
+                  {pendingUsers.map(u=>{
+                    const [assignOrg,setAssignOrg] = [u._org||"",v=>u._org=v];
                     return (
-                      <tr key={u.id} className="row-hover">
-                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.email}</td>
-                        <td style={{ padding:"10px 14px", fontSize:13, color:T.text, borderBottom:`1px solid ${T.border}` }}>{u.full_name||"—"}</td>
-                        <td style={{ padding:"10px 14px", fontSize:12, color:T.muted, borderBottom:`1px solid ${T.border}` }}>{userOrg?.name||"— Unassigned —"}</td>
-                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}><Badge label={u.role||"viewer"}/></td>
-                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
-                          <span style={{ background:u.status==="approved"?T.greenLt:T.yellowLt, color:u.status==="approved"?T.green:T.yellow, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:600 }}>
-                            {u.status==="approved"?"Approved":"Pending"}
-                          </span>
-                        </td>
-                        <td style={{ padding:"10px 14px", borderBottom:`1px solid ${T.border}` }}>
-                          {u.status==="approved"&&!u.is_super_admin&&(
-                            <Btn size="sm" variant="danger" onClick={async()=>{
-                              await supabase.from("profiles").update({status:"pending"}).eq("id",u.id);
-                              showToast("Access revoked","success"); onRefresh();
-                            }} style={{ fontSize:11 }}>Revoke</Btn>
-                          )}
-                        </td>
-                      </tr>
+                      <PendingUserRow key={u.id} u={u} orgs={orgs} onAssign={assignUser}/>
                     );
                   })}
                 </tbody>
               </table>
             </div>
+          )}
+          <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
+            <div style={{ padding:"14px 20px",borderBottom:"1px solid #dde3ea",fontWeight:700,fontSize:14,color:"#1a2332" }}>All Users ({orgUsers.length})</div>
+            <table style={{ width:"100%",borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:"#f8fafc" }}>
+                  {["Name","Email","Organisation","Role","Status","Joined"].map(h=>(
+                    <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orgUsers.map(u=>{
+                  const uOrg=orgs.find(o=>o.id===u.org_id);
+                  return (
+                    <tr key={u.id} className="row-hover">
+                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:600,color:"#1a2332" }}>{u.full_name||"—"}</td>
+                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{u.email}</td>
+                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#1a2332" }}>{uOrg?.name||<span style={{ color:"#8a9ab0" }}>Unassigned</span>}</td>
+                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}><Badge label={u.role||"viewer"}/></td>
+                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                        <span style={{ background:u.status==="approved"?"#e8f5e9":u.status==="pending"?"#fff8e1":"#ffebee",color:u.status==="approved"?"#2e7d32":u.status==="pending"?"#e65100":"#c62828",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600 }}>
+                          {u.status}
+                        </span>
+                      </td>
+                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* ── Create new organisation */}
+      {/* ── New Org Tab ── */}
       {tab==="new"&&(
-        <div className="card" style={{ padding:28, maxWidth:560 }}>
-          <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:20 }}>Create New Organisation</div>
-          <Input label="Organisation Name *" value={newOrg.name} onChange={e=>setNewOrg(p=>({...p,name:e.target.value,slug:slugify(e.target.value)}))} placeholder="e.g. Precision Air Services" />
-          <Input label="Slug (auto-generated, must be unique)" value={newOrg.slug} onChange={e=>setNewOrg(p=>({...p,slug:e.target.value}))} placeholder="e.g. precision-air" />
-          <Input label="Country" value={newOrg.country} onChange={e=>setNewOrg(p=>({...p,country:e.target.value}))} placeholder="Kenya" />
-          <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name" />
-          <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com" />
-          <Btn onClick={createOrg} style={{ opacity:creating?0.7:1 }} disabled={!newOrg.name.trim()||creating}>
-            {creating?"Creating…":"Create Organisation"}
-          </Btn>
+        <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28,maxWidth:560 }}>
+          <div style={{ fontWeight:700,fontSize:16,color:"#1a2332",marginBottom:4 }}>Create New Organisation</div>
+          <div style={{ fontSize:12,color:"#8a9ab0",marginBottom:20 }}>Set up a new client organisation on the AeroQualify platform.</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
+            <div style={{ gridColumn:"1/-1" }}>
+              <Input label="Organisation Name *" value={newOrg.name} onChange={e=>setNewOrg(p=>({...p,name:e.target.value,slug:slugify(e.target.value)}))} placeholder="e.g. Precision Air Services Ltd"/>
+            </div>
+            <Input label="Slug (auto-generated)" value={newOrg.slug} onChange={e=>setNewOrg(p=>({...p,slug:e.target.value}))} placeholder="e.g. precision-air"/>
+            <Input label="Country" value={newOrg.country} onChange={e=>setNewOrg(p=>({...p,country:e.target.value}))} placeholder="Kenya"/>
+            <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name"/>
+            <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com"/>
+          </div>
+          <div style={{ marginTop:20,display:"flex",gap:10 }}>
+            <Btn onClick={createOrg} disabled={!newOrg.name.trim()||creating} style={{ opacity:creating?0.7:1 }}>
+              {creating?"Creating…":"Create Organisation"}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>setTab("orgs")}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* ── Activity Log Tab ── */}
+      {tab==="activity"&&(
+        <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
+          <div style={{ padding:"14px 20px",borderBottom:"1px solid #dde3ea",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+            <div style={{ fontWeight:700,fontSize:15,color:"#1a2332" }}>Platform Activity Log</div>
+            <button onClick={loadActivity} style={{ background:"none",border:"1px solid #dde3ea",borderRadius:6,padding:"4px 12px",fontSize:12,color:"#5f7285",cursor:"pointer" }}>↻ Refresh</button>
+          </div>
+          {loadingLog?(
+            <div style={{ padding:32,textAlign:"center",color:"#8a9ab0" }}>Loading activity…</div>
+          ):(
+            <table style={{ width:"100%",borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:"#f8fafc" }}>
+                  {["Time","User","Action","Record","Table"].map(h=>(
+                    <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activityLog.length===0?(
+                  <tr><td colSpan={5} style={{ padding:32,textAlign:"center",color:"#8a9ab0" }}>No activity yet — click Refresh to load.</td></tr>
+                ):activityLog.map((log,i)=>(
+                  <tr key={i} className="row-hover">
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0",whiteSpace:"nowrap" }}>{new Date(log.created_at).toLocaleString()}</td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#1a2332" }}>{log.user_name||log.user_email||"—"}</td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#01579b",fontWeight:600 }}>{log.action}</td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{log.record_title||log.record_id||"—"}</td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0",fontFamily:"monospace" }}>{log.table_name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>
   );
 };
 
+// ── PendingUserRow — needs local state so must be its own component ──
+const PendingUserRow = ({ u, orgs, onAssign }) => {
+  const [orgId, setOrgId] = useState("");
+  const [role,  setRole]  = useState("viewer");
+  return (
+    <tr className="row-hover">
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1",fontSize:12,color:"#5f7285" }}>{u.email}</td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1",fontSize:13,fontWeight:600,color:"#1a2332" }}>{u.full_name||"—"}</td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1" }}>
+        <select value={orgId} onChange={e=>setOrgId(e.target.value)}
+          style={{ padding:"5px 8px",border:"1px solid #dde3ea",borderRadius:6,fontSize:12,minWidth:160 }}>
+          <option value="">Select org…</option>
+          {orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      </td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1" }}>
+        <select value={role} onChange={e=>setRole(e.target.value)}
+          style={{ padding:"5px 8px",border:"1px solid #dde3ea",borderRadius:6,fontSize:12 }}>
+          {["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1" }}>
+        <button onClick={()=>onAssign(u.id,orgId,role)} disabled={!orgId}
+          style={{ background:orgId?"#01579b":"#e8edf2",color:orgId?"#fff":"#8a9ab0",border:"none",borderRadius:6,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:orgId?"pointer":"default" }}>
+          Approve →
+        </button>
+      </td>
+    </tr>
+  );
+};
 // ─── Main App ─────────────────────────────────────────────────
+// ─── Org Settings Page ───────────────────────────────────────
+const OrgSettingsPage = ({ org, onSave }) => {
+  const [prefix, setPrefix]     = useState(org?.car_prefix||"ORG");
+  const [areas,  setAreas]      = useState(()=>{
+    try{ return JSON.parse(org?.audit_areas||"null") || [
+      "Flight Operations","Maintenance","Training","Safety",
+      "Quality","Administration","Engineering","Ground Operations"
+    ]; }catch{ return [
+      "Flight Operations","Maintenance","Training","Safety",
+      "Quality","Administration","Engineering","Ground Operations"
+    ]; }
+  });
+  const [newArea, setNewArea]   = useState("");
+  const [saving,  setSaving]    = useState(false);
+
+  const addArea = () => {
+    const trimmed = newArea.trim();
+    if(!trimmed || areas.includes(trimmed)) return;
+    setAreas(prev=>[...prev, trimmed]);
+    setNewArea("");
+  };
+  const removeArea = (a) => setAreas(prev=>prev.filter(x=>x!==a));
+  const moveArea = (idx, dir) => {
+    const next = [...areas];
+    const swap = idx+dir;
+    if(swap<0||swap>=next.length) return;
+    [next[idx],next[swap]]=[next[swap],next[idx]];
+    setAreas(next);
+  };
+
+  const save = async() => {
+    if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
+    setSaving(true);
+    await onSave({ car_prefix: prefix.trim().toUpperCase(), audit_areas: JSON.stringify(areas) });
+    setSaving(false);
+  };
+
+  const sectionHead = (title,sub) => (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontWeight:700, fontSize:15, color:"#1a2332" }}>{title}</div>
+      <div style={{ fontSize:12, color:"#5f7285", marginTop:2 }}>{sub}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth:700, margin:"0 auto", display:"flex", flexDirection:"column", gap:28 }}>
+
+      {/* CAR Naming Convention */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28 }}>
+        {sectionHead("CAR Naming Convention","Set the prefix used to generate CAR and CAPA reference numbers for your organisation.")}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+          <div style={{ flex:1 }}>
+            <label style={{ fontSize:11, fontWeight:700, color:"#5f7285", letterSpacing:0.8, textTransform:"uppercase", display:"block", marginBottom:6 }}>Organisation Prefix</label>
+            <input value={prefix} onChange={e=>setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))}
+              style={{ width:"100%", padding:"9px 12px", border:"1.5px solid #dde3ea", borderRadius:8, fontSize:14, fontFamily:"monospace", fontWeight:700, letterSpacing:1 }}
+              maxLength={6} placeholder="e.g. PGF, KQA, AMO" />
+            <div style={{ fontSize:11, color:"#8a9ab0", marginTop:4 }}>2–6 uppercase letters/numbers. No spaces or special characters.</div>
+          </div>
+        </div>
+        {/* Live preview */}
+        <div style={{ background:"#f0f4f8", borderRadius:8, padding:"12px 16px" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#5f7285", textTransform:"uppercase", letterSpacing:0.8, marginBottom:6 }}>Preview</div>
+          <div style={{ fontFamily:"monospace", fontSize:13, color:"#1a2332" }}>
+            <div>CAR ID: <strong>{prefix||"ORG"}-QMS-001-13032026-CAPA001</strong></div>
+            <div style={{ marginTop:4 }}>Audit Ref: <strong>{prefix||"ORG"}-QMS-007-13032026</strong></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Audit Areas */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28 }}>
+        {sectionHead("Audit Areas & Departments","Customise the list of audit areas used in CAR forms and audit scheduling for your organisation.")}
+
+        {/* Current areas */}
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:16 }}>
+          {areas.map((a,i)=>(
+            <div key={a} style={{ display:"flex", alignItems:"center", gap:8, background:"#f5f8fc", borderRadius:8, padding:"8px 12px", border:"1px solid #dde3ea" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                <button onClick={()=>moveArea(i,-1)} disabled={i===0}
+                  style={{ background:"none", border:"none", cursor:i===0?"default":"pointer", color:i===0?"#ccc":"#5f7285", fontSize:10, padding:0, lineHeight:1 }}>▲</button>
+                <button onClick={()=>moveArea(i,1)} disabled={i===areas.length-1}
+                  style={{ background:"none", border:"none", cursor:i===areas.length-1?"default":"pointer", color:i===areas.length-1?"#ccc":"#5f7285", fontSize:10, padding:0, lineHeight:1 }}>▼</button>
+              </div>
+              <span style={{ flex:1, fontSize:13, color:"#1a2332", fontWeight:500 }}>{a}</span>
+              <span style={{ fontSize:10, color:"#8a9ab0", background:"#e8edf2", borderRadius:4, padding:"2px 7px" }}>#{i+1}</span>
+              <button onClick={()=>removeArea(a)}
+                style={{ background:"#ffebee", border:"none", borderRadius:6, color:"#c62828", fontWeight:700, fontSize:12, cursor:"pointer", padding:"3px 9px" }}>✕</button>
+            </div>
+          ))}
+          {areas.length===0&&<div style={{ fontSize:13, color:"#8a9ab0", fontStyle:"italic", padding:8 }}>No areas defined — add one below.</div>}
+        </div>
+
+        {/* Add new area */}
+        <div style={{ display:"flex", gap:8 }}>
+          <input value={newArea} onChange={e=>setNewArea(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&addArea()}
+            style={{ flex:1, padding:"9px 12px", border:"1.5px solid #dde3ea", borderRadius:8, fontSize:13 }}
+            placeholder="Add new area (e.g. Line Maintenance, Avionics)…" />
+          <button onClick={addArea}
+            style={{ background:"#01579b", color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontWeight:700, fontSize:13, cursor:"pointer" }}>+ Add</button>
+        </div>
+      </div>
+
+      {/* Save button */}
+      <div style={{ display:"flex", justifyContent:"flex-end" }}>
+        <button onClick={save} disabled={saving}
+          style={{ background:"#01579b", color:"#fff", border:"none", borderRadius:8, padding:"12px 32px", fontWeight:700, fontSize:14, cursor:saving?"wait":"pointer", opacity:saving?0.7:1 }}>
+          {saving?"Saving…":"Save Settings"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [user,setUser]         = useState(null);
-  const [showLogin,setShowLogin] = useState(false);
+  const [showLogin,setShowLogin]           = useState(false);
+  const [showOrgSwitcher,setShowOrgSwitcher] = useState(false);
   const [authPopup,setAuthPopup] = useState(null); // "signup" | "pending" | "noProfile"
   const [profile,setProfile]   = useState(null);
   const [managers,setManagers] = useState([]);
@@ -5643,6 +6132,7 @@ export default function App() {
   const [toast,setToast]       = useState(null);
   const [loading,setLoading]   = useState(false);
   const [org,setOrg]           = useState(null);
+  const [loginOrgOverride,setLoginOrgOverride] = useState(null); // org ID forced at login
   const [isSuperAdmin,setIsSuperAdmin] = useState(false);
   const [orgs,setOrgs]         = useState([]);   // super admin: all orgs
   const [orgUsers,setOrgUsers] = useState([]);   // super admin: all users
@@ -5724,10 +6214,15 @@ export default function App() {
       setIsSuperAdmin(prof.data?.is_super_admin||false);
       setLoading(false);
     });
-    // Load org details
-    if(prof.data?.org_id){
-      supabase.from("organisations").select("*").eq("id",prof.data.org_id).single()
+    // Load org details — use login override if provided, otherwise use profile org_id
+    // If super admin logged in without an org override, don't load an org (stay in platform mode)
+    const isSuperAdminMode = prof.data?.is_super_admin && !loginOrgOverride;
+    const orgIdToLoad = loginOrgOverride || (!isSuperAdminMode ? prof.data?.org_id : null);
+    if(orgIdToLoad){
+      supabase.from("organisations").select("*").eq("id",orgIdToLoad).single()
         .then(({data})=>{ if(data) setOrg(data); });
+    } else if(isSuperAdminMode){
+      setOrg(null); // clear org so sidebar shows platform mode
     }
     // Super admin: load all orgs and all users
     if(prof.data?.is_super_admin){
@@ -5736,7 +6231,7 @@ export default function App() {
       supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false})
         .then(({data})=>{ if(data) setOrgUsers(data); });
     }
-  },[user]);
+  },[user,loginOrgOverride]);
 
   useEffect(()=>{ loadAll(); },[loadAll]);
 
@@ -5787,7 +6282,15 @@ export default function App() {
           </div>
         )}
         {showLogin
-          ? <LoginScreen onLogin={(u) => { setUser(u); setShowLogin(false); setAuthPopup(null); }} authPopup={authPopup} setAuthPopup={setAuthPopup}/>
+          ? <LoginScreen
+              onLogin={(u, orgIdOverride, superAdminMode) => {
+                setUser(u);
+                setShowLogin(false);
+                setAuthPopup(null);
+                if(superAdminMode){ setIsSuperAdmin(true); setTab("superadmin"); }
+                if(orgIdOverride){ setLoginOrgOverride(orgIdOverride); }
+              }}
+              authPopup={authPopup} setAuthPopup={setAuthPopup}/>
           : <LandingPage onShowLogin={() => setShowLogin(true)} onShowSignup={() => setShowLogin(true)}/>
         }
       </>
@@ -5809,6 +6312,54 @@ export default function App() {
     return <PendingApprovalScreen user={user} onSignOut={async()=>{ await supabase.auth.signOut(); }} />;
   }
 
+  // ── Super admin fullscreen portal (no org ID entered at login) ──
+  if(isSuperAdmin && !loginOrgOverride && !org) {
+    return (
+      <div style={{ minHeight:"100vh", background:"#f0f4f8", display:"flex", flexDirection:"column" }}>
+        <GlobalStyle/>
+        {/* Top stripe */}
+        <div style={{ position:"fixed", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,#0d1b2a,#1a3a5c,#01579b)`, zIndex:200 }} />
+        {/* Header bar */}
+        <div style={{ background:"#0d1b2a", padding:"12px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:3, flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#01579b,#0288d1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20 }}>✈</div>
+            <div>
+              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:16, color:"#fff" }}>AeroQualify Pro</div>
+              <div style={{ fontSize:10, color:"#90b4d4", letterSpacing:1 }}>PLATFORM ADMINISTRATION</div>
+            </div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+            <div style={{ fontSize:12, color:"#90b4d4" }}>
+              Signed in as <strong style={{ color:"#fff" }}>{profile?.full_name||profile?.email}</strong>
+            </div>
+            <button
+              onClick={()=>{ setLoginOrgOverride(null); setOrg(null); }}
+              style={{ background:"#1a3a5c", border:"1px solid #2a5a8c", borderRadius:7, padding:"6px 14px", color:"#90b4d4", fontSize:12, cursor:"pointer" }}
+              title="Enter an org ID to view as org user">
+              🏢 Enter Org
+            </button>
+            <button
+              onClick={async()=>{ await supabase.auth.signOut(); }}
+              style={{ background:"none", border:"1px solid #c62828", borderRadius:7, padding:"6px 14px", color:"#ef9a9a", fontSize:12, cursor:"pointer" }}>
+              Sign Out
+            </button>
+          </div>
+        </div>
+        {/* Portal content */}
+        <div style={{ flex:1, padding:"24px 28px", overflowY:"auto" }}>
+          <SuperAdminPanel
+            orgs={orgs} orgUsers={orgUsers}
+            showToast={showToast}
+            onRefresh={()=>{
+              supabase.from("organisations").select("*").order("name").then(({data})=>{ if(data) setOrgs(data); });
+              supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false}).then(({data})=>{ if(data) setOrgUsers(data); });
+            }}
+          />
+        </div>
+        {toast&&<Toast message={toast.message} type={toast.type} onDone={()=>setToast(null)}/>}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
@@ -5878,7 +6429,14 @@ export default function App() {
                 <Badge label={profile?.role||"viewer"}/>
                 {isSuperAdmin&&<span style={{ background:T.redLt, color:T.red, borderRadius:20, padding:"1px 7px", fontSize:10, fontWeight:700 }}>Super Admin</span>}
               </div>
-              {org&&<div style={{ fontSize:10, color:T.muted, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={org.name}>🏢 {org.name}</div>}
+              {org&&(
+                <div style={{ fontSize:10, color:T.muted, marginTop:3, display:"flex", alignItems:"center", gap:4, overflow:"hidden" }}>
+                  <span>🏢</span>
+                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={org.name}>{org.name}</span>
+                  <button onClick={()=>setShowOrgSwitcher(true)} title="Switch organisation"
+                    style={{ background:"none",border:"none",cursor:"pointer",color:T.primary,fontSize:11,padding:0,flexShrink:0,fontWeight:700 }}>⇄</button>
+                </div>
+              )}
             </div>
           </div>
           <Btn variant="ghost" size="sm" onClick={()=>supabase.auth.signOut()} style={{ width:"100%",textAlign:"center" }}>Sign Out</Btn>
@@ -5912,14 +6470,20 @@ export default function App() {
         {/* Content */}
         <div style={{ flex:1,overflowY:"auto",padding:24 }}>
           {activeTab==="dashboard" && <Dashboard data={data}/>}
-          {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="flightdocs" && <GenericPage title="Flight School Documents" subtitle="Approvals, certificates and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Flight School Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="contractors" && <GenericPage title="Contractors" subtitle="Approved contractor register" table="contractors" columns={CONTRACTOR_COLS} modalFields={CONTRACTOR_FIELDS} modalTitle="Contractor" modalDefaults={{status:"Approved",rating:"A"}} data={data} canEdit={isAdmin} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="rca"      && <RCAView data={data} user={user} profile={profile}/>}
           {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin}/>}
+          {activeTab==="orgsettings" && isAdmin && <OrgSettingsPage org={org} onSave={async(updates)=>{
+            const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
+            if(error){showToast("Error saving settings: "+error.message,"error");return;}
+            setOrg(prev=>({...prev,...updates}));
+            showToast("Organisation settings saved","success");
+          }} />}
           {activeTab==="changelog" && <ChangeLogView logs={data.changeLog}/>}
           {activeTab==="about"     && <AboutView />}
           {activeTab==="superadmin"&&isSuperAdmin&&(
@@ -5936,6 +6500,20 @@ export default function App() {
       </div>
 
       {toast&&<Toast message={toast.message} type={toast.type} onDone={()=>setToast(null)}/>}
+      {showOrgSwitcher&&user&&(
+        <OrgSwitcherModal
+          userId={user.id}
+          currentOrgId={org?.id}
+          onSwitch={(newOrg)=>{
+            setOrg(newOrg);
+            setLoginOrgOverride(newOrg.id);
+            setShowOrgSwitcher(false);
+            // Reload all data for the new org
+            setTimeout(()=>loadAll(),100);
+          }}
+          onClose={()=>setShowOrgSwitcher(false)}
+        />
+      )}
     </div>
   );
 }
