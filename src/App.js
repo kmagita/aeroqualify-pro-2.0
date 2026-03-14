@@ -955,7 +955,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
               <div style={{ marginBottom:16 }}>
                 <Input label="Organisation ID" value={orgSlug}
                   onChange={e=>{ setOrgSlug(e.target.value); resolveSlug(e.target.value); }}
-                  placeholder={mode==="login"?"e.g. pegasus (leave blank for super admin)":"e.g. pegasus"}
+                  placeholder={mode==="login"?"Ask your organisation admin for the code":"Ask your organisation admin for the code"}
                 />
                 {/* Live org resolution feedback */}
                 {orgSlug.trim()&&orgHint===null&&<div style={{ fontSize:11, color:T.muted, marginTop:-10, marginBottom:8 }}>Checking…</div>}
@@ -6215,10 +6215,14 @@ export default function App() {
       setLoading(false);
     });
     // Load org details — use login override if provided, otherwise use profile org_id
-    const orgIdToLoad = loginOrgOverride || prof.data?.org_id;
+    // If super admin logged in without an org override, don't load an org (stay in platform mode)
+    const isSuperAdminMode = prof.data?.is_super_admin && !loginOrgOverride;
+    const orgIdToLoad = loginOrgOverride || (!isSuperAdminMode ? prof.data?.org_id : null);
     if(orgIdToLoad){
       supabase.from("organisations").select("*").eq("id",orgIdToLoad).single()
         .then(({data})=>{ if(data) setOrg(data); });
+    } else if(isSuperAdminMode){
+      setOrg(null); // clear org so sidebar shows platform mode
     }
     // Super admin: load all orgs and all users
     if(prof.data?.is_super_admin){
@@ -6308,6 +6312,54 @@ export default function App() {
     return <PendingApprovalScreen user={user} onSignOut={async()=>{ await supabase.auth.signOut(); }} />;
   }
 
+  // ── Super admin fullscreen portal (no org ID entered at login) ──
+  if(isSuperAdmin && !loginOrgOverride && !org) {
+    return (
+      <div style={{ minHeight:"100vh", background:"#f0f4f8", display:"flex", flexDirection:"column" }}>
+        <GlobalStyle/>
+        {/* Top stripe */}
+        <div style={{ position:"fixed", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,#0d1b2a,#1a3a5c,#01579b)`, zIndex:200 }} />
+        {/* Header bar */}
+        <div style={{ background:"#0d1b2a", padding:"12px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:3, flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#01579b,#0288d1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20 }}>✈</div>
+            <div>
+              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:16, color:"#fff" }}>AeroQualify Pro</div>
+              <div style={{ fontSize:10, color:"#90b4d4", letterSpacing:1 }}>PLATFORM ADMINISTRATION</div>
+            </div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+            <div style={{ fontSize:12, color:"#90b4d4" }}>
+              Signed in as <strong style={{ color:"#fff" }}>{profile?.full_name||profile?.email}</strong>
+            </div>
+            <button
+              onClick={()=>{ setLoginOrgOverride(null); setOrg(null); }}
+              style={{ background:"#1a3a5c", border:"1px solid #2a5a8c", borderRadius:7, padding:"6px 14px", color:"#90b4d4", fontSize:12, cursor:"pointer" }}
+              title="Enter an org ID to view as org user">
+              🏢 Enter Org
+            </button>
+            <button
+              onClick={async()=>{ await supabase.auth.signOut(); }}
+              style={{ background:"none", border:"1px solid #c62828", borderRadius:7, padding:"6px 14px", color:"#ef9a9a", fontSize:12, cursor:"pointer" }}>
+              Sign Out
+            </button>
+          </div>
+        </div>
+        {/* Portal content */}
+        <div style={{ flex:1, padding:"24px 28px", overflowY:"auto" }}>
+          <SuperAdminPanel
+            orgs={orgs} orgUsers={orgUsers}
+            showToast={showToast}
+            onRefresh={()=>{
+              supabase.from("organisations").select("*").order("name").then(({data})=>{ if(data) setOrgs(data); });
+              supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false}).then(({data})=>{ if(data) setOrgUsers(data); });
+            }}
+          />
+        </div>
+        {toast&&<Toast message={toast.message} type={toast.type} onDone={()=>setToast(null)}/>}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
