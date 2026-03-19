@@ -856,55 +856,6 @@ const OrgSwitcherModal = ({ userId, currentOrgId, onSwitch, onClose }) => {
 };
 
 // ─── Password Reset Screen ───────────────────────────────────
-const PasswordResetScreen = ({ onDone }) => {
-  const [pw,    setPw]    = useState("");
-  const [pw2,   setPw2]   = useState("");
-  const [loading,setLoading] = useState(false);
-  const [err,   setErr]   = useState("");
-  const [done,  setDone]  = useState(false);
-
-  const handle = async(e) => {
-    e.preventDefault();
-    if(pw !== pw2){ setErr("Passwords do not match"); return; }
-    if(pw.length < 6){ setErr("Password must be at least 6 characters"); return; }
-    setLoading(true); setErr("");
-    const { error } = await supabase.auth.updateUser({ password: pw });
-    if(error){ setErr(error.message); setLoading(false); return; }
-    setDone(true);
-    setTimeout(()=>onDone(), 2000);
-  };
-
-  return (
-    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,#e3f2fd 0%,#f0f4f8 50%,#e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <GlobalStyle/>
-      <div style={{ position:"fixed", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})` }} />
-      <div style={{ width:400, animation:"fadeIn 0.5s ease" }}>
-        <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ width:64, height:64, borderRadius:16, background:`linear-gradient(135deg,${T.primary},${T.sky})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px", boxShadow:"0 4px 20px rgba(1,87,155,0.25)" }}>✈</div>
-          <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primaryDk, letterSpacing:1 }}>AeroQualify Pro</div>
-          <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>Set your new password</div>
-        </div>
-        <div className="card" style={{ padding:32 }}>
-          {done ? (
-            <div style={{ textAlign:"center", padding:20 }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
-              <div style={{ fontWeight:700, color:T.green, fontSize:16 }}>Password updated successfully!</div>
-              <div style={{ fontSize:13, color:T.muted, marginTop:8 }}>Redirecting to sign in…</div>
-            </div>
-          ) : (
-            <form onSubmit={handle}>
-              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:22 }}>Reset Password</div>
-              <Input label="New Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 6 characters" required />
-              <Input label="Confirm New Password" type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Repeat password" required />
-              {err&&<div style={{ fontSize:12, color:T.red, marginBottom:14, padding:"8px 12px", background:T.redLt, borderRadius:6 }}>{err}</div>}
-              <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>{loading?"Updating…":"Set New Password"}</Btn>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
   const [email,   setEmail]   = useState("");
