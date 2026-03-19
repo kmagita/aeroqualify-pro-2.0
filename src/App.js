@@ -2808,7 +2808,8 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
             dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(blob);});
           }
           drawEvHeader();
-          const imgTop=22; const imgBottom=284;
+          drawAuditEvidenceHeader(evFile, fi, auditEvidenceFiles.length);
+        const imgTop=22; const imgBottom=284;
           const maxW=W-margin*2; const maxH=imgBottom-imgTop;
           const imgProps=doc.getImageProperties(dataUrl);
           let iw=imgProps.width; let ih=imgProps.height;
@@ -4677,8 +4678,7 @@ const generateAuditReport = async (slot) => {
   y += 4;
 
   // ── SIGNATURE BLOCK ───────────────────────────────────────────
-  // Always put signatures on a fresh page for clean presentation
-  doc.addPage(); y = NEW_PAGE_Y;
+  y = needPage(y, 45);
   doc.setDrawColor(221,227,234); doc.setLineWidth(0.3);
   const sigW3 = (col-8)/3;
   [["Lead Auditor Signature", slot.lead_auditor||""], ["Quality Manager Signature", slot.approved_by||""], ["Accountable Manager Signature", ""]].forEach(([label, name], i) => {
@@ -4702,6 +4702,17 @@ const generateAuditReport = async (slot) => {
   if(!slot.attachments && slot.attachment_url) auditEvidenceFiles = [{name:slot.attachment_name||"attachment",url:slot.attachment_url}];
 
   const reportPageCount = doc.getNumberOfPages();
+  // eslint-disable-next-line no-loop-func
+  const drawAuditEvidenceHeader = (evFile, fi, total) => {
+    doc.addPage();
+    doc.setFillColor(26,35,50); doc.rect(0,0,W,18,"F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
+    doc.text(`AUDIT EVIDENCE — File ${fi+1} of ${total}`, M, 8);
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(200,210,220);
+    doc.text(evFile.name, W-M, 8, {align:"right"});
+    doc.setFontSize(7); doc.setTextColor(160,180,200);
+    doc.text(`Audit: ${slot.area} — ${auditRefNum}`, M, 14);
+  };
   for(let fi=0; fi<auditEvidenceFiles.length; fi++){
     const evFile = auditEvidenceFiles[fi];
     if(!evFile?.url && !evFile?.name) continue;
@@ -4711,18 +4722,10 @@ const generateAuditReport = async (slot) => {
       const fileData = evFile.dataUrl || evFile.url || "";
       const isInline = fileData.startsWith("data:");
 
-      doc.addPage();
-      // Evidence header
-      doc.setFillColor(26,35,50); doc.rect(0,0,W,18,"F");
-      doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
-      doc.text(`AUDIT EVIDENCE — File ${fi+1} of ${auditEvidenceFiles.length}`, M, 8);
-      doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(200,210,220);
-      doc.text(evFile.name, W-M, 8, {align:"right"});
-      doc.setFontSize(7); doc.setTextColor(160,180,200);
-      doc.text(`Audit: ${slot.area} — ${auditRefNum}`, M, 14);
 
       if(isImage){
-        let dataUrl = evFile.url;
+        drawAuditEvidenceHeader(evFile, fi, auditEvidenceFiles.length);
+        let dataUrl = fileData;
         if(!isInline){
           const resp = await fetch(evFile.url);
           if(!resp.ok) throw new Error("fetch failed");
@@ -4752,21 +4755,11 @@ const generateAuditReport = async (slot) => {
             if(!resp.ok) throw new Error("fetch failed");
             pdfBytes = await resp.arrayBuffer();
           }
-          // Queue for merging after jsPDF is saved
+          // Queue for merging after jsPDF is saved — no placeholder page needed
           if(!window._auditMergeQueue) window._auditMergeQueue = [];
           window._auditMergeQueue.push({ name: evFile.name, bytes: pdfBytes, index: fi+1, total: auditEvidenceFiles.length });
-          // Add a placeholder page showing the file will be appended
-          doc.setFillColor(232,245,233); doc.rect(M,24,col,40,"F");
-          doc.setDrawColor(165,214,167); doc.rect(M,24,col,40,"S");
-          doc.setFillColor(46,125,50); doc.rect(M+4,28,18,8,"F");
-          doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
-          doc.text("PDF", M+13, 33.5, {align:"center"});
-          doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(26,35,50);
-          const fn1 = doc.splitTextToSize(evFile.name, col-30);
-          doc.text(fn1[0], M+26, 34);
-          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(46,125,50);
-          doc.text("✓ PDF attached — pages follow in the merged export", M+4, 50);
-          if(evFile.url && !isInline){ doc.setTextColor(1,87,155); doc.textWithLink("Click to open original", M+4, 60, {url:evFile.url}); }
+          // Skip adding a page - the actual PDF pages will be appended by the merge step
+          continue;
         } catch(pdfErr){
           console.warn("PDF queue failed:", pdfErr);
           doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
@@ -4775,6 +4768,7 @@ const generateAuditReport = async (slot) => {
         }
       } else {
         // Non-renderable file types (docx, xlsx etc) — show evidence record with download
+        drawAuditEvidenceHeader(evFile, fi, auditEvidenceFiles.length);
         const badgeColors={"docx":[0,120,215],"doc":[0,120,215],"xlsx":[33,115,70],"xls":[33,115,70],"txt":[95,114,133]};
         const bc=badgeColors[ext]||[95,114,133];
         doc.setFillColor(245,248,252); doc.rect(M,24,col,60,"F");
