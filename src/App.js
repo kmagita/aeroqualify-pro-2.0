@@ -759,21 +759,10 @@ const PasswordResetScreen = ({ onDone }) => {
     if(pw !== pw2){ setMsg("Passwords do not match."); return; }
     if(pw.length < 6){ setMsg("Password must be at least 6 characters."); return; }
     setLoading(true); setMsg("");
-    // Ensure we have a valid session before updating
-    const { data: { session } } = await supabase.auth.getSession();
-    if(!session){
-      // Try to get session from URL hash
-      const { data, error: sessionErr } = await supabase.auth.getSessionFromUrl();
-      if(sessionErr || !data?.session){
-        setMsg("Session expired. Please request a new password reset link.");
-        setLoading(false); return;
-      }
-    }
     const { error } = await supabase.auth.updateUser({ password: pw });
     if(error){ setMsg("Error: "+error.message); setLoading(false); return; }
     setDone(true);
-    await supabase.auth.signOut();
-    setTimeout(onDone, 2000);
+    setTimeout(async()=>{ await supabase.auth.signOut(); onDone(); }, 2000);
   };
 
   return (
@@ -6416,18 +6405,10 @@ export default function App() {
       }
     });
 
-    // Also check hash directly for immediate detection
+    // Check hash for recovery token
     const hash = window.location.hash;
-    if(hash && (hash.includes("type=recovery") || hash.includes("type=signup"))){
-      // Let Supabase process the hash and establish session
-      supabase.auth.getSessionFromUrl().then(({data, error}) => {
-        if(!error && data?.session){
-          setShowPasswordReset(true);
-        }
-      }).catch(()=>{
-        // Fallback - still show reset form, Supabase will handle session
-        if(hash.includes("type=recovery")) setShowPasswordReset(true);
-      });
+    if(hash && hash.includes("type=recovery")){
+      setShowPasswordReset(true);
       setLoading(false);
       return;
     }
