@@ -4429,8 +4429,8 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
                         </div>
                       </div>
                       <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-                        {f.url&&(
-                          <a href={f.url} download={f.name}
+                        {(f.dataUrl||f.url)&&(
+                          <a href={f.dataUrl||f.url} download={f.name}
                             style={{ background:T.primary,color:"#fff",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none" }}>
                             ⬇ Download
                           </a>
@@ -4708,7 +4708,8 @@ const generateAuditReport = async (slot) => {
     try {
       const ext = (evFile.name.split(".").pop()||"").toLowerCase();
       const isImage = ["jpg","jpeg","png","gif","webp"].includes(ext);
-      const isInline = evFile.url && evFile.url.startsWith("data:");
+      const fileData = evFile.dataUrl || evFile.url || "";
+      const isInline = fileData.startsWith("data:");
 
       doc.addPage();
       // Evidence header
@@ -4741,7 +4742,7 @@ const generateAuditReport = async (slot) => {
           const { PDFDocument } = await import("pdf-lib");
           let pdfBytes;
           if(isInline){
-            const base64 = evFile.url.split(",")[1];
+            const base64 = fileData.split(",")[1];
             const binary = atob(base64);
             const arr = new Uint8Array(binary.length);
             for(let bi=0;bi<binary.length;bi++) arr[bi]=binary.charCodeAt(bi);
