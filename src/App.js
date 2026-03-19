@@ -6327,7 +6327,6 @@ export default function App() {
   const [showLogin,setShowLogin]           = useState(false);
   const [showOrgSwitcher,setShowOrgSwitcher] = useState(false);
   const [showPasswordReset,setShowPasswordReset] = useState(false);
-  const [showPasswordReset,setShowPasswordReset] = useState(false);
   const [authPopup,setAuthPopup] = useState(null); // "signup" | "pending" | "noProfile"
   const [profile,setProfile]   = useState(null);
   const [managers,setManagers] = useState([]);
