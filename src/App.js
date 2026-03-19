@@ -1316,7 +1316,7 @@ const getAuditRef = (slot, prefix="PGF") => {
   return `${prefix}-QMS-${code}-${dd}${mm}${yyyy}`;
 };
 
-const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas }) => {
+const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, fromAudit=false }) => {
   const [selectedAuditId, setSelectedAuditId] = useState(car?.audit_ref||"");
   const auditRef = selectedAuditId || car?.audit_ref || "";
 
@@ -1352,12 +1352,14 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
   return (
     <ModalShell title={car?"Edit CAR":"Raise New CAR"} onClose={onClose} wide>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 20px" }}>
-        <div style={{ gridColumn:"1/-1" }}>
-          <Select label="Link to Audit (optional)" value={selectedAuditId} onChange={e=>handleAuditChange(e.target.value)}>
-            <option value="">— Standalone CAR (not linked to audit) —</option>
-            {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix)} · {s.area} · {s.year}</option>)}
-          </Select>
-        </div>
+        {!fromAudit&&(
+          <div style={{ gridColumn:"1/-1" }}>
+            <Select label="Link to Audit (optional)" value={selectedAuditId} onChange={e=>handleAuditChange(e.target.value)}>
+              <option value="">— Standalone CAR (not linked to audit) —</option>
+              {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix)} · {s.area} · {s.year}</option>)}
+            </Select>
+          </div>
+        )}
         <Input label="CAR Number" value={form.id||""} onChange={e=>set("id",e.target.value)} />
         <Input label="Date Raised" type="date" value={form.date_raised||""} onChange={e=>set("date_raised",e.target.value)} />
         {form.audit_ref&&<div style={{ gridColumn:"1/-1" }}><Input label="Audit Reference" value={form.audit_ref} readOnly style={{ background:"#f5f8fc",color:"#5f7285",fontFamily:"monospace" }} /></div>}
@@ -4317,6 +4319,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
           auditSchedule={data?.auditSchedule||[]}
           orgPrefix={org?.car_prefix||"ORG"}
           auditAreas={org?.audit_areas||null}
+          fromAudit={true}
           onSave={(carForm)=>saveCarFromFinding(carForm, f.id)}
           onClose={()=>setCarModal(null)}
         />
