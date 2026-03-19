@@ -747,6 +747,63 @@ const PendingApprovalScreen = ({ user, onSignOut }) => (
 
 // ─── Login ────────────────────────────────────────────────────
 // ─── Password Reset Screen ───────────────────────────────────
+// ─── Terms & Disclaimer Modal (shown on first login) ─────────
+const DISCLAIMER_KEY = "aq_terms_accepted_v1";
+const TermsModal = ({ onAccept }) => (
+  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9998, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+    <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:600, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
+      {/* Header */}
+      <div style={{ background:"linear-gradient(135deg,#0d1b2a,#1a3a5c)", borderRadius:"16px 16px 0 0", padding:"20px 24px", flexShrink:0 }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:18, color:"#fff", display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:24 }}>✈</span> AeroQualify Pro
+        </div>
+        <div style={{ fontSize:12, color:"#90b4d4", marginTop:4 }}>Terms of Use & Legal Disclaimer — Please read before continuing</div>
+      </div>
+      {/* Scrollable content */}
+      <div style={{ flex:1, overflowY:"auto", padding:"20px 24px" }}>
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#1a2332", marginBottom:6 }}>Legal Ownership</div>
+          <div style={{ fontSize:12, color:"#5f7285", lineHeight:1.7 }}>
+            Copyright © 2026 Kornelius M. Magita. All rights reserved. AeroQualify Pro and all associated software, source code, design, documentation, workflows, and data structures are the exclusive intellectual property of Kornelius M. Magita. No part of this software may be reproduced, distributed, modified, sublicensed, sold, or transferred to any third party without express written consent.
+          </div>
+        </div>
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:14, color:"#1a2332", marginBottom:6 }}>User Licence Terms</div>
+          <div style={{ fontSize:12, color:"#5f7285", lineHeight:1.7 }}>
+            <strong>Authorised Use:</strong> This software is licensed, not sold. You may use AeroQualify Pro solely for managing quality, safety, and compliance records within your organisation.<br/><br/>
+            <strong>Prohibited Activities:</strong> You may not copy, decompile, reverse engineer, modify, or create derivative works. Sharing credentials or granting unauthorised access is strictly prohibited.<br/><br/>
+            <strong>Data Ownership:</strong> All data you enter remains your organisation's property. Kornelius M. Magita does not claim ownership of customer data.<br/><br/>
+            <strong>Confidentiality:</strong> You must treat all aspects of the software as confidential. This obligation survives termination of your licence.<br/><br/>
+            <strong>Warranty Disclaimer:</strong> The software is provided in good faith with no warranties as to fitness for any specific regulatory purpose. It is your responsibility to ensure the system meets your applicable regulatory requirements.
+          </div>
+        </div>
+        <div style={{ background:"#fff3e0", borderRadius:8, padding:"14px 16px", border:"1px solid #ffcc80", marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:12, color:"#e65100", marginBottom:6 }}>LIMITATION OF LIABILITY</div>
+          <div style={{ fontSize:11, color:"#795548", lineHeight:1.7 }}>
+            TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, KORNELIUS M. MAGITA SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF THE USE OF THIS SOFTWARE, INCLUDING BUT NOT LIMITED TO: LOSS OF DATA; REGULATORY NON-COMPLIANCE OR ENFORCEMENT ACTION BY ANY CIVIL AVIATION AUTHORITY; FAILURE TO DETECT OR PREVENT SAFETY OCCURRENCES; BUSINESS INTERRUPTION; OR LOSS OF REVENUE OR PROFIT.
+          </div>
+          <div style={{ fontSize:11, color:"#795548", lineHeight:1.7, marginTop:8 }}>
+            This software does not constitute legal, regulatory, or professional aviation advice and does not guarantee compliance with the requirements of any civil aviation authority including the KCAA or ICAO. Compliance responsibility rests solely with the licensed operator and its designated accountable manager.
+          </div>
+        </div>
+        <div style={{ fontSize:11, color:"#8a9ab0", lineHeight:1.6 }}>
+          Jurisdiction: Republic of Kenya &nbsp;·&nbsp; Licence: Proprietary &nbsp;·&nbsp; Enquiries: Contact Kornelius M. Magita — Developer & Owner, AeroQualify Pro, Nairobi, Kenya.
+        </div>
+      </div>
+      {/* Accept button */}
+      <div style={{ padding:"16px 24px", borderTop:"1px solid #dde3ea", background:"#f8fafc", borderRadius:"0 0 16px 16px", flexShrink:0 }}>
+        <div style={{ fontSize:12, color:"#5f7285", marginBottom:12, textAlign:"center" }}>
+          By clicking "I Accept & Continue" you confirm that you have read and agree to these terms.
+        </div>
+        <button onClick={onAccept}
+          style={{ width:"100%", padding:"13px", background:"linear-gradient(135deg,#01579b,#0288d1)", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:0.3 }}>
+          ✓ I Accept & Continue
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 const PasswordResetScreen = ({ onDone }) => {
   const [pw,  setPw]      = useState("");
   const [pw2, setPw2]     = useState("");
@@ -3478,6 +3535,44 @@ const AboutView = () => {
               })}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Legal Disclaimer Section */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28, marginBottom:16 }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:16, color:"#1a2332", marginBottom:4 }}>Legal Ownership & Disclaimer</div>
+        <div style={{ fontSize:11, color:T.muted, marginBottom:16 }}>Copyright © 2026 Kornelius M. Magita. All rights reserved.</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          {[
+            ["Software Owner", "Kornelius M. Magita"],
+            ["Jurisdiction", "Republic of Kenya"],
+            ["Licence Type", "Proprietary — not open source"],
+          ].map(([k,v])=>(
+            <div key={k} style={{ display:"flex", gap:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#5f7285", minWidth:160 }}>{k}</div>
+              <div style={{ fontSize:12, color:"#1a2332" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop:20, background:"#f8fafc", borderRadius:8, padding:"16px 18px", maxHeight:320, overflowY:"auto", border:"1px solid #eef2f7" }}>
+          {[
+            ["User Licence Terms", "Authorised Use: This software is licensed, not sold. Authorised users may access and use AeroQualify Pro solely for the purpose of managing quality, safety, and compliance records within their organisation, as agreed in writing with Kornelius M. Magita."],
+            ["Prohibited Activities", "Users may not copy, decompile, reverse engineer, disassemble, modify, or create derivative works based on this software. Sharing access credentials or granting unauthorised third-party access is strictly prohibited."],
+            ["Data Ownership", "All data entered into the system by the licensed organisation remains the property of that organisation. Kornelius M. Magita does not claim ownership of customer data."],
+            ["Confidentiality", "Users must treat all aspects of the software — including its workflows, design, and features — as confidential. This obligation survives termination of the licence agreement."],
+            ["Warranty Disclaimer", "The software is provided in good faith. Kornelius M. Magita makes no warranties as to fitness for any specific regulatory purpose. It is the operator's responsibility to ensure the system meets applicable regulatory requirements in their jurisdiction."],
+          ].map(([title, text])=>(
+            <div key={title} style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#1a2332", marginBottom:3 }}>{title}</div>
+              <div style={{ fontSize:12, color:"#5f7285", lineHeight:1.6 }}>{text}</div>
+            </div>
+          ))}
+          <div style={{ marginTop:8, padding:"12px 14px", background:"#fff3e0", borderRadius:6, border:"1px solid #ffcc80" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#e65100", marginBottom:4 }}>LIMITATION OF LIABILITY</div>
+            <div style={{ fontSize:11, color:"#795548", lineHeight:1.6 }}>
+              TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, KORNELIUS M. MAGITA SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR IN CONNECTION WITH THE USE OF THIS SOFTWARE, INCLUDING BUT NOT LIMITED TO: LOSS OF DATA; REGULATORY NON-COMPLIANCE; FAILURE TO DETECT SAFETY OCCURRENCES; BUSINESS INTERRUPTION; OR LOSS OF REVENUE. Compliance responsibility rests solely with the licensed operator and its designated accountable manager.
+            </div>
+          </div>
         </div>
       </div>
 
@@ -6696,6 +6791,7 @@ export default function App() {
   const [showLogin,setShowLogin]           = useState(false);
   const [showOrgSwitcher,setShowOrgSwitcher] = useState(false);
   const [showPasswordReset,setShowPasswordReset] = useState(false);
+  const [showTerms,setShowTerms]           = useState(false);
   const [authPopup,setAuthPopup] = useState(null); // "signup" | "pending" | "noProfile"
   const [profile,setProfile]   = useState(null);
   const [managers,setManagers] = useState([]);
@@ -6891,6 +6987,8 @@ export default function App() {
                   setAuthPopup(null);
                   if(superAdminMode){ setIsSuperAdmin(true); setTab("superadmin"); }
                   if(orgIdOverride){ setLoginOrgOverride(orgIdOverride); }
+                  // Show terms disclaimer if not yet accepted
+                  if(!localStorage.getItem(DISCLAIMER_KEY)){ setShowTerms(true); }
                 }}
                 authPopup={authPopup} setAuthPopup={setAuthPopup}/>
             : <LandingPage onShowLogin={() => setShowLogin(true)} onShowSignup={() => setShowLogin(true)}/>
@@ -6959,6 +7057,7 @@ export default function App() {
           />
         </div>
         {toast&&<Toast message={toast.message} type={toast.type} onDone={()=>setToast(null)}/>}
+      {showTerms&&<TermsModal onAccept={()=>{ localStorage.setItem(DISCLAIMER_KEY,"1"); setShowTerms(false); }}/>}
       </div>
     );
   }
