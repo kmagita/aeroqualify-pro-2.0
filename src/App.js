@@ -4595,7 +4595,7 @@ const generateAuditReport = async (slot) => {
 const SCHEDULE_PASSWORD = "QM2024!";
 
 // ── Schedule PDF export ────────────────────────────────────────
-const generateSchedulePDF = async (yearSlots, year, approval) => {
+const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUDIT_AREAS) => {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
   const W=297; const H=210; const M=12; const col=W-M*2;
@@ -4634,7 +4634,7 @@ const generateSchedulePDF = async (yearSlots, year, approval) => {
   y += 8;
 
   // Rows
-  orgAuditAreas.forEach((area, ai) => {
+  auditAreasList.forEach((area, ai) => {
     const rowH = 10;
     doc.setFillColor(ai%2===0?255:248,ai%2===0?255:250,ai%2===0?255:252);
     doc.rect(M,y,col,rowH,"F");
@@ -5098,9 +5098,9 @@ const ADHOC_TRIGGERS = [
   "Other",
 ];
 
-const AdHocAuditModal = ({ year, existingSlots, onSave, onClose }) => {
+const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=AUDIT_AREAS }) => {
   const [form, setForm] = useState({
-    area: orgAuditAreas[0],
+    area: (orgAuditAreas||AUDIT_AREAS)[0],
     custom_area: "",
     use_custom: false,
     trigger: ADHOC_TRIGGERS[0],
@@ -5380,7 +5380,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
             ))}
           </div>
           {isQM && hasSchedule && (
-            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, yearSlots[0]||{})}>
+            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, yearSlots[0]||{}, orgAuditAreas)}>
               📥 Export Schedule PDF
             </Btn>
           )}
