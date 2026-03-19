@@ -872,7 +872,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
   // Live-resolve org slug as user types
   const resolveSlug = async (slug) => {
     if(!slug.trim()){ setOrgHint(null); return; }
-    const { data } = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toLowerCase()).single();
+    const { data } = await supabase.from("organisations").select("id,name").ilike("slug", slug.trim()).single();
     setOrgHint(data || false); // false = not found, null = not typed yet
   };
 
@@ -895,7 +895,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         // Resolve org from slug if provided
         let resolvedOrgId = null;
         if(orgSlug.trim()){
-          const { data: orgData } = await supabase.from("organisations").select("id,name").eq("slug", orgSlug.trim().toLowerCase()).single();
+          const { data: orgData } = await supabase.from("organisations").select("id,name").ilike("slug", orgSlug.trim()).single();
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); setLoading(false); return; }
           resolvedOrgId = orgData.id;
         }
@@ -951,7 +951,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
 
         // Resolve org slug if provided
         if(orgSlug.trim()){
-          const { data: orgData } = await supabase.from("organisations").select("id,name,status").eq("slug", orgSlug.trim().toLowerCase()).single();
+          const { data: orgData } = await supabase.from("organisations").select("id,name,status,demo_expires_at").ilike("slug", orgSlug.trim()).single();
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
           if(orgData.status !== "active"){
             // Check if it's a demo expiry
