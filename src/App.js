@@ -5727,11 +5727,16 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
   const [loadingLog,  setLoadingLog]  = useState(false);
 
   const slugify = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  const generateOrgCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusable chars (0,O,1,I)
+    const segment = (n) => Array.from({length:n},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+    return `${segment(3)}-${segment(4)}-${segment(3)}`;
+  };
 
   const createOrg = async () => {
     if(!newOrg.name.trim()) return;
     setCreating(true);
-    const slug = newOrg.slug || slugify(newOrg.name);
+    const slug = newOrg.slug || generateOrgCode();
     const { error } = await supabase.from("organisations").insert({ ...newOrg, slug });
     if(error){ showToast("Error: "+error.message,"error"); }
     else { showToast("Organisation created","success"); setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" }); onRefresh(); setTab("orgs"); }
@@ -5936,7 +5941,11 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                         {pending>0&&<div style={{ fontSize:11,color:"#c62828",fontWeight:600 }}>⚠ {pending} pending</div>}
                       </td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
-                        <div style={{ fontFamily:"monospace",fontSize:12,fontWeight:700,color:"#01579b",background:"#e3f2fd",borderRadius:5,padding:"2px 8px",display:"inline-block" }}>{o.slug}</div>
+                        <div style={{ fontFamily:"monospace",fontSize:12,fontWeight:700,color:"#01579b",background:"#e3f2fd",borderRadius:5,padding:"3px 10px",display:"inline-block",letterSpacing:1 }}>{o.slug}</div>
+                        <button onClick={e=>{e.stopPropagation();navigator.clipboard?.writeText(o.slug);showToast("Login code copied!","success");}}
+                          style={{ display:"block",marginTop:3,background:"none",border:"none",color:"#8a9ab0",fontSize:10,cursor:"pointer",padding:0 }}>
+                          📋 Copy
+                        </button>
                       </td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8",fontFamily:"monospace",fontSize:13,fontWeight:700,color:"#01579b" }}>{o.car_prefix||"ORG"}</td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
@@ -6121,7 +6130,19 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <div style={{ gridColumn:"1/-1" }}>
               <Input label="Organisation Name *" value={newOrg.name} onChange={e=>setNewOrg(p=>({...p,name:e.target.value,slug:slugify(e.target.value)}))} placeholder="e.g. Precision Air Services Ltd"/>
             </div>
-            <Input label="Slug (auto-generated)" value={newOrg.slug} onChange={e=>setNewOrg(p=>({...p,slug:e.target.value}))} placeholder="e.g. precision-air"/>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",letterSpacing:0.8,textTransform:"uppercase",display:"block",marginBottom:6 }}>Login Code (auto-generated)</label>
+              <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                <input value={newOrg.slug} onChange={e=>setNewOrg(p=>({...p,slug:e.target.value}))}
+                  style={{ flex:1,padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1 }}
+                  placeholder="Auto-generated on create"/>
+                <button type="button" onClick={()=>setNewOrg(p=>({...p,slug:generateOrgCode()}))}
+                  style={{ background:"#e8eaf6",color:"#3949ab",border:"none",borderRadius:8,padding:"9px 14px",fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap" }}>
+                  🔄 Generate
+                </button>
+              </div>
+              <div style={{ fontSize:11,color:"#8a9ab0",marginTop:4 }}>Share this code privately with your staff — they need it to log in. Leave blank to auto-generate.</div>
+            </div>
             <Input label="Country" value={newOrg.country} onChange={e=>setNewOrg(p=>({...p,country:e.target.value}))} placeholder="Kenya"/>
             <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name"/>
             <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com"/>
