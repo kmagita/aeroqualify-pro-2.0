@@ -1068,7 +1068,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
               style={{ background:"none",border:"none",color:T.primary,fontSize:12,cursor:"pointer" }}>
               {mode==="login"?"Create account":"Back to sign in"}
             </button>
-            {mode==="login"&&<button onClick={()=>setMode("reset")} style={{ background:"none",border:"none",color:T.muted,fontSize:12,cursor:"pointer" }}>Forgot password?</button>}
+            {mode==="login"&&<span style={{ fontSize:11,color:T.muted }}>Forgot password? Contact your admin.</span>}
           </div>
         </div>
         <div style={{ textAlign:"center", marginTop:16, fontSize:11, color:T.muted }}>AS9100D · ISO 9001:2015 · AS9110</div>
@@ -5735,6 +5735,8 @@ const TABS = [
   {id:"rca",          label:"Root Cause Analysis", icon:"🧠", group:"main"},
   {id:"managers",     label:"Managers",        icon:"👥", group:"settings"},
   {id:"orgsettings",  label:"Org Settings",    icon:"⚙️",  group:"settings"},
+  {id:"users",        label:"Users",           icon:"👤", group:"settings"},
+  {id:"profile",      label:"My Profile",      icon:"🔐", group:"settings"},
   {id:"changelog",    label:"Change Log",      icon:"📋", group:"settings"},
   {id:"about",        label:"About",           icon:"(i)", group:"settings"},
   {id:"superadmin",   label:"Super Admin",     icon:"⚡",  group:"superadmin"},
@@ -5850,6 +5852,14 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     if(error){ showToast("Error: "+error.message,"error"); return; }
     showToast(status==="active"?"Organisation activated":"Organisation suspended","success");
     onRefresh();
+  };
+
+  const sendResetLink = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://aeroqualify.co.ke"
+    });
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast(`Password reset link sent to ${email}`,"success");
   };
 
   const assignUser = async (userId, orgId, role) => {
@@ -6116,7 +6126,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <table style={{ width:"100%",borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f8fafc" }}>
-                  {["Name","Email","Organisation","Role","Status","Joined"].map(h=>(
+                  {["Name","Email","Organisation","Role","Status","Joined",""].map(h=>(
                     <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
                   ))}
                 </tr>
@@ -6136,6 +6146,12 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                         </span>
                       </td>
                       <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                        <button onClick={()=>sendResetLink(u.email)}
+                          style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                          📧 Reset Password
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -6253,6 +6269,244 @@ const PendingUserRow = ({ u, orgs, onAssign }) => {
   );
 };
 // ─── Main App ─────────────────────────────────────────────────
+// ─── Org Users Page (admin manages org users) ────────────────
+const OrgUsersPage = ({ org, user, showToast, onRefresh }) => {
+  const [users, setUsers]   = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("profiles")
+      .select("*").eq("org_id", org?.id).order("created_at", {ascending:false});
+    setUsers(data||[]);
+    setLoading(false);
+  };
+
+  useEffect(()=>{ if(org?.id) loadUsers(); },[org?.id]);
+
+  const sendReset = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin
+    });
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast(`Password reset link sent to ${email}`,"success");
+  };
+
+  const updateRole = async (userId, role) => {
+    const { error } = await supabase.from("profiles").update({ role }).eq("id", userId);
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast("Role updated","success");
+    loadUsers();
+  };
+
+  const updateStatus = async (userId, status) => {
+    const { error } = await supabase.from("profiles").update({ status }).eq("id", userId);
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast(`User ${status}`,"success");
+    loadUsers();
+  };
+
+  const sectionHead = (title, sub) => (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontWeight:700, fontSize:15, color:"#1a2332" }}>{title}</div>
+      {sub&&<div style={{ fontSize:12, color:"#5f7285", marginTop:2 }}>{sub}</div>}
+    </div>
+  );
+
+  const pending = users.filter(u=>u.status==="pending");
+  const approved = users.filter(u=>u.status==="approved");
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:900 }}>
+      {/* Pending approvals */}
+      {pending.length>0&&(
+        <div style={{ background:"#fff", borderRadius:12, border:"1.5px solid #ffe082", overflow:"hidden" }}>
+          <div style={{ padding:"14px 20px", background:"#fff8e1", borderBottom:"1px solid #ffe082" }}>
+            {sectionHead(`⏳ Pending Approval (${pending.length})`, "These users have verified their email and are waiting for access.")}
+          </div>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:"#fffde7" }}>
+                {["Name","Email","Joined","Role","Action"].map(h=>(
+                  <th key={h} style={{ padding:"9px 16px", borderBottom:"1px solid #ffe082", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a9ab0", textTransform:"uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map(u=>(
+                <PendingOrgUserRow key={u.id} u={u} onApprove={(role)=>updateStatus(u.id,"approved") && updateRole(u.id,role)} onApproveWithRole={async(role)=>{
+                  await supabase.from("profiles").update({status:"approved",role}).eq("id",u.id);
+                  showToast(`${u.full_name||u.email} approved as ${role}`,"success");
+                  loadUsers();
+                }}/>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* All users */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", overflow:"hidden" }}>
+        <div style={{ padding:"14px 20px", borderBottom:"1px solid #dde3ea", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          {sectionHead(`Team Members (${approved.length})`, `All active users in ${org?.name||"your organisation"}`)}
+          <button onClick={loadUsers} style={{ background:"none", border:"1px solid #dde3ea", borderRadius:6, padding:"4px 12px", fontSize:12, color:"#5f7285", cursor:"pointer" }}>↻ Refresh</button>
+        </div>
+        {loading?(
+          <div style={{ padding:32, textAlign:"center", color:"#8a9ab0" }}>Loading…</div>
+        ):(
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:"#f8fafc" }}>
+                {["Name","Email","Role","Status","Joined","Actions"].map(h=>(
+                  <th key={h} style={{ padding:"9px 16px", borderBottom:"1px solid #dde3ea", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a9ab0", textTransform:"uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {approved.map(u=>(
+                <tr key={u.id} style={{ borderBottom:"1px solid #f0f4f8" }}>
+                  <td style={{ padding:"11px 16px", fontSize:13, fontWeight:600, color:"#1a2332" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ width:30, height:30, borderRadius:"50%", background:"linear-gradient(135deg,#01579b,#0288d1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"#fff", flexShrink:0 }}>
+                        {(u.full_name||u.email)[0].toUpperCase()}
+                      </div>
+                      {u.full_name||"—"}
+                      {u.id===user?.id&&<span style={{ fontSize:10, color:"#01579b", fontWeight:700, background:"#e3f2fd", borderRadius:10, padding:"1px 6px" }}>You</span>}
+                    </div>
+                  </td>
+                  <td style={{ padding:"11px 16px", fontSize:12, color:"#5f7285" }}>{u.email}</td>
+                  <td style={{ padding:"11px 16px" }}>
+                    <select value={u.role||"viewer"} onChange={e=>updateRole(u.id,e.target.value)}
+                      style={{ padding:"4px 8px", border:"1px solid #dde3ea", borderRadius:6, fontSize:12, background:"#fff" }}>
+                      {["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
+                        <option key={r} value={r}>{r.replace("_"," ")}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td style={{ padding:"11px 16px" }}>
+                    <span style={{ background:"#e8f5e9", color:"#2e7d32", borderRadius:20, padding:"2px 9px", fontSize:11, fontWeight:600 }}>Active</span>
+                  </td>
+                  <td style={{ padding:"11px 16px", fontSize:11, color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+                  <td style={{ padding:"11px 16px" }}>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={()=>sendReset(u.email)}
+                        style={{ background:"#e3f2fd", color:"#01579b", border:"none", borderRadius:6, padding:"4px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>
+                        📧 Reset Password
+                      </button>
+                      {u.id!==user?.id&&(
+                        <button onClick={()=>{ if(window.confirm(`Suspend ${u.full_name||u.email}?`)) updateStatus(u.id,"suspended"); }}
+                          style={{ background:"#ffebee", color:"#c62828", border:"none", borderRadius:6, padding:"4px 10px", fontSize:11, fontWeight:600, cursor:"pointer" }}>
+                          Suspend
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PendingOrgUserRow = ({ u, onApproveWithRole }) => {
+  const [role, setRole] = useState("viewer");
+  return (
+    <tr style={{ borderBottom:"1px solid #fff8e1" }}>
+      <td style={{ padding:"11px 16px", fontSize:13, fontWeight:600, color:"#1a2332" }}>{u.full_name||"—"}</td>
+      <td style={{ padding:"11px 16px", fontSize:12, color:"#5f7285" }}>{u.email}</td>
+      <td style={{ padding:"11px 16px", fontSize:11, color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+      <td style={{ padding:"11px 16px" }}>
+        <select value={role} onChange={e=>setRole(e.target.value)}
+          style={{ padding:"5px 8px", border:"1px solid #dde3ea", borderRadius:6, fontSize:12 }}>
+          {["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
+            <option key={r} value={r}>{r.replace("_"," ")}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ padding:"11px 16px" }}>
+        <button onClick={()=>onApproveWithRole(role)}
+          style={{ background:"#01579b", color:"#fff", border:"none", borderRadius:6, padding:"5px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>
+          Approve →
+        </button>
+      </td>
+    </tr>
+  );
+};
+
+// ─── Profile Page (user manages own profile + password) ───────
+const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
+  const [name,    setName]    = useState(profile?.full_name||"");
+  const [pw,      setPw]      = useState("");
+  const [pw2,     setPw2]     = useState("");
+  const [saving,  setSaving]  = useState(false);
+  const [pwSaving,setPwSaving]= useState(false);
+
+  const saveName = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update({ full_name: name }).eq("id", user.id);
+    if(error){ showToast("Error: "+error.message,"error"); setSaving(false); return; }
+    showToast("Profile updated","success");
+    onRefresh();
+    setSaving(false);
+  };
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    if(pw !== pw2){ showToast("Passwords do not match","error"); return; }
+    if(pw.length < 6){ showToast("Password must be at least 6 characters","error"); return; }
+    setPwSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if(error){ showToast("Error: "+error.message,"error"); setPwSaving(false); return; }
+    showToast("Password updated successfully","success");
+    setPw(""); setPw2("");
+    setPwSaving(false);
+  };
+
+  const cardStyle = { background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28, maxWidth:500 };
+  const sectionHead = (title, sub) => (
+    <div style={{ marginBottom:20 }}>
+      <div style={{ fontWeight:700, fontSize:15, color:"#1a2332" }}>{title}</div>
+      {sub&&<div style={{ fontSize:12, color:"#5f7285", marginTop:2 }}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:520 }}>
+      {/* Profile info */}
+      <div style={cardStyle}>
+        {sectionHead("My Profile", "Update your display name")}
+        <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:20 }}>
+          <div style={{ width:56, height:56, borderRadius:"50%", background:"linear-gradient(135deg,#01579b,#0288d1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, color:"#fff", flexShrink:0 }}>
+            {(profile?.full_name||user?.email||"?")[0].toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#1a2332" }}>{profile?.full_name||"—"}</div>
+            <div style={{ fontSize:12, color:"#5f7285" }}>{user?.email}</div>
+            <div style={{ fontSize:11, color:"#8a9ab0", marginTop:2 }}>{profile?.role?.replace(/_/g," ")||"viewer"}</div>
+          </div>
+        </div>
+        <Input label="Display Name" value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name"/>
+        <Btn onClick={saveName} disabled={saving} style={{ opacity:saving?0.7:1 }}>{saving?"Saving…":"Save Name"}</Btn>
+      </div>
+
+      {/* Change password */}
+      <div style={cardStyle}>
+        {sectionHead("Change Password", "Enter a new password for your account")}
+        <form onSubmit={changePassword}>
+          <Input label="New Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 6 characters"/>
+          <Input label="Confirm New Password" type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Repeat new password"/>
+          <Btn type="submit" disabled={pwSaving||!pw||!pw2} style={{ opacity:(pwSaving||!pw||!pw2)?0.7:1 }}>
+            {pwSaving?"Updating…":"Update Password"}
+          </Btn>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // ─── Org Settings Page ───────────────────────────────────────
 const OrgSettingsPage = ({ org, onSave }) => {
   const [prefix, setPrefix]     = useState(org?.car_prefix||"ORG");
@@ -6756,6 +7010,8 @@ export default function App() {
           {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="rca"      && <RCAView data={data} user={user} profile={profile}/>}
           {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin}/>}
+          {activeTab==="users" && isAdmin && <OrgUsersPage org={org} user={user} showToast={showToast} onRefresh={loadAll}/>}
+          {activeTab==="profile" && <ProfilePage user={user} profile={profile} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="orgsettings" && isAdmin && <OrgSettingsPage org={org} onSave={async(updates)=>{
             const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
             if(error){showToast("Error saving settings: "+error.message,"error");return;}
