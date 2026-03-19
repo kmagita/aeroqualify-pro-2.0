@@ -4428,7 +4428,15 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
                           <div style={{ fontSize:11,color:T.muted }}>{f.size?Math.round(f.size/1024)+"KB":""}{f.addedAt?" · Added "+new Date(f.addedAt).toLocaleDateString("en-GB"):""}</div>
                         </div>
                       </div>
-                      <button onClick={()=>removeAttachment(i)} style={{ background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:18,fontWeight:700,lineHeight:1 }}>✕</button>
+                      <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                        {f.url&&(
+                          <a href={f.url} download={f.name}
+                            style={{ background:T.primary,color:"#fff",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none" }}>
+                            ⬇ Download
+                          </a>
+                        )}
+                        <button onClick={()=>removeAttachment(i)} style={{ background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:18,fontWeight:700,lineHeight:1 }}>✕</button>
+                      </div>
                     </div>
                   ))}
                   <label style={{ cursor:"pointer",display:"block" }}>
@@ -4667,22 +4675,23 @@ const generateAuditReport = async (slot) => {
   y += 4;
 
   // ── SIGNATURE BLOCK ───────────────────────────────────────────
-  y = needPage(y, 40);
+  y = needPage(y, 50);
   doc.setDrawColor(221,227,234); doc.setLineWidth(0.3);
-  const sigW = (col-4)/2;
   const sigW3 = (col-8)/3;
   [["Lead Auditor Signature", slot.lead_auditor||""], ["Quality Manager Signature", slot.approved_by||""], ["Accountable Manager Signature", ""]].forEach(([label, name], i) => {
     const bx = M + i*(sigW3+4);
-    doc.setFillColor(245,248,252); doc.rect(bx,y,sigW3,22,"F");
-    doc.rect(bx,y,sigW3,22,"S");
+    doc.setFillColor(245,248,252); doc.rect(bx,y,sigW3,30,"F");
+    doc.setDrawColor(221,227,234); doc.rect(bx,y,sigW3,30,"S");
     doc.setFont("helvetica","bold"); doc.setFontSize(LABEL_SZ); doc.setTextColor(95,114,133);
     doc.text(label.toUpperCase(), bx+3, y+5);
-    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(26,35,50);
-    doc.text(name, bx+3, y+13);
-    doc.setDrawColor(170,190,210); doc.line(bx+3, y+18, bx+sigW3-3, y+18);
+    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
+    if(name) doc.text(name, bx+3, y+13);
+    doc.setDrawColor(170,190,210); doc.line(bx+3, y+22, bx+sigW3-3, y+22);
     doc.setFontSize(7); doc.setTextColor(140,160,180);
-    doc.text("Signature / Date", bx+3, y+21);
+    doc.text("Signature", bx+3, y+26);
+    doc.line(bx+3, y+29, bx+sigW3-3, y+29);
   });
+  y += 34;
 
   // ── Attached Evidence Files ──────────────────────────────────
   let auditEvidenceFiles = [];
@@ -4723,33 +4732,73 @@ const generateAuditReport = async (slot) => {
         const scale = Math.min(maxW/iw, maxH/ih, 1);
         iw*=scale; ih*=scale;
         doc.addImage(dataUrl, ext==="png"?"PNG":"JPEG", M+(maxW-iw)/2, imgTop+(maxH-ih)/2, iw, ih);
-      } else if(ext==="pdf" && !isInline){
+      } else if(ext==="pdf"){
+        // PDF files — try to merge (both inline base64 and remote URLs)
         try{
-          if(!window._auditPdfMergeQueue) window._auditPdfMergeQueue=[];
-          const resp = await fetch(evFile.url);
-          if(resp.ok) window._auditPdfMergeQueue.push({ name:evFile.name, bytes:await resp.arrayBuffer() });
-        } catch(e){
-          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
-          doc.text(evFile.name, M, 32);
+          let bytes;
+          if(isInline){
+            const base64 = evFile.url.split(",")[1];
+            const binary = atob(base64);
+            bytes = new Uint8Array(binary.length);
+            for(let bi=0;bi<binary.length;bi++) bytes[bi]=binary.charCodeAt(bi);
+            bytes = bytes.buffer;
+          } else {
+            const resp = await fetch(evFile.url);
+            if(!resp.ok) throw new Error("fetch failed");
+            bytes = await resp.arrayBuffer();
+          }
+          // Merge PDF pages using pdf-lib
+          const { PDFDocument } = await import("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm");
+          const evidencePdf = await PDFDocument.load(bytes);
+          const mainPdf = await PDFDocument.load(doc.output("arraybuffer"));
+          const pages = await mainPdf.copyPages(evidencePdf, evidencePdf.getPageIndices());
+          pages.forEach(p => mainPdf.addPage(p));
+          // Re-save merged PDF
+          const mergedBytes = await mainPdf.save();
+          const blob = new Blob([mergedBytes], {type:"application/pdf"});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `Audit-Report-${slot.area.replace(/\s+/g,"-")}-${slot.year}-Slot${slot.slot}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+          return; // Exit early — download triggered from merged PDF
+        } catch(pdfErr){
+          console.warn("PDF merge failed, falling back to reference page:", pdfErr);
+          // Fallback: show reference page with download link
+          doc.setFillColor(245,248,252); doc.rect(M,24,col,50,"F");
+          doc.setDrawColor(221,227,234); doc.rect(M,24,col,50,"S");
+          doc.setFillColor(198,40,40); doc.rect(M+4,28,18,8,"F");
+          doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
+          doc.text("PDF", M+13, 33.5, {align:"center"});
+          doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(26,35,50);
+          const nameLines = doc.splitTextToSize(evFile.name, col-30);
+          doc.text(nameLines[0], M+26, 34);
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(55,71,79);
+          doc.text("PDF evidence file — attached to this audit record", M+4, 46);
+          if(evFile.url && !isInline){ doc.setTextColor(1,87,155); doc.textWithLink("Click to open / download", M+4, 58, {url:evFile.url}); }
+          else if(isInline && evFile.url){
+            doc.setTextColor(1,87,155);
+            doc.textWithLink("Click to download", M+4, 58, {url:evFile.url});
+          }
         }
       } else {
-        // Non-renderable file type - show evidence record
+        // Non-renderable file types (docx, xlsx etc) — show evidence record with download
         const badgeColors={"docx":[0,120,215],"doc":[0,120,215],"xlsx":[33,115,70],"xls":[33,115,70],"txt":[95,114,133]};
         const bc=badgeColors[ext]||[95,114,133];
-        doc.setFillColor(245,248,252); doc.rect(M,24,col,50,"F");
-        doc.setDrawColor(221,227,234); doc.rect(M,24,col,50,"S");
+        doc.setFillColor(245,248,252); doc.rect(M,24,col,60,"F");
+        doc.setDrawColor(221,227,234); doc.rect(M,24,col,60,"S");
         doc.setFillColor(...bc); doc.rect(M+4,28,18,8,"F");
         doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
         doc.text(ext.toUpperCase(), M+13, 33.5, {align:"center"});
         doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(26,35,50);
-        doc.text(evFile.name, M+26, 34);
+        const nameLines = doc.splitTextToSize(evFile.name, col-30);
+        doc.text(nameLines[0], M+26, 34);
         doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(55,71,79);
-        doc.text(`Audit Evidence for: ${slot.area}`, M+4, 46);
-        if(evFile.url && !isInline){ doc.setTextColor(1,87,155); doc.textWithLink("Click to open original file", M+4, 60, {url:evFile.url}); }
-        else if(isInline){
-          doc.setTextColor(1,87,155);
-          doc.textWithLink("Download from AeroQualify", M+4, 60, {url:evFile.url});
-        }
+        doc.text(`Audit Evidence for: ${slot.area}`, M+4, 48);
+        doc.text(`File type: ${ext.toUpperCase()} — cannot be rendered inside PDF`, M+4, 57);
+        if(evFile.url && !isInline){ doc.setTextColor(1,87,155); doc.textWithLink("Click to open / download original file", M+4, 68, {url:evFile.url}); }
+        else if(isInline && evFile.url){ doc.setTextColor(1,87,155); doc.textWithLink("Click to download from AeroQualify", M+4, 68, {url:evFile.url}); }
       }
     } catch(evErr){ console.warn("Evidence page failed:", evFile.name, evErr); }
   }
