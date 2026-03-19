@@ -3905,16 +3905,16 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast 
 
 // ─── Annual Audit Schedule Builder ────────────────────────────
 const AUDIT_AREAS = [
-  "Management Personnel",
+  "Management Personnel Records",
   "Ground & Flight Instructor Records",
   "Ground School Training Records",
   "Flight Training Records",
   "Company Manuals and Relevant Documents",
   "Classrooms and Facilities",
   "Aircraft",
-  "AMO Oversight",
-  "Fuel Supplier Oversight",
-  "Safety Systems",
+  "AMO",
+  "Fuel Supplier",
+  "Safety Management Systems",
   "Quality Management Systems",
 ];
 // Helper: get org-specific audit areas, falling back to defaults
