@@ -753,11 +753,24 @@ const PasswordResetScreen = ({ onDone }) => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg]     = useState("");
   const [done, setDone]   = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    // Poll for session to be established from the recovery token
+    let attempts = 0;
+    const check = setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if(session){ setSessionReady(true); clearInterval(check); }
+      if(++attempts > 20){ clearInterval(check); setMsg("Session expired. Please request a new password reset link."); }
+    }, 500);
+    return () => clearInterval(check);
+  }, []);
 
   const handle = async(e) => {
     e.preventDefault();
     if(pw !== pw2){ setMsg("Passwords do not match."); return; }
     if(pw.length < 6){ setMsg("Password must be at least 6 characters."); return; }
+    if(!sessionReady){ setMsg("Session not ready. Please wait a moment and try again."); return; }
     setLoading(true); setMsg("");
     const { error } = await supabase.auth.updateUser({ password: pw });
     if(error){ setMsg("Error: "+error.message); setLoading(false); return; }
@@ -782,14 +795,19 @@ const PasswordResetScreen = ({ onDone }) => {
               <div style={{ fontWeight:700, color:T.green, fontSize:16, marginBottom:8 }}>Password updated!</div>
               <div style={{ fontSize:13, color:T.muted }}>Redirecting to sign in…</div>
             </div>
+          ) : !sessionReady && !msg ? (
+            <div style={{ textAlign:"center", padding:20 }}>
+              <div style={{ width:32,height:32,border:`3px solid ${T.border}`,borderTop:`3px solid ${T.primary}`,borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 12px" }}/>
+              <div style={{ fontSize:13, color:T.muted }}>Establishing secure session…</div>
+            </div>
           ) : (
             <>
               <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:22 }}>Create New Password</div>
               <form onSubmit={handle}>
                 <Input label="New Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 6 characters" required />
                 <Input label="Confirm Password" type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Repeat new password" required />
-                {msg&&<div style={{ fontSize:12, color:T.red, marginBottom:14, padding:"8px 12px", background:T.redLt, borderRadius:6 }}>{msg}</div>}
-                <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>{loading?"Updating…":"Set New Password"}</Btn>
+                {msg&&<div style={{ fontSize:12, color:msg.includes("expired")?T.red:T.red, marginBottom:14, padding:"8px 12px", background:T.redLt, borderRadius:6 }}>{msg}</div>}
+                <Btn type="submit" size="lg" style={{ width:"100%", opacity:(loading||!sessionReady)?0.7:1 }}>{loading?"Updating…":"Set New Password"}</Btn>
               </form>
             </>
           )}
