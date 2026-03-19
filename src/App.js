@@ -2808,7 +2808,6 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
             dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(blob);});
           }
           drawEvHeader();
-          drawAuditEvidenceHeader(evFile, fi, auditEvidenceFiles.length);
         const imgTop=22; const imgBottom=284;
           const maxW=W-margin*2; const maxH=imgBottom-imgTop;
           const imgProps=doc.getImageProperties(dataUrl);
