@@ -872,8 +872,11 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
   // Live-resolve org slug as user types
   const resolveSlug = async (slug) => {
     if(!slug.trim()){ setOrgHint(null); return; }
-    const { data } = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toUpperCase()).single();
-    setOrgHint(data || false); // false = not found, null = not typed yet
+    // Try uppercase first (new format), then exact, then lowercase
+    let result = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toUpperCase()).single();
+    if(!result.data) result = await supabase.from("organisations").select("id,name").eq("slug", slug.trim()).single();
+    if(!result.data) result = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toLowerCase()).single();
+    setOrgHint(result.data || false);
   };
 
   const POPUPS = {
@@ -951,7 +954,9 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
 
         // Resolve org slug if provided
         if(orgSlug.trim()){
-          const { data: orgData } = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim().toUpperCase()).single();
+          let { data: orgData } = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim().toUpperCase()).single();
+          if(!orgData){ const r2 = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim()).single(); orgData=r2.data; }
+          if(!orgData){ const r3 = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim().toLowerCase()).single(); orgData=r3.data; }
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
           if(orgData.status !== "active"){
             // Check if it's a demo expiry
@@ -1029,7 +1034,6 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
                 {/* Live org resolution feedback */}
                 {orgSlug.trim()&&orgHint===null&&<div style={{ fontSize:11, color:T.muted, marginTop:-10, marginBottom:8 }}>Checking…</div>}
                 {orgSlug.trim()&&orgHint&&<div style={{ fontSize:11, color:T.green, marginTop:-10, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>✓ {orgHint.name}</div>}
-                {orgSlug.trim()&&orgHint===false&&<div style={{ fontSize:11, color:T.red, marginTop:-10, marginBottom:8 }}>✗ Organisation not found</div>}
                 <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
                   {mode==="login"
                     ? "Enter your organisation's ID to load the correct dashboard."
