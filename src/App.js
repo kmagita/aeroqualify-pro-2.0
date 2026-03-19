@@ -746,6 +746,60 @@ const PendingApprovalScreen = ({ user, onSignOut }) => (
 );
 
 // ─── Login ────────────────────────────────────────────────────
+// ─── Password Reset Screen ───────────────────────────────────
+const PasswordResetScreen = ({ onDone }) => {
+  const [pw,  setPw]      = useState("");
+  const [pw2, setPw2]     = useState("");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg]     = useState("");
+  const [done, setDone]   = useState(false);
+
+  const handle = async(e) => {
+    e.preventDefault();
+    if(pw !== pw2){ setMsg("Passwords do not match."); return; }
+    if(pw.length < 6){ setMsg("Password must be at least 6 characters."); return; }
+    setLoading(true); setMsg("");
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if(error){ setMsg("Error: "+error.message); setLoading(false); return; }
+    setDone(true);
+    await supabase.auth.signOut();
+    setTimeout(onDone, 2000);
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,#e3f2fd 0%,#f0f4f8 50%,#e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <GlobalStyle/>
+      <div style={{ position:"fixed", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})` }} />
+      <div style={{ width:400, animation:"fadeIn 0.5s ease" }}>
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ width:64, height:64, borderRadius:16, background:`linear-gradient(135deg,${T.primary},${T.sky})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px", boxShadow:"0 4px 20px rgba(1,87,155,0.25)" }}>✈</div>
+          <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primaryDk }}>AeroQualify Pro</div>
+          <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>Set New Password</div>
+        </div>
+        <div className="card" style={{ padding:32 }}>
+          {done ? (
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
+              <div style={{ fontWeight:700, color:T.green, fontSize:16, marginBottom:8 }}>Password updated!</div>
+              <div style={{ fontSize:13, color:T.muted }}>Redirecting to sign in…</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:22 }}>Create New Password</div>
+              <form onSubmit={handle}>
+                <Input label="New Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 6 characters" required />
+                <Input label="Confirm Password" type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Repeat new password" required />
+                {msg&&<div style={{ fontSize:12, color:T.red, marginBottom:14, padding:"8px 12px", background:T.redLt, borderRadius:6 }}>{msg}</div>}
+                <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>{loading?"Updating…":"Set New Password"}</Btn>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Org Switcher Modal ──────────────────────────────────────
 const OrgSwitcherModal = ({ userId, currentOrgId, onSwitch, onClose }) => {
   const [memberships, setMemberships] = useState([]);
@@ -796,6 +850,57 @@ const OrgSwitcherModal = ({ userId, currentOrgId, onSwitch, onClose }) => {
           </div>
         )}
         <button onClick={onClose} style={{ marginTop:16,width:"100%",padding:"10px",border:"1px solid #dde3ea",borderRadius:8,background:"#f5f8fc",color:"#5f7285",fontWeight:600,fontSize:13,cursor:"pointer" }}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Password Reset Screen ───────────────────────────────────
+const PasswordResetScreen = ({ onDone }) => {
+  const [pw,    setPw]    = useState("");
+  const [pw2,   setPw2]   = useState("");
+  const [loading,setLoading] = useState(false);
+  const [err,   setErr]   = useState("");
+  const [done,  setDone]  = useState(false);
+
+  const handle = async(e) => {
+    e.preventDefault();
+    if(pw !== pw2){ setErr("Passwords do not match"); return; }
+    if(pw.length < 6){ setErr("Password must be at least 6 characters"); return; }
+    setLoading(true); setErr("");
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if(error){ setErr(error.message); setLoading(false); return; }
+    setDone(true);
+    setTimeout(()=>onDone(), 2000);
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,#e3f2fd 0%,#f0f4f8 50%,#e8f5e9 100%)`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <GlobalStyle/>
+      <div style={{ position:"fixed", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})` }} />
+      <div style={{ width:400, animation:"fadeIn 0.5s ease" }}>
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ width:64, height:64, borderRadius:16, background:`linear-gradient(135deg,${T.primary},${T.sky})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, margin:"0 auto 16px", boxShadow:"0 4px 20px rgba(1,87,155,0.25)" }}>✈</div>
+          <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.primaryDk, letterSpacing:1 }}>AeroQualify Pro</div>
+          <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>Set your new password</div>
+        </div>
+        <div className="card" style={{ padding:32 }}>
+          {done ? (
+            <div style={{ textAlign:"center", padding:20 }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
+              <div style={{ fontWeight:700, color:T.green, fontSize:16 }}>Password updated successfully!</div>
+              <div style={{ fontSize:13, color:T.muted, marginTop:8 }}>Redirecting to sign in…</div>
+            </div>
+          ) : (
+            <form onSubmit={handle}>
+              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:700, fontSize:16, color:T.primaryDk, marginBottom:22 }}>Reset Password</div>
+              <Input label="New Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 6 characters" required />
+              <Input label="Confirm New Password" type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Repeat password" required />
+              {err&&<div style={{ fontSize:12, color:T.red, marginBottom:14, padding:"8px 12px", background:T.redLt, borderRadius:6 }}>{err}</div>}
+              <Btn type="submit" size="lg" style={{ width:"100%", opacity:loading?0.7:1 }}>{loading?"Updating…":"Set New Password"}</Btn>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1299,7 +1404,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
         </Select>
         <Select label="Department" value={form.department||""} onChange={e=>set("department",e.target.value)}>
           <option value="">Select…</option>
-          {(auditAreas||["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]).map(o=><option key={o}>{o}</option>)}
+          {(auditAreas ? (typeof auditAreas==="string" ? JSON.parse(auditAreas) : auditAreas) : ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]).map(o=><option key={o}>{o}</option>)}
         </Select>
         <Input label="Due Date" type="date" value={form.due_date||""} onChange={e=>set("due_date",e.target.value)} />
         <div style={{ gridColumn:"1/-1" }}>
@@ -3846,7 +3951,7 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast 
 // ─── Annual Audit Schedule Builder ────────────────────────────
 const AUDIT_AREAS = [
   "Management Personnel Records",
-  "Personnel Records & Qualifications",
+  "Ground & Flight Instructor Records",
   "Ground School Training Records",
   "Flight Training Records",
   "Company Manuals and Relevant Documents",
@@ -3857,12 +3962,20 @@ const AUDIT_AREAS = [
   "Safety Management Systems",
   "Quality Management Systems",
 ];
+// Helper: get org-specific audit areas, falling back to defaults
+const getAuditAreas = (org) => {
+  if(!org?.audit_areas) return AUDIT_AREAS;
+  try {
+    const parsed = JSON.parse(org.audit_areas);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : AUDIT_AREAS;
+  } catch { return AUDIT_AREAS; }
+};
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const AUDIT_TYPES = ["Internal","Supplier","External","Regulatory","Surveillance"];
 
 const FINDING_LEVELS = ["Level 1 - Critical NC","Level 2 - Major NC","Level 3 - Minor NC","Observation","Repeat Finding","Regulatory"];
 
-const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profile, showToast, onRefresh }) => {
+const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profile, showToast, onRefresh, org }) => {
   const [tab, setTab] = useState("details");
   const [form, setForm] = useState({
     lead_auditor:     slot.lead_auditor||"",
@@ -4205,7 +4318,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
           <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments})}>🔔 Notification Form</Btn>
-          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems)})}>📄 Audit Report PDF</Btn>}
+          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG"})}>📄 Audit Report PDF</Btn>}
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
@@ -4230,6 +4343,8 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
           managers={managers}
           allCars={data?.cars||[]}
           auditSchedule={data?.auditSchedule||[]}
+          orgPrefix={org?.car_prefix||"ORG"}
+          auditAreas={org?.audit_areas||null}
           onSave={(carForm)=>saveCarFromFinding(carForm, f.id)}
           onClose={()=>setCarModal(null)}
         />
@@ -4324,7 +4439,7 @@ const generateAuditReport = async (slot) => {
   const _aCode = AREA_CODES_PDF[slot.area]||"000";
   const _aDate = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
   const _dd=String(_aDate.getDate()).padStart(2,"0"),_mm=String(_aDate.getMonth()+1).padStart(2,"0"),_yyyy=_aDate.getFullYear();
-  const auditRefNum = `PGF-QMS-${_aCode}-${_dd}${_mm}${_yyyy}`;
+  const auditRefNum = `${slot.org_prefix||"ORG"}-QMS-${_aCode}-${_dd}${_mm}${_yyyy}`;
   const statusColors = {
     Completed:[46,125,50], "In Progress":[1,87,155],
     Scheduled:[245,127,23], Overdue:[198,40,40], Cancelled:[117,117,117]
@@ -4332,8 +4447,9 @@ const generateAuditReport = async (slot) => {
   const sc = statusColors[slot.status]||[1,87,155];
   doc.setFillColor(245,248,252); doc.rect(M,y,col,16,"F");
   doc.setDrawColor(221,227,234); doc.rect(M,y,col,16,"S");
-  doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(26,35,50);
-  doc.text(`${slot.area} — ${auditRefNum}`, M+4, y+7);
+  doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(26,35,50);
+  const areaTitle = `${slot.area} — ${auditRefNum}`;
+  doc.text(doc.splitTextToSize(areaTitle, col-40)[0], M+4, y+7);
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(95,114,133);
   doc.text(`${MONTHS[(slot.month||1)-1]} ${slot.year}  ·  ${slot.audit_type||"Internal"}`, M+4, y+13);
   // Status badge
@@ -4435,7 +4551,91 @@ const generateAuditReport = async (slot) => {
     doc.text("Signature / Date", bx+3, y+21);
   });
 
-  addFooter();
+  // ── Attached Evidence Files ──────────────────────────────────
+  let auditEvidenceFiles = [];
+  try { auditEvidenceFiles = JSON.parse(slot.attachments||"[]"); } catch {}
+  if(!slot.attachments && slot.attachment_url) auditEvidenceFiles = [{name:slot.attachment_name||"attachment",url:slot.attachment_url}];
+
+  const reportPageCount = doc.getNumberOfPages();
+  for(let fi=0; fi<auditEvidenceFiles.length; fi++){
+    const evFile = auditEvidenceFiles[fi];
+    if(!evFile?.url && !evFile?.name) continue;
+    try {
+      const ext = (evFile.name.split(".").pop()||"").toLowerCase();
+      const isImage = ["jpg","jpeg","png","gif","webp"].includes(ext);
+      const isInline = evFile.url && evFile.url.startsWith("data:");
+
+      doc.addPage();
+      // Evidence header
+      doc.setFillColor(26,35,50); doc.rect(0,0,W,18,"F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
+      doc.text(`AUDIT EVIDENCE — File ${fi+1} of ${auditEvidenceFiles.length}`, M, 8);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(200,210,220);
+      doc.text(evFile.name, W-M, 8, {align:"right"});
+      doc.setFontSize(7); doc.setTextColor(160,180,200);
+      doc.text(`Audit: ${slot.area} — ${auditRefNum}`, M, 14);
+
+      if(isImage){
+        let dataUrl = evFile.url;
+        if(!isInline){
+          const resp = await fetch(evFile.url);
+          if(!resp.ok) throw new Error("fetch failed");
+          const blob = await resp.blob();
+          dataUrl = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(blob); });
+        }
+        const imgTop=22; const imgBottom=284;
+        const maxW=W-M*2; const maxH=imgBottom-imgTop;
+        const imgProps = doc.getImageProperties(dataUrl);
+        let iw=imgProps.width; let ih=imgProps.height;
+        const scale = Math.min(maxW/iw, maxH/ih, 1);
+        iw*=scale; ih*=scale;
+        doc.addImage(dataUrl, ext==="png"?"PNG":"JPEG", M+(maxW-iw)/2, imgTop+(maxH-ih)/2, iw, ih);
+      } else if(ext==="pdf" && !isInline){
+        try{
+          if(!window._auditPdfMergeQueue) window._auditPdfMergeQueue=[];
+          const resp = await fetch(evFile.url);
+          if(resp.ok) window._auditPdfMergeQueue.push({ name:evFile.name, bytes:await resp.arrayBuffer() });
+        } catch(e){
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
+          doc.text(evFile.name, M, 32);
+        }
+      } else {
+        // Non-renderable file type - show evidence record
+        const badgeColors={"docx":[0,120,215],"doc":[0,120,215],"xlsx":[33,115,70],"xls":[33,115,70],"txt":[95,114,133]};
+        const bc=badgeColors[ext]||[95,114,133];
+        doc.setFillColor(245,248,252); doc.rect(M,24,col,50,"F");
+        doc.setDrawColor(221,227,234); doc.rect(M,24,col,50,"S");
+        doc.setFillColor(...bc); doc.rect(M+4,28,18,8,"F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
+        doc.text(ext.toUpperCase(), M+13, 33.5, {align:"center"});
+        doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(26,35,50);
+        doc.text(evFile.name, M+26, 34);
+        doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(55,71,79);
+        doc.text(`Audit Evidence for: ${slot.area}`, M+4, 46);
+        if(evFile.url && !isInline){ doc.setTextColor(1,87,155); doc.textWithLink("Click to open original file", M+4, 60, {url:evFile.url}); }
+        else if(isInline){
+          doc.setTextColor(1,87,155);
+          doc.textWithLink("Download from AeroQualify", M+4, 60, {url:evFile.url});
+        }
+      }
+    } catch(evErr){ console.warn("Evidence page failed:", evFile.name, evErr); }
+  }
+
+  // Rebuild footer with correct total page count including evidence pages
+  const totalPages = doc.getNumberOfPages();
+  for(let i=1; i<=totalPages; i++){
+    doc.setPage(i);
+    const isEvPage = i > reportPageCount;
+    doc.setFillColor(isEvPage?26:245, isEvPage?35:248, isEvPage?50:252);
+    doc.rect(0,287,W,10,"F");
+    doc.setDrawColor(isEvPage?60:221, isEvPage?80:227, isEvPage?100:234);
+    doc.setLineWidth(0.3); doc.line(0,287,W,287);
+    doc.setFont("helvetica","normal"); doc.setFontSize(7);
+    doc.setTextColor(isEvPage?200:95, isEvPage?210:114, isEvPage?220:133);
+    doc.text("AeroQualify Pro · Quality Management System · Audit Report  |  QMS 004  |  CONTROLLED DOCUMENT", M, 293);
+    doc.text(`Page ${i} of ${totalPages}`, W-M, 293, {align:"right"});
+  }
+
   const filename = `Audit-Report-${slot.area.replace(/\s+/g,"-")}-${slot.year}-Slot${slot.slot}.pdf`;
   doc.save(filename);
 };
@@ -4483,7 +4683,7 @@ const generateSchedulePDF = async (yearSlots, year, approval) => {
   y += 8;
 
   // Rows
-  AUDIT_AREAS.forEach((area, ai) => {
+  orgAuditAreas.forEach((area, ai) => {
     const rowH = 10;
     doc.setFillColor(ai%2===0?255:248,ai%2===0?255:250,ai%2===0?255:252);
     doc.rect(M,y,col,rowH,"F");
@@ -4949,7 +5149,7 @@ const ADHOC_TRIGGERS = [
 
 const AdHocAuditModal = ({ year, existingSlots, onSave, onClose }) => {
   const [form, setForm] = useState({
-    area: AUDIT_AREAS[0],
+    area: orgAuditAreas[0],
     custom_area: "",
     use_custom: false,
     trigger: ADHOC_TRIGGERS[0],
@@ -5046,7 +5246,7 @@ const AdHocAuditModal = ({ year, existingSlots, onSave, onClose }) => {
             </div>
             {!form.use_custom
               ? <select value={form.area} onChange={e=>set("area",e.target.value)} style={inputStyle}>
-                  {AUDIT_AREAS.map(a=><option key={a}>{a}</option>)}
+                  {orgAuditAreas.map(a=><option key={a}>{a}</option>)}
                 </select>
               : <input value={form.custom_area} onChange={e=>set("custom_area",e.target.value)} placeholder="Enter audit area name..." style={inputStyle}/>
             }
@@ -5109,7 +5309,19 @@ const AdHocAuditModal = ({ year, existingSlots, onSave, onClose }) => {
 };
 
 
-const AuditsView = ({ data, user, profile, managers, onRefresh, showToast }) => {
+const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
+  // Use org-specific audit areas if set, otherwise fall back to AUDIT_AREAS constant
+  const orgAuditAreas = (() => {
+    try {
+      const custom = JSON.parse(org?.audit_areas||"null");
+      const base = (custom && custom.length > 0) ? custom : AUDIT_AREAS;
+      // Also include any areas from existing schedule slots that aren't in the list
+      // This preserves integrity of old data when areas are renamed
+      const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
+      const combined = [...new Set([...base, ...scheduleAreas.filter(a=>!base.includes(a))])];
+      return combined;
+    } catch { return AUDIT_AREAS; }
+  })();
   const isQM    = ["admin","quality_manager"].includes(profile?.role);
   const isAdmin = profile?.role==="admin";
   const [view,      setView]      = useState("schedule");
@@ -5143,7 +5355,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast }) => 
     setGenerating(true);
     try {
       const rows = [];
-      AUDIT_AREAS.forEach((area, idx) => {
+      orgAuditAreas.forEach((area, idx) => {
         const month1 = 1 + (idx % 6);
         const month2 = 7 + (idx % 6);
         rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-1`, year, area, slot:1, month:month1, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date });
@@ -5184,7 +5396,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast }) => 
   };
 
   // Programme completion stats
-  const totalSlots  = AUDIT_AREAS.length * 2;
+  const totalSlots  = orgAuditAreas.length * 2;
   const yearSlots   = schedule.filter(s=>s.year===year);
   const adHocSlots  = yearSlots.filter(s=>s.ad_hoc);
   const completed   = yearSlots.filter(s=>s.status==="Completed").length;
@@ -5284,7 +5496,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast }) => 
                 </tr>
               </thead>
               <tbody>
-                {AUDIT_AREAS.map((area,ai)=>{
+                {orgAuditAreas.map((area,ai)=>{
                   const slot1 = getSlot(area,1);
                   const slot2 = getSlot(area,2);
                   const bothDone = slot1?.status==="Completed" && slot2?.status==="Completed";
@@ -5414,7 +5626,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
                           {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
-                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport(s)}>📄 PDF</Btn>}
+                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG"})}>📄 PDF</Btn>}
                         </div>
                       </td>
                     </tr>
@@ -5453,7 +5665,7 @@ Planned: ${slot.planned_date||"Not set"}`}
           onClose={()=>setAdHocModal(false)}
         />
       )}
-      {modal&&<AuditScheduleModal slot={modal} onSave={saveSlot} onClose={()=>setModal(null)} managers={managers} data={data} user={user} profile={profile} showToast={showToast} onRefresh={onRefresh}/>}
+      {modal&&<AuditScheduleModal slot={modal} onSave={saveSlot} onClose={()=>setModal(null)} managers={managers} data={data} user={user} profile={profile} showToast={showToast} onRefresh={onRefresh} org={org}/>}
 
       {/* Password Gate Modal */}
       {pwModal&&(
@@ -5500,7 +5712,7 @@ Planned: ${slot.planned_date||"Not set"}`}
             </div>
             <div style={{ padding:24,display:"flex",flexDirection:"column",gap:14 }}>
               <div style={{ padding:"10px 14px",background:"#fff3e0",borderRadius:8,fontSize:12,color:"#e65100",borderLeft:"4px solid #f57f17" }}>
-                ⚠️ This will generate {AUDIT_AREAS.length*2} audit slots for {year}. Existing slots will be overwritten.
+                ⚠️ This will generate {orgAuditAreas.length*2} audit slots for {year}. Existing slots will be overwritten.
               </div>
               <div style={{ fontSize:13,fontWeight:700,color:"#1a2332",borderBottom:"1px solid #eef2f7",paddingBottom:8 }}>Quality Manager</div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
@@ -5747,7 +5959,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <table style={{ width:"100%",borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f8fafc" }}>
-                  {["Organisation","Users","CAR Prefix","Status","Created","Actions"].map(h=>(
+                  {["Organisation","Users","Org ID","CAR Prefix","Status","Created","Actions"].map(h=>(
                     <th key={h} style={{ padding:"10px 16px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5 }}>{h}</th>
                   ))}
                 </tr>
@@ -5760,11 +5972,20 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                     <tr key={o.id} style={{ cursor:"pointer" }} onClick={()=>setSelectedOrg(selectedOrg?.id===o.id?null:o)}>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
                         <div style={{ fontWeight:700,color:"#1a2332",fontSize:13 }}>{o.name}</div>
-                        <div style={{ fontSize:11,color:"#8a9ab0" }}>{o.slug} · {o.country||"—"}</div>
+                        <div style={{ fontSize:11,color:"#8a9ab0",display:"flex",alignItems:"center",gap:6 }}>
+                          <span style={{ fontFamily:"monospace",background:"#f0f4f8",borderRadius:4,padding:"1px 6px",color:"#01579b",fontWeight:700 }}>{o.slug}</span>
+                          <button onClick={e=>{e.stopPropagation();navigator.clipboard.writeText(o.slug);}} title="Copy org ID"
+                            style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#8a9ab0",padding:0 }}>📋</button>
+                          <span style={{ color:"#dde3ea" }}>·</span>
+                          <span>{o.country||"—"}</span>
+                        </div>
                       </td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
                         <div style={{ fontSize:13,color:"#1a2332",fontWeight:600 }}>{uCount}</div>
                         {pending>0&&<div style={{ fontSize:11,color:"#c62828",fontWeight:600 }}>⚠ {pending} pending</div>}
+                      </td>
+                      <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
+                        <div style={{ fontFamily:"monospace",fontSize:12,fontWeight:700,color:"#01579b",background:"#e3f2fd",borderRadius:5,padding:"2px 8px",display:"inline-block" }}>{o.slug}</div>
                       </td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8",fontFamily:"monospace",fontSize:13,fontWeight:700,color:"#01579b" }}>{o.car_prefix||"ORG"}</td>
                       <td style={{ padding:"14px 16px",borderBottom:"1px solid #f0f4f8" }}>
@@ -5828,7 +6049,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <table style={{ width:"100%",borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f8fafc" }}>
-                  {["Organisation","Slug","Country","Contact","CAR Prefix","Status","Created","Actions"].map(h=>(
+                  {["Organisation","Org ID (Login Code)","Country","Contact","CAR Prefix","Status","Created","Actions"].map(h=>(
                     <th key={h} style={{ padding:"10px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5 }}>{h}</th>
                   ))}
                 </tr>
@@ -6154,6 +6375,8 @@ export default function App() {
   const [user,setUser]         = useState(null);
   const [showLogin,setShowLogin]           = useState(false);
   const [showOrgSwitcher,setShowOrgSwitcher] = useState(false);
+  const [showPasswordReset,setShowPasswordReset] = useState(false);
+  const [showPasswordReset,setShowPasswordReset] = useState(false);
   const [authPopup,setAuthPopup] = useState(null); // "signup" | "pending" | "noProfile"
   const [profile,setProfile]   = useState(null);
   const [managers,setManagers] = useState([]);
@@ -6181,7 +6404,13 @@ export default function App() {
     }
     sessionStorage.setItem("aq_loaded", "1");
 
-    const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,session)=>{
+    const{data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      if(event==="PASSWORD_RECOVERY"){
+        // User clicked the reset link — show the password reset form
+        setShowPasswordReset(true);
+        setShowLogin(false);
+        return;
+      }
       if(!session?.user){
         setLoading(false);
         setProfile(null);
@@ -6189,6 +6418,15 @@ export default function App() {
         setShowLogin(prev => prev ? prev : false);
       }
     });
+
+    // Handle password reset redirect (Supabase appends #access_token to URL)
+    const hash = window.location.hash;
+    if(hash && hash.includes("type=recovery")){
+      // Show password reset form
+      setShowPasswordReset(true);
+      setLoading(false);
+      return;
+    }
 
     // If there is an existing session on refresh, restore it
     if(isRefresh){
@@ -6291,6 +6529,11 @@ export default function App() {
     audits:    data.audits.filter(a=>a.status==="Scheduled"&&isOverdue(a.date)).length,
   };
 
+  // ── Password Reset Screen (redirected from email link) ──
+  if(showPasswordReset){
+    return <PasswordResetScreen onDone={()=>{ setShowPasswordReset(false); window.location.hash=""; }} />;
+  }
+
   if(!user) {
     const POPUPS = {
       signup: { icon:"📧", title:"Check your email", msg:"A verification link has been sent to your email address. Click the link to verify your account, then return here to sign in.", sub:"Once verified, your account will be reviewed by an administrator before you can access AeroQualify.", color:"#01579b", bg:"#e3f2fd" },
@@ -6311,17 +6554,19 @@ export default function App() {
             </div>
           </div>
         )}
-        {showLogin
-          ? <LoginScreen
-              onLogin={(u, orgIdOverride, superAdminMode) => {
-                setUser(u);
-                setShowLogin(false);
-                setAuthPopup(null);
-                if(superAdminMode){ setIsSuperAdmin(true); setTab("superadmin"); }
-                if(orgIdOverride){ setLoginOrgOverride(orgIdOverride); }
-              }}
-              authPopup={authPopup} setAuthPopup={setAuthPopup}/>
-          : <LandingPage onShowLogin={() => setShowLogin(true)} onShowSignup={() => setShowLogin(true)}/>
+        {showPasswordReset
+          ? <PasswordResetScreen onDone={()=>{ setShowPasswordReset(false); setShowLogin(true); }}/>
+          : showLogin
+            ? <LoginScreen
+                onLogin={(u, orgIdOverride, superAdminMode) => {
+                  setUser(u);
+                  setShowLogin(false);
+                  setAuthPopup(null);
+                  if(superAdminMode){ setIsSuperAdmin(true); setTab("superadmin"); }
+                  if(orgIdOverride){ setLoginOrgOverride(orgIdOverride); }
+                }}
+                authPopup={authPopup} setAuthPopup={setAuthPopup}/>
+            : <LandingPage onShowLogin={() => setShowLogin(true)} onShowSignup={() => setShowLogin(true)}/>
         }
       </>
     );
@@ -6503,7 +6748,7 @@ export default function App() {
           {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="contractors" && <GenericPage title="Contractors" subtitle="Approved contractor register" table="contractors" columns={CONTRACTOR_COLS} modalFields={CONTRACTOR_FIELDS} modalTitle="Contractor" modalDefaults={{status:"Approved",rating:"A"}} data={data} canEdit={isAdmin} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="rca"      && <RCAView data={data} user={user} profile={profile}/>}
