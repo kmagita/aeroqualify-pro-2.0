@@ -4669,13 +4669,16 @@ const generateAuditReport = async (slot) => {
   }
 
   // ── SECTION 4: REPORT ADMINISTRATION ─────────────────────────
-  y = needPage(y,12); y = sectionTitle("SECTION 4 — REPORT ADMINISTRATION", y, [69,39,160]);
+  // Force new page if less than 80mm remaining — prevents content bleeding into footer
+  if(y > 210) { doc.addPage(); y = NEW_PAGE_Y; }
+  y = sectionTitle("SECTION 4 — REPORT ADMINISTRATION", y, [69,39,160]);
   y = boxRow([["Prepared By", slot.prepared_by||"—"],["Approved By", slot.approved_by||"—"]], M, y, col);
   y = needPage(y,20); y = box("Distribution List", slot.distribution||"—", M, y, col);
   y += 4;
 
   // ── SIGNATURE BLOCK ───────────────────────────────────────────
-  y = needPage(y, 50);
+  // Always put signatures on a fresh page for clean presentation
+  doc.addPage(); y = NEW_PAGE_Y;
   doc.setDrawColor(221,227,234); doc.setLineWidth(0.3);
   const sigW3 = (col-8)/3;
   [["Lead Auditor Signature", slot.lead_auditor||""], ["Quality Manager Signature", slot.approved_by||""], ["Accountable Manager Signature", ""]].forEach(([label, name], i) => {
@@ -4733,54 +4736,41 @@ const generateAuditReport = async (slot) => {
         iw*=scale; ih*=scale;
         doc.addImage(dataUrl, ext==="png"?"PNG":"JPEG", M+(maxW-iw)/2, imgTop+(maxH-ih)/2, iw, ih);
       } else if(ext==="pdf"){
-        // PDF files — try to merge (both inline base64 and remote URLs)
+        // PDF files — use pdf-lib to merge (already imported at top of app)
         try{
-          let bytes;
+          const { PDFDocument } = await import("pdf-lib");
+          let pdfBytes;
           if(isInline){
             const base64 = evFile.url.split(",")[1];
             const binary = atob(base64);
-            bytes = new Uint8Array(binary.length);
-            for(let bi=0;bi<binary.length;bi++) bytes[bi]=binary.charCodeAt(bi);
-            bytes = bytes.buffer;
+            const arr = new Uint8Array(binary.length);
+            for(let bi=0;bi<binary.length;bi++) arr[bi]=binary.charCodeAt(bi);
+            pdfBytes = arr.buffer;
           } else {
             const resp = await fetch(evFile.url);
             if(!resp.ok) throw new Error("fetch failed");
-            bytes = await resp.arrayBuffer();
+            pdfBytes = await resp.arrayBuffer();
           }
-          // Merge PDF pages using pdf-lib
-          const { PDFDocument } = await import("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm");
-          const evidencePdf = await PDFDocument.load(bytes);
-          const mainPdf = await PDFDocument.load(doc.output("arraybuffer"));
-          const pages = await mainPdf.copyPages(evidencePdf, evidencePdf.getPageIndices());
-          pages.forEach(p => mainPdf.addPage(p));
-          // Re-save merged PDF
-          const mergedBytes = await mainPdf.save();
-          const blob = new Blob([mergedBytes], {type:"application/pdf"});
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `Audit-Report-${slot.area.replace(/\s+/g,"-")}-${slot.year}-Slot${slot.slot}.pdf`;
-          a.click();
-          URL.revokeObjectURL(url);
-          return; // Exit early — download triggered from merged PDF
-        } catch(pdfErr){
-          console.warn("PDF merge failed, falling back to reference page:", pdfErr);
-          // Fallback: show reference page with download link
-          doc.setFillColor(245,248,252); doc.rect(M,24,col,50,"F");
-          doc.setDrawColor(221,227,234); doc.rect(M,24,col,50,"S");
-          doc.setFillColor(198,40,40); doc.rect(M+4,28,18,8,"F");
+          // Queue for merging after jsPDF is saved
+          if(!window._auditMergeQueue) window._auditMergeQueue = [];
+          window._auditMergeQueue.push({ name: evFile.name, bytes: pdfBytes, index: fi+1, total: auditEvidenceFiles.length });
+          // Add a placeholder page showing the file will be appended
+          doc.setFillColor(232,245,233); doc.rect(M,24,col,40,"F");
+          doc.setDrawColor(165,214,167); doc.rect(M,24,col,40,"S");
+          doc.setFillColor(46,125,50); doc.rect(M+4,28,18,8,"F");
           doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
           doc.text("PDF", M+13, 33.5, {align:"center"});
           doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(26,35,50);
-          const nameLines = doc.splitTextToSize(evFile.name, col-30);
-          doc.text(nameLines[0], M+26, 34);
-          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(55,71,79);
-          doc.text("PDF evidence file — attached to this audit record", M+4, 46);
-          if(evFile.url && !isInline){ doc.setTextColor(1,87,155); doc.textWithLink("Click to open / download", M+4, 58, {url:evFile.url}); }
-          else if(isInline && evFile.url){
-            doc.setTextColor(1,87,155);
-            doc.textWithLink("Click to download", M+4, 58, {url:evFile.url});
-          }
+          const fn1 = doc.splitTextToSize(evFile.name, col-30);
+          doc.text(fn1[0], M+26, 34);
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(46,125,50);
+          doc.text("✓ PDF attached — pages follow in the merged export", M+4, 50);
+          if(evFile.url && !isInline){ doc.setTextColor(1,87,155); doc.textWithLink("Click to open original", M+4, 60, {url:evFile.url}); }
+        } catch(pdfErr){
+          console.warn("PDF queue failed:", pdfErr);
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
+          doc.text("PDF: "+evFile.name, M, 32);
+          if(isInline && evFile.url){ doc.setTextColor(1,87,155); doc.textWithLink("Download", M, 42, {url:evFile.url}); }
         }
       } else {
         // Non-renderable file types (docx, xlsx etc) — show evidence record with download
@@ -4818,8 +4808,35 @@ const generateAuditReport = async (slot) => {
     doc.text(`Page ${i} of ${totalPages}`, W-M, 293, {align:"right"});
   }
 
-  const filename = `Audit-Report-${slot.area.replace(/\s+/g,"-")}-${slot.year}-Slot${slot.slot}.pdf`;
-  doc.save(filename);
+  const filename = `Audit-Report-${slot.area.replace(/[\s/]+/g,"-")}-${slot.year}-Slot${slot.slot}.pdf`;
+
+  // ── Merge queued PDF evidence files ──────────────────────────
+  if(window._auditMergeQueue && window._auditMergeQueue.length > 0){
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const mainBytes = doc.output("arraybuffer");
+      const mainPdf = await PDFDocument.load(mainBytes);
+      for(const item of window._auditMergeQueue){
+        try {
+          const evPdf = await PDFDocument.load(item.bytes);
+          const pages = await mainPdf.copyPages(evPdf, evPdf.getPageIndices());
+          pages.forEach(p => mainPdf.addPage(p));
+        } catch(e){ console.warn("Could not merge:", item.name, e); }
+      }
+      window._auditMergeQueue = [];
+      const mergedBytes = await mainPdf.save();
+      const blob = new Blob([mergedBytes], {type:"application/pdf"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 5000);
+    } catch(mergeErr){
+      console.warn("PDF merge failed, saving without evidence:", mergeErr);
+      doc.save(filename);
+    }
+  } else {
+    doc.save(filename);
+  }
 };
 
 
