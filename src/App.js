@@ -759,6 +759,16 @@ const PasswordResetScreen = ({ onDone }) => {
     if(pw !== pw2){ setMsg("Passwords do not match."); return; }
     if(pw.length < 6){ setMsg("Password must be at least 6 characters."); return; }
     setLoading(true); setMsg("");
+    // Ensure we have a valid session before updating
+    const { data: { session } } = await supabase.auth.getSession();
+    if(!session){
+      // Try to get session from URL hash
+      const { data, error: sessionErr } = await supabase.auth.getSessionFromUrl();
+      if(sessionErr || !data?.session){
+        setMsg("Session expired. Please request a new password reset link.");
+        setLoading(false); return;
+      }
+    }
     const { error } = await supabase.auth.updateUser({ password: pw });
     if(error){ setMsg("Error: "+error.message); setLoading(false); return; }
     setDone(true);
@@ -5298,8 +5308,11 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
     const s = slot.status;
     if(s==="Completed")   return { bg:"#e8f5e9", border:"#a5d6a7", text:"#2e7d32", label:"Completed" };
     if(s==="In Progress") return { bg:"#e3f2fd", border:"#90caf9", text:"#01579b", label:"In Progress" };
-    if(s==="Overdue")     return { bg:"#ffebee", border:"#ef9a9a", text:"#c62828", label:"Overdue" };
     if(s==="Cancelled")   return { bg:"#f5f5f5", border:"#e0e0e0", text:"#757575", label:"Cancelled" };
+    // Auto-detect overdue — scheduled/in-progress slots past their planned date
+    const isSlotOverdue = !["Completed","Cancelled"].includes(s) &&
+      slot.planned_date && new Date(slot.planned_date) < new Date();
+    if(s==="Overdue"||isSlotOverdue) return { bg:"#ffebee", border:"#ef9a9a", text:"#c62828", label:"Overdue" };
     return { bg:"#fff8e1", border:"#ffe082", text:"#f57f17", label:"Scheduled" };
   };
 
@@ -6394,11 +6407,27 @@ export default function App() {
       }
     });
 
-    // Handle password reset redirect (Supabase appends #access_token to URL)
+    // Handle password reset redirect via Supabase auth state change
+    // Supabase automatically detects the recovery token in the URL hash
+    supabase.auth.onAuthStateChange((event, session) => {
+      if(event === "PASSWORD_RECOVERY"){
+        setShowPasswordReset(true);
+        setLoading(false);
+      }
+    });
+
+    // Also check hash directly for immediate detection
     const hash = window.location.hash;
-    if(hash && hash.includes("type=recovery")){
-      // Show password reset form
-      setShowPasswordReset(true);
+    if(hash && (hash.includes("type=recovery") || hash.includes("type=signup"))){
+      // Let Supabase process the hash and establish session
+      supabase.auth.getSessionFromUrl().then(({data, error}) => {
+        if(!error && data?.session){
+          setShowPasswordReset(true);
+        }
+      }).catch(()=>{
+        // Fallback - still show reset form, Supabase will handle session
+        if(hash.includes("type=recovery")) setShowPasswordReset(true);
+      });
       setLoading(false);
       return;
     }
