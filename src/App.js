@@ -1348,7 +1348,10 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
   };
 
   // Sorted audit schedule for dropdown — most recent first
-  const auditOptions = [...(auditSchedule||[])].sort((a,b)=>b.year-a.year||b.month-a.month);
+  // Only show completed audits for linking — incomplete audits cannot have CARs raised against them
+  const auditOptions = [...(auditSchedule||[])]
+    .filter(s=>s.status==="Completed")
+    .sort((a,b)=>b.year-a.year||b.month-a.month);
   return (
     <ModalShell title={car?"Edit CAR":"Raise New CAR"} onClose={onClose} wide>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 20px" }}>
@@ -1952,7 +1955,7 @@ const VerificationModal = ({ car, cap, verif, onSave, onClose }) => {
 
 // ─── Generic Modal Shell ──────────────────────────────────────
 const ModalShell = ({ title, children, onClose, wide }) => (
-  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }} onClick={onClose}>
+  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", zIndex:2100, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }} onClick={onClose}>
     <div style={{ background:"#fff", borderRadius:14, padding:28, width:wide?680:480, maxHeight:"90vh", overflowY:"auto", animation:"fadeIn 0.2s ease", boxShadow:"0 8px 40px rgba(0,0,0,0.15)" }} onClick={e=>e.stopPropagation()}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
         <h2 style={{ fontFamily:"'Oxanium',sans-serif", fontSize:18, fontWeight:700, color:T.primaryDk }}>{title}</h2>
@@ -3971,8 +3974,11 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
     prepared_by:      slot.prepared_by||"",
     approved_by:      slot.approved_by||"",
     finding_items:    slot.finding_items||"[]",
+    deferred_from:    slot.deferred_from||"",   // original planned date before deferral
+    deferred_reason:  slot.deferred_reason||"",  // reason for deferral
   });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  const [showDefer, setShowDefer] = useState(false);
 
   // Finding items management
   const [findingItems, setFindingItems] = useState(()=>{
@@ -4104,12 +4110,69 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
                 <div><label style={labelStyle}>Auditee / Department</label>
                   <input value={form.auditee} onChange={e=>set("auditee",e.target.value)} placeholder="Dept or person" style={inputStyle}/>
                 </div>
-                <div><label style={labelStyle}>Planned Date</label>
+                <div>
+                  <label style={labelStyle}>Planned Date</label>
                   <input type="date" value={form.planned_date} onChange={e=>set("planned_date",e.target.value)} style={inputStyle}/>
+                  {/* Show deferred badge if this was deferred */}
+                  {form.deferred_from&&(
+                    <div style={{ marginTop:4, fontSize:11, color:"#e65100", background:"#fff3e0", borderRadius:4, padding:"2px 7px", display:"inline-block" }}>
+                      ⏱ Deferred from {form.deferred_from}
+                    </div>
+                  )}
                 </div>
                 <div><label style={labelStyle}>Actual Date</label>
                   <input type="date" value={form.actual_date} onChange={e=>set("actual_date",e.target.value)} style={inputStyle}/>
                 </div>
+                {/* Defer audit button */}
+                {!["Completed","Cancelled"].includes(form.status)&&(
+                  <div style={{ gridColumn:"1/-1" }}>
+                    {!showDefer?(
+                      <button type="button" onClick={()=>setShowDefer(true)}
+                        style={{ background:"#fff3e0",color:"#e65100",border:"1px solid #ffcc80",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                        ⏱ Defer Audit to Another Date
+                      </button>
+                    ):(
+                      <div style={{ background:"#fff3e0",borderRadius:8,padding:"12px 14px",border:"1px solid #ffcc80" }}>
+                        <div style={{ fontWeight:700,fontSize:13,color:"#e65100",marginBottom:10 }}>⏱ Defer Audit</div>
+                        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+                          <div>
+                            <label style={labelStyle}>New Planned Date</label>
+                            <input type="date" style={inputStyle}
+                              onChange={e=>{
+                                // Save original date before overwriting
+                                if(!form.deferred_from) set("deferred_from", form.planned_date);
+                                set("planned_date", e.target.value);
+                              }}/>
+                          </div>
+                          <div>
+                            <label style={labelStyle}>Reason for Deferral</label>
+                            <input value={form.deferred_reason} onChange={e=>set("deferred_reason",e.target.value)}
+                              placeholder="e.g. Key personnel unavailable" style={inputStyle}/>
+                          </div>
+                        </div>
+                        <div style={{ display:"flex",gap:8,marginTop:10 }}>
+                          <button type="button" onClick={()=>setShowDefer(false)}
+                            style={{ background:"#e65100",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                            Confirm Deferral
+                          </button>
+                          <button type="button" onClick={()=>setShowDefer(false)}
+                            style={{ background:"none",border:"1px solid #ffcc80",borderRadius:6,padding:"5px 14px",fontSize:12,color:"#e65100",cursor:"pointer" }}>
+                            Cancel
+                          </button>
+                        </div>
+                        <div style={{ fontSize:11,color:"#bf360c",marginTop:8 }}>
+                          The audit ID and reference number will remain unchanged. Only the planned date will be updated.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {form.deferred_from&&(
+                  <div style={{ gridColumn:"1/-1",background:"#fff8e1",borderRadius:7,padding:"8px 12px",border:"1px solid #ffe082",fontSize:12,color:"#795548" }}>
+                    <strong>Deferral record:</strong> Originally planned for <strong>{form.deferred_from}</strong>
+                    {form.deferred_reason&&<span> — Reason: {form.deferred_reason}</span>}
+                  </div>
+                )}
                 <div><label style={labelStyle}>Opening Brief Time</label>
                   <input value={form.opening_brief} onChange={e=>set("opening_brief",e.target.value)} placeholder="e.g. 09:00" style={inputStyle}/>
                 </div>
@@ -4833,6 +4896,9 @@ const generateNotificationPDF = async (slot) => {
   y+=16;
   halfBox("Planned Date", slot.planned_date||"TBC", M, y);
   halfBox("Lead Auditor", slot.lead_auditor||"TBC", M+hw+2, y);
+  y+=16;
+  halfBox("Auditee / Responsible Manager", slot.auditee||"TBC", M, y);
+  halfBox("Department / Area", slot.area||"TBC", M+hw+2, y);
   y+=16;
   halfBox("Opening Brief", slot.opening_brief||"TBC", M, y);
   halfBox("Closing Brief", slot.closing_brief||"TBC", M+hw+2, y);
