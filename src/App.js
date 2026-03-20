@@ -1190,9 +1190,14 @@ const Dashboard = ({ data }) => {
     {label:"Audit & Contractors",score:p5,max:10,desc:`${auditsDone} audits done · ${contractorOk} approved contractors`},
   ];
 
+  const openOnly    = data.cars.filter(c=>c.status==="Open").length;
+  const overdueOnly = data.cars.filter(c=>c.status==="Overdue").length;
   const carsByStatus = [
-    {name:"Open/Overdue",value:openCARs},{name:"In Progress",value:inProgCARs},
-    {name:"Pend. Verif.",value:pendVerif},{name:"Closed",value:closedCARs},
+    {name:"Open",       value:openOnly},
+    {name:"Overdue",    value:overdueOnly},
+    {name:"In Progress",value:inProgCARs},
+    {name:"Pend. Verif.",value:pendVerif},
+    {name:"Closed",     value:closedCARs},
   ].filter(d=>d.value>0);
 
   const carsBySeverity = ["Critical","Major","Minor"].map(s=>({
@@ -1300,7 +1305,10 @@ const Dashboard = ({ data }) => {
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie data={carsByStatus} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
-                {carsByStatus.map((e,i)=><Cell key={i} fill={e.name==="Closed"?T.green:e.name==="Open"?T.red:e.name==="In Progress"?T.yellow:T.purple} />)}
+                {carsByStatus.map((e,i)=>{
+                  const clr = e.name==="Closed"?"#2e7d32":e.name==="Open"?"#f57f17":e.name==="Overdue"?"#c62828":e.name==="In Progress"?"#01579b":"#6a1b9a";
+                  return <Cell key={i} fill={clr} />;
+                })}
               </Pie>
               <Tooltip contentStyle={{fontSize:12,borderRadius:8}} />
               <Legend wrapperStyle={{fontSize:11}} />
@@ -1311,7 +1319,10 @@ const Dashboard = ({ data }) => {
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie data={carsBySeverity} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
-                {carsBySeverity.map((_,i)=><Cell key={i} fill={[T.red,T.yellow,T.teal][i]||CHART_COLORS[i]} />)}
+                {carsBySeverity.map((e,i)=>{
+                  const clr = e.name==="Critical"?"#c62828":e.name==="Major"?"#e65100":"#f57f17";
+                  return <Cell key={i} fill={clr} />;
+                })}
               </Pie>
               <Tooltip contentStyle={{fontSize:12,borderRadius:8}} />
               <Legend wrapperStyle={{fontSize:11}} />
