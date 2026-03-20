@@ -4139,6 +4139,20 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
     updateFinding(findingId, "car_id", carForm.id);
     showToast?.(`CAR ${carForm.id} raised — responsible manager notified`,"success");
     setCarModal(null);
+    // Auto-save the audit record so car_raised flag is persisted to the database
+    // We need to use the updated findingItems — use a small delay to let state update
+    setTimeout(() => {
+      const updatedItems = findingItems.map(f =>
+        f.id === findingId ? { ...f, car_raised: true, car_id: carForm.id } : f
+      );
+      onSave({
+        ...slot, ...form,
+        finding_items: JSON.stringify(updatedItems),
+        attachments: JSON.stringify(attachments),
+        findings: updatedItems.filter(f=>f.level.includes("Level 1")||f.level.includes("Level 2")||f.level.includes("Level 3")||f.level==="Regulatory").length,
+        observations: updatedItems.filter(f=>f.level==="Observation").length,
+      });
+    }, 100);
     onRefresh?.();
   };
 
@@ -4654,9 +4668,9 @@ const generateAuditReport = async (slot) => {
       doc.setFillColor(...levelC); doc.rect(M,y,col,7,"F");
       doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
       doc.text(`Finding #${fi+1}  —  ${f.level}${f.ref?" ("+f.ref+")":""}`, M+3, y+4.8);
-      if(f.car_raised && f.level!=="Observation"){ doc.text("CAR RAISED ✓", W-M-3, y+4.8, {align:"right"}); }
+      if((f.car_raised||f.car_id) && f.level!=="Observation"){ doc.text("CAR RAISED ✓", W-M-3, y+4.8, {align:"right"}); }
       y += 9;
-      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["Car Raised", f.level==="Observation"?"N/A — Observation":f.car_raised?"Yes":"No"]], M, y, col); }
+      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["Car Raised", f.level==="Observation"?"N/A — Observation":(f.car_raised||f.car_id)?`Yes — ${f.car_id||""}`.trim():"No"]], M, y, col); }
       y = needPage(y,20); y = box("Finding Description", f.description||"—", M, y, col);
       if(f.requirement){ y = needPage(y,20); y = box("Requirement / Standard Not Met", f.requirement, M, y, col); }
       if(f.evidence){ y = needPage(y,20); y = box("Objective Evidence", f.evidence, M, y, col); }
