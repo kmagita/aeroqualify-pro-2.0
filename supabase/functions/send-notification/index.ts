@@ -131,6 +131,58 @@ const overdueBadge = (days: number) => {
 // ═══════════════════════════════════════════════════════════════
 const templates: Record<string, (r: Record<string, string>) => { subject: string; html: string }> = {
 
+  // ── New organisation welcome email ──────────────────────────
+  org_welcome: (r) => ({
+    subject: `Welcome to AeroQualify Pro — Your Access Details for ${r.org_name}`,
+    html: base(`
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">Welcome to AeroQualify Pro</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        Hi ${r.contact_name}, your organisation has been set up on AeroQualify Pro. Here are your access details.
+      </p>
+
+      <div style="background:${LTBLUE};border-radius:10px;padding:20px 24px;margin-bottom:24px;">
+        <div style="font-size:11px;font-weight:700;color:${BLUE};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Your Access Details</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${row('Organisation', r.org_name, NAVY)}
+          ${row('Organisation ID', `<span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:${BLUE};">${r.org_id}</span>`)}
+          ${row('Login URL', `<a href="${r.app_url}" style="color:${BLUE};">${r.app_url}</a>`)}
+        </table>
+      </div>
+
+      <div style="background:#f8fafc;border-radius:8px;padding:16px 18px;margin-bottom:20px;font-size:12px;color:#1A2332;line-height:1.8;">
+        <div style="font-weight:700;margin-bottom:8px;color:${NAVY};">Getting Started</div>
+        <div><strong>Step 1:</strong> Go to <a href="${r.app_url}" style="color:${BLUE};">${r.app_url}</a></div>
+        <div><strong>Step 2:</strong> Click <em>Create Account</em> and register with your email address</div>
+        <div><strong>Step 3:</strong> Enter Organisation ID: <span style="font-family:'Courier New',monospace;font-weight:700;color:${BLUE};">${r.org_id}</span></div>
+        <div><strong>Step 4:</strong> Verify your email, then contact your AeroQualify administrator to approve your account</div>
+      </div>
+
+      ${r.is_demo === 'true' ? `
+      <div style="background:#fff3e0;border:1.5px solid #ffcc80;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+        <div style="font-weight:700;font-size:13px;color:#e65100;margin-bottom:4px;">⏱ Demo Access</div>
+        <div style="font-size:12px;color:#795548;line-height:1.6;">
+          Your organisation has been set up with <strong>${r.demo_days}-day demo access</strong>.
+          To upgrade to full access after your evaluation, contact us at
+          <a href="mailto:aeroqualify@gmail.com" style="color:${BLUE};">aeroqualify@gmail.com</a>.
+        </div>
+      </div>` : ''}
+
+      ${r.account_created === 'true' ? `
+      <div style="background:#e8f5e9;border:1.5px solid #a5d6a7;border-radius:10px;padding:20px 24px;margin-bottom:20px;">
+        <div style="font-size:11px;font-weight:700;color:${GREEN};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Your Login Credentials</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${row('Email Address', r.contact_email)}
+          ${row('Temporary Password', \`<span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:#2E7D32;">\${r.temp_password}</span>\`)}
+        </table>
+        <div style="margin-top:12px;font-size:11px;color:#388E3C;line-height:1.6;">
+          ⚠ Please change your password immediately after first login via <strong>Settings → My Profile → Change Password</strong>.
+        </div>
+      </div>` : ''}
+
+      ${alert('Keep your Organisation ID and password confidential — they grant access to your organisation's quality management data.', BLUE, '🔐')}
+    `, BLUE),
+  }),
+
   // ── New access request from landing page ───────────────────
   access_request: (r) => ({
     subject: `New Access Request: ${r.company} — ${r.name}`,
@@ -418,6 +470,51 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// CREATE ORG USER — called from App on org creation
+// Creates a Supabase auth user + profile and sends welcome email
+// ═══════════════════════════════════════════════════════════════
+async function createOrgUser(orgId: string, orgName: string, orgSlug: string, contactName: string, contactEmail: string, isDemo: boolean, demoDays: number) {
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Generate a temporary password
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+  let tempPassword = "";
+  for(let i=0;i<10;i++) tempPassword += chars[Math.floor(Math.random()*chars.length)];
+
+  // Create auth user
+  const { data: authUser, error: authErr } = await sb.auth.admin.createUser({
+    email: contactEmail,
+    password: tempPassword,
+    email_confirm: true,  // skip email verification — we handle it
+    user_metadata: { full_name: contactName },
+  });
+
+  if(authErr) {
+    console.error("Failed to create auth user:", authErr);
+    return { error: authErr.message };
+  }
+
+  const userId = authUser.user.id;
+
+  // Create profile as admin
+  const { error: profErr } = await sb.from("profiles").upsert({
+    id: userId,
+    email: contactEmail,
+    full_name: contactName,
+    org_id: orgId,
+    role: "admin",
+    status: "approved",
+    is_super_admin: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  if(profErr) console.warn("Profile upsert warning:", profErr);
+
+  return { userId, tempPassword };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ESCALATING OVERDUE REMINDER LOGIC
 // Runs when type = "check_overdue_cars"
 // Called by pg_cron daily at 08:00 EAT
@@ -533,6 +630,26 @@ serve(async (req) => {
 
   try {
     const { type, record, recipients } = await req.json();
+
+    // Handle org user creation
+    if (type === "create_org_user") {
+      const { org_id, org_name, org_slug, contact_name, contact_email, is_demo, demo_days } = record || {};
+      if(!contact_email || !org_id) return new Response(JSON.stringify({ error:"Missing required fields" }), { status:400 });
+      const result = await createOrgUser(org_id, org_name, org_slug, contact_name, contact_email, is_demo==="true", parseInt(demo_days)||14);
+      if(result.error) return new Response(JSON.stringify({ error: result.error }), { status:500 });
+
+      // Send welcome email with temp password
+      const { subject, html } = templates.org_welcome({
+        org_name, org_id: org_slug, contact_name, contact_email,
+        is_demo, demo_days, app_url: "https://aeroqualify.co.ke",
+        temp_password: result.tempPassword,
+        account_created: "true",
+      });
+      await sendEmail(contact_email, subject, html);
+      return new Response(JSON.stringify({ ok:true, userId: result.userId }), {
+        headers: { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" },
+      });
+    }
 
     // Handle overdue check (triggered by pg_cron)
     if (type === "check_overdue_cars") {
