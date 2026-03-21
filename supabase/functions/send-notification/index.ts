@@ -1,269 +1,359 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") || "";
-const FROM_EMAIL    = "aeroqualify@gmail.com";
-const FROM_NAME     = "AeroQualify Pro";
+const BREVO_API_KEY  = Deno.env.get("BREVO_API_KEY") || "";
+const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const FROM_EMAIL     = "noreply@aeroqualify.co.ke";
+const FROM_NAME      = "AeroQualify Pro";
+const APP_URL        = "https://aeroqualify.co.ke";
 
-const base = (content: string) => `
-<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f0f4f8;padding:20px;">
-  <div style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #dde3ea;">
-    <div style="background:#1a2332;paddinimport { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// ── Shared design tokens ─────────────────────────────────────
+const NAVY   = "#0D2340";
+const BLUE   = "#01579B";
+const LTBLUE = "#E3F2FD";
+const GREEN  = "#2E7D32";
+const ORANGE = "#E65100";
+const RED    = "#C62828";
+const PURPLE = "#4527A0";
+const MUTED  = "#607D8B";
+const BORDER = "#DDE3EA";
+const BG     = "#F0F4F8";
+const WHITE  = "#FFFFFF";
 
-const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") || "";
-const FROM_EMAIL    = "aeroqualify@gmail.com";
-const FROM_NAME     = "AeroQualify Pro";
+// ── Severity color helper ─────────────────────────────────────
+const sevColor = (sev: string) =>
+  sev === "Critical" ? RED : sev === "Major" ? ORANGE : sev === "Minor" ? GREEN : BLUE;
 
-const base = (content: string) => `
-<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f0f4f8;padding:20px;">
-  <div style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #dde3ea;">
-    <div style="background:#1a2332;padding:20px 28px;">
-      <div style="font-size:20px;font-weight:800;color:#fff;">Aero<span style="color:#0288d1;">Qualify</span> Pro</div>
-      <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px;">Aviation Quality Management System</div>
+// ── Base email shell ──────────────────────────────────────────
+const base = (content: string, accentColor = BLUE) => `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AeroQualify Pro</title></head>
+<body style="margin:0;padding:0;background:${BG};font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:${BG};padding:32px 16px;">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${WHITE};border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+
+      <!-- Header -->
+      <tr><td style="background:${NAVY};padding:24px 32px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td>
+            <div style="font-size:22px;font-weight:800;color:${WHITE};letter-spacing:-0.5px;">
+              Aero<span style="color:#0288d1;">Qualify</span> Pro
+            </div>
+            <div style="color:rgba(255,255,255,0.45);font-size:11px;margin-top:3px;letter-spacing:0.5px;text-transform:uppercase;">
+              Aviation Quality Management System
+            </div>
+          </td>
+          <td align="right">
+            <div style="background:rgba(255,255,255,0.08);border-radius:6px;padding:6px 12px;display:inline-block;">
+              <span style="color:rgba(255,255,255,0.5);font-size:10px;text-transform:uppercase;letter-spacing:1px;">Automated Notification</span>
+            </div>
+          </td>
+        </tr></table>
+      </td></tr>
+
+      <!-- Accent bar -->
+      <tr><td style="background:${accentColor};height:4px;"></td></tr>
+
+      <!-- Body -->
+      <tr><td style="padding:32px;">
+        ${content}
+      </td></tr>
+
+      <!-- CTA -->
+      <tr><td style="padding:0 32px 28px;" align="center">
+        <a href="${APP_URL}" style="display:inline-block;background:${NAVY};color:${WHITE};text-decoration:none;font-size:13px;font-weight:700;padding:12px 32px;border-radius:7px;letter-spacing:0.3px;">
+          Open AeroQualify Pro &rarr;
+        </a>
+      </td></tr>
+
+      <!-- Footer -->
+      <tr><td style="background:#F8FAFC;border-top:1px solid ${BORDER};padding:16px 32px;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="font-size:11px;color:${MUTED};">
+            &copy; 2026 AeroQualify Pro &nbsp;&middot;&nbsp; Nairobi, Kenya
+          </td>
+          <td align="right" style="font-size:11px;color:${MUTED};">
+            <a href="${APP_URL}" style="color:${BLUE};text-decoration:none;">${APP_URL}</a>
+          </td>
+        </tr></table>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+
+// ── Detail row for tables ─────────────────────────────────────
+const row = (label: string, value: string, color?: string) => `
+  <tr>
+    <td style="padding:9px 14px;background:#F8FAFC;font-size:10px;font-weight:700;color:${MUTED};
+               text-transform:uppercase;letter-spacing:0.5px;width:36%;border:1px solid ${BORDER};
+               vertical-align:top;">${label}</td>
+    <td style="padding:9px 14px;font-size:13px;color:${color || '#1A2332'};
+               border:1px solid ${BORDER};vertical-align:top;line-height:1.5;">${value || '—'}</td>
+  </tr>`;
+
+// ── CAR reference chip ────────────────────────────────────────
+const carChip = (id: string, color = BLUE) => `
+  <div style="background:${color}10;border:1.5px solid ${color}40;border-radius:8px;
+              padding:14px 18px;margin-bottom:20px;">
+    <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;
+                letter-spacing:1px;margin-bottom:4px;">CAR Reference</div>
+    <div style="font-family:'Courier New',monospace;font-size:16px;font-weight:700;color:${color};">
+      ${id}
     </div>
-    <div style="padding:28px;">${content}</div>
-    <div style="background:#f8fafc;padding:14px 28px;border-top:1px solid #dde3ea;font-size:11px;color:#8fa8c0;text-align:center;">
-      AeroQualify Pro - AS9100D / ISO 9001:2015 - This is an automated notification.
-    </div>
-  </div>
-</div>`;
+  </div>`;
 
-const row = (label: string, value: string, color?: string) =>
-  `<tr><td style="padding:8px 12px;background:#f8fafc;font-size:11px;font-weight:700;color:#5f7285;text-transform:uppercase;width:38%;border:1px solid #dde3ea;vertical-align:top;">${label}</td><td style="padding:8px 12px;font-size:13px;color:${color||'#1a2332'};border:1px solid #dde3ea;vertical-align:top;">${value||'--'}</td></tr>`;
+// ── Alert banner ──────────────────────────────────────────────
+const alert = (text: string, color: string, icon: string) => `
+  <div style="background:${color}12;border-left:4px solid ${color};border-radius:0 6px 6px 0;
+              padding:12px 16px;margin-top:20px;font-size:12px;color:#1A2332;line-height:1.6;">
+    <span style="font-size:16px;margin-right:8px;">${icon}</span>
+    ${text}
+  </div>`;
 
-const templates: Record<string, (r: Record<string,string>) => {subject:string; html:string}> = {
+// ── Section divider ───────────────────────────────────────────
+const divider = () => `<hr style="border:none;border-top:1px solid ${BORDER};margin:24px 0;">`;
 
+// ── Days overdue badge ────────────────────────────────────────
+const overdueBadge = (days: number) => {
+  const color = days >= 14 ? RED : days >= 7 ? ORANGE : "#F57F17";
+  return `<span style="background:${color};color:${WHITE};border-radius:20px;padding:3px 10px;
+                        font-size:11px;font-weight:700;">${days} day${days !== 1 ? 's' : ''} overdue</span>`;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// EMAIL TEMPLATES
+// ═══════════════════════════════════════════════════════════════
+const templates: Record<string, (r: Record<string, string>) => { subject: string; html: string }> = {
+
+  // ── New CAR raised ──────────────────────────────────────────
   car_raised: (r) => ({
-    subject: `[AeroQualify] New CAR: ${r.id} - ${r.severity} Severity`,
+    subject: `Action Required: New CAR ${r.id} — ${r.severity} Severity`,
     html: base(`
-      <h2 style="color:#c62828;margin:0 0 6px;font-size:18px;">New Corrective Action Request</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">A new CAR has been raised and requires your action.</p>
-      <div style="background:#e3f2fd;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-        <div style="font-family:monospace;font-size:15px;font-weight:700;color:#01579b;">${r.id}</div>
-        <div style="font-size:13px;color:#1a2332;margin-top:6px;">${r.finding_description||'--'}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('Severity', r.severity, r.severity==='Critical'?'#c62828':r.severity==='Major'?'#e65100':'#00695c')}
-        ${row('Department', r.department)}
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">New Corrective Action Request</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        A Corrective Action Request has been raised and assigned to you. Please review the details below and submit your Corrective Action Plan within the required timeframe.
+      </p>
+
+      ${carChip(r.id, sevColor(r.severity))}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Finding Description', r.finding_description)}
+        ${row('Severity', `<span style="color:${sevColor(r.severity)};font-weight:700;">${r.severity}</span>`)}
         ${row('Assigned To', r.responsible_manager)}
-        ${row('Due Date', r.due_date)}
-        ${row('QMS Clause', r.qms_clause)}
+        ${row('Department', r.department)}
+        ${row('Due Date', `<span style="font-weight:700;color:${RED};">${r.due_date}</span>`)}
+        ${row('QMS Clause / Reference', r.qms_clause)}
         ${row('Raised By', r.raised_by_name)}
+        ${r.audit_ref ? row('Audit Reference', r.audit_ref) : ''}
       </table>
-      <div style="padding:12px 16px;background:#fff3e0;border-left:4px solid #f57f17;border-radius:4px;font-size:12px;color:#5f7285;">
-        <strong>Action Required:</strong> Log in to AeroQualify Pro to submit your Corrective Action Plan.
-      </div>
-    `),
+
+      ${alert(`<strong>Action Required:</strong> Log in to AeroQualify Pro and submit your Corrective Action Plan before the due date shown above. Failure to submit within the required timeframe may result in escalation.`, ORANGE, '⚠️')}
+    `, sevColor(r.severity)),
   }),
 
+  // ── CAP submitted for verification ─────────────────────────
   cap_submitted: (r) => ({
-    subject: `[AeroQualify] CAP Ready for Verification: ${r.id}`,
+    subject: `Verification Required: CAP Submitted for ${r.id}`,
     html: base(`
-      <h2 style="color:#4527a0;margin:0 0 6px;font-size:18px;">CAP Submitted - Awaiting Verification</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">A Corrective Action Plan has been submitted and is pending your review.</p>
-      <div style="background:#ede7f6;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-        <div style="font-family:monospace;font-size:15px;font-weight:700;color:#4527a0;">${r.id}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">CAP Submitted — Awaiting Verification</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        A Corrective Action Plan has been submitted and is pending your review and verification.
+      </p>
+
+      ${carChip(r.id, PURPLE)}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
         ${row('Submitted By', r.submitted_by_name)}
+        ${row('Immediate Action', r.immediate_action)}
         ${row('Root Cause', r.root_cause)}
         ${row('Corrective Action', r.corrective_action)}
-        ${row('Evidence', r.evidence_filename)}
+        ${row('Preventive Action', r.preventive_action)}
+        ${r.evidence_filename ? row('Evidence Attached', r.evidence_filename) : ''}
       </table>
-      <div style="padding:12px 16px;background:#e8f5e9;border-left:4px solid #2e7d32;border-radius:4px;font-size:12px;color:#5f7285;">
-        <strong>Action Required:</strong> Log in to AeroQualify Pro to verify this CAP and close the CAR.
-      </div>
-    `),
+
+      ${divider()}
+      <p style="font-size:12px;color:${MUTED};margin:0;">
+        Please log in to AeroQualify Pro, open this CAR, and complete the verification checklist. 
+        You may approve and close the CAR, or return it for resubmission with comments.
+      </p>
+
+      ${alert(`<strong>Action Required:</strong> Open the CAR in AeroQualify Pro and complete verification. All six verification criteria must be satisfied before the CAR can be closed.`, PURPLE, '🔍')}
+    `, PURPLE),
   }),
 
-  verification_submitted: (r) => ({
-    subject: `[AeroQualify] CAPA Verified: ${r.id} - ${r.status}`,
-    html: base(`
-      <h2 style="color:${r.status==='Closed'?'#2e7d32':'#e65100'};margin:0 0 6px;font-size:18px;">CAPA Verification: ${r.status}</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">The Quality Manager has completed verification of your CAPA.</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('CAR Number', r.id)}
-        ${row('Final Status', r.status, r.status==='Closed'?'#2e7d32':'#c62828')}
-        ${row('Effectiveness Rating', r.effectiveness_rating)}
-        ${row('Verified By', r.verified_by_name)}
-        ${row('Comments', r.comments)}
-      </table>
-    `),
-  }),
+  // ── CAR closed / verification complete ─────────────────────
+  verification_submitted: (r) => {
+    const closed = r.status === 'Closed';
+    const color = closed ? GREEN : ORANGE;
+    return {
+      subject: `CAR ${r.id} — ${r.status}`,
+      html: base(`
+        <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">
+          ${closed ? 'CAR Closed — Verification Complete' : 'CAR Verification Update'}
+        </h1>
+        <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+          ${closed
+            ? 'Your Corrective Action Plan has been verified and the CAR has been closed. No further action is required.'
+            : 'The Quality Manager has completed review of your Corrective Action Plan.'}
+        </p>
 
+        ${carChip(r.id, color)}
+
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+          ${row('Final Status', `<span style="color:${color};font-weight:700;">${r.status}</span>`)}
+          ${r.effectiveness_rating ? row('Effectiveness Rating', r.effectiveness_rating) : ''}
+          ${row('Verified By', r.verified_by_name)}
+          ${r.comments ? row('Verifier Comments', r.comments) : ''}
+        </table>
+
+        ${closed
+          ? alert('This CAR has been closed and locked. All records have been retained in the Change Log.', GREEN, '✅')
+          : alert(`<strong>Note:</strong> Please review the verifier's comments and take any necessary further action.`, ORANGE, 'ℹ️')
+        }
+      `, color),
+    };
+  },
+
+  // ── CAP returned for resubmission ──────────────────────────
   returned_for_resubmission: (r) => ({
-    subject: `[AeroQualify] CAP Returned for Resubmission: ${r.id}`,
+    subject: `Action Required: CAP Returned — ${r.id}`,
     html: base(`
-      <h2 style="color:#c62828;margin:0 0 6px;font-size:18px;">CAP Returned - Action Required</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">Your CAP has been reviewed and returned. Please revise and resubmit.</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('CAR Number', r.id)}
-        ${row('Effectiveness Rating', 'Not Effective', '#c62828')}
-        ${row('QM Comments', r.comments)}
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">CAP Returned for Resubmission</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        Your Corrective Action Plan has been reviewed by the Quality Manager and returned for revision. Please review the comments below and resubmit.
+      </p>
+
+      ${carChip(r.id, RED)}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Verification Result', `<span style="color:${RED};font-weight:700;">Not Satisfactory — Returned</span>`)}
+        ${row('Quality Manager Comments', `<span style="color:#1A2332;">${r.comments || '—'}</span>`)}
+        ${row('Round', r.round ? `Submission #${r.round}` : '—')}
       </table>
-      <div style="padding:12px 16px;background:#ffebee;border-left:4px solid #c62828;border-radius:4px;font-size:12px;color:#5f7285;">
-        <strong>Action Required:</strong> Log in to AeroQualify Pro, review the QM comments, and resubmit your CAP.
-      </div>
-    `),
+
+      ${alert(`<strong>Action Required:</strong> Log in to AeroQualify Pro, carefully review the Quality Manager's comments above, revise your CAP accordingly, and resubmit with updated evidence.`, RED, '🔄')}
+    `, RED),
   }),
 
-
+  // ── Audit notification ──────────────────────────────────────
   audit_scheduled: (r) => ({
-    subject: `[AeroQualify] Audit Notification: ${r.area} — ${r.planned_date||'Date TBC'}`,
+    subject: `Audit Notification: ${r.area} — ${r.planned_date || 'Date TBC'}`,
     html: base(`
-      <h2 style="color:#01579b;margin:0 0 6px;font-size:18px;">Audit Notification</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">The following audit has been scheduled. Please ensure all relevant records, documentation and personnel are available on the date of audit.</p>
-      <div style="background:#e3f2fd;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-        <div style="font-size:15px;font-weight:700;color:#01579b;">${r.area}</div>
-        <div style="font-size:12px;color:#5f7285;margin-top:4px;">${r.audit_type||'Internal'} Audit · ${r.year} Programme · Slot #${r.slot}</div>
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">Audit Notification</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        The following audit has been scheduled. Please ensure all relevant records, documentation and personnel are prepared and available on the date of audit.
+      </p>
+
+      <div style="background:${LTBLUE};border-radius:8px;padding:18px 20px;margin-bottom:24px;">
+        <div style="font-size:18px;font-weight:700;color:${BLUE};">${r.area}</div>
+        <div style="font-size:12px;color:${MUTED};margin-top:4px;">
+          ${r.audit_type || 'Internal'} Audit &nbsp;&middot;&nbsp; ${r.year} Programme &nbsp;&middot;&nbsp; Slot #${r.slot}
+        </div>
       </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('Planned Date', r.planned_date||'TBC', '#01579b')}
-        ${row('Lead Auditor', r.lead_auditor||'TBC')}
-        ${row('Opening Brief', r.opening_brief||'TBC')}
-        ${row('Closing Brief', r.closing_brief||'TBC')}
-        ${row('Audit Criteria', r.audit_criteria||'AS9100D / KCAA ANO / Quality Manual')}
-        ${row('Scope', r.notes||'As per Annual Audit Programme')}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Planned Date', `<span style="font-weight:700;color:${BLUE};">${r.planned_date || 'TBC'}</span>`)}
+        ${row('Auditee / Responsible Manager', r.auditee || 'TBC')}
+        ${row('Lead Auditor', r.lead_auditor || 'TBC')}
+        ${row('Opening Brief', r.opening_brief || 'TBC')}
+        ${row('Closing Brief', r.closing_brief || 'TBC')}
+        ${row('Audit Criteria', r.audit_criteria || 'Quality Manual')}
+        ${row('Scope', r.notes || 'As per Annual Audit Programme')}
       </table>
-      <div style="padding:12px 16px;background:#e3f2fd;border-left:4px solid #01579b;border-radius:4px;font-size:12px;color:#5f7285;">
-        <strong>Note:</strong> This notification is issued at least 7 days prior to the audit date per Quality Manual requirements. A formal Audit Notification Form (QMS 002) will be issued separately.
-      </div>
-    `),
+
+      ${alert('A formal Audit Notification Form (QMS 002) will be issued separately. Please ensure all documentation is current and accessible on the day of the audit.', BLUE, '📋')}
+    `, BLUE),
   }),
 
-};
-
-async function sendEmail(to: string, subject: string, html: string) {
-  if (!BREVO_API_KEY) { console.warn("No BREVO_API_KEY set"); return; }
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "api-key": BREVO_API_KEY },
-    body: JSON.stringify({
-      sender: { name: FROM_NAME, email: FROM_EMAIL },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-    }),
-  });
-  if (!res.ok) throw new Error(`Brevo error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  }});
-
-  try {
-    const { type, record, recipients } = await req.json();
-    const tmplFn = templates[type];
-    if (!tmplFn) return new Response(JSON.stringify({ ok:true, skipped:true }), { status:200 });
-    const { subject, html } = tmplFn(record || {});
-    const toList = (recipients || []).filter(Boolean);
-    if (toList.length === 0) return new Response(JSON.stringify({ ok:true, message:"No recipients" }), { status:200 });
-    await Promise.all(toList.map((email: string) => sendEmail(email, subject, html)));
-    return new Response(JSON.stringify({ ok:true, sent:toList.length }), {
-      headers: { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" },
-    });
-  } catch (err) {
-    console.error("send-notification error:", err);
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500,
-      headers: { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" },
-    });
-  }
-});g:20px 28px;">
-      <div style="font-size:20px;font-weight:800;color:#fff;">Aero<span style="color:#0288d1;">Qualify</span> Pro</div>
-      <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:2px;">Aviation Quality Management System</div>
-    </div>
-    <div style="padding:28px;">${content}</div>
-    <div style="background:#f8fafc;padding:14px 28px;border-top:1px solid #dde3ea;font-size:11px;color:#8fa8c0;text-align:center;">
-      AeroQualify Pro - AS9100D / ISO 9001:2015 - This is an automated notification.
-    </div>
-  </div>
-</div>`;
-
-const row = (label: string, value: string, color?: string) =>
-  `<tr><td style="padding:8px 12px;background:#f8fafc;font-size:11px;font-weight:700;color:#5f7285;text-transform:uppercase;width:38%;border:1px solid #dde3ea;vertical-align:top;">${label}</td><td style="padding:8px 12px;font-size:13px;color:${color||'#1a2332'};border:1px solid #dde3ea;vertical-align:top;">${value||'--'}</td></tr>`;
-
-const templates: Record<string, (r: Record<string,string>) => {subject:string; html:string}> = {
-
-  car_raised: (r) => ({
-    subject: `[AeroQualify] New CAR: ${r.id} - ${r.severity} Severity`,
+  // ── Overdue CAR reminder — Day 1 (just became overdue) ─────
+  car_overdue_reminder: (r) => ({
+    subject: `Overdue: CAR ${r.id} — Response Required`,
     html: base(`
-      <h2 style="color:#c62828;margin:0 0 6px;font-size:18px;">New Corrective Action Request</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">A new CAR has been raised and requires your action.</p>
-      <div style="background:#e3f2fd;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-        <div style="font-family:monospace;font-size:15px;font-weight:700;color:#01579b;">${r.id}</div>
-        <div style="font-size:13px;color:#1a2332;margin-top:6px;">${r.finding_description||'--'}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('Severity', r.severity, r.severity==='Critical'?'#c62828':r.severity==='Major'?'#e65100':'#00695c')}
-        ${row('Department', r.department)}
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">Corrective Action Request Overdue</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        The Corrective Action Plan for the following CAR has not been submitted and is now past its due date.
+      </p>
+
+      ${carChip(r.id, RED)}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Status', `<span style="color:${RED};font-weight:700;">OVERDUE</span>`)}
+        ${row('Days Overdue', overdueBadge(parseInt(r.days_overdue || '1')))}
+        ${row('Finding', r.finding_description)}
+        ${row('Severity', `<span style="color:${sevColor(r.severity)};font-weight:700;">${r.severity}</span>`)}
+        ${row('Original Due Date', r.due_date)}
         ${row('Assigned To', r.responsible_manager)}
-        ${row('Due Date', r.due_date)}
-        ${row('QMS Clause', r.qms_clause)}
-        ${row('Raised By', r.raised_by_name)}
       </table>
-      <div style="padding:12px 16px;background:#fff3e0;border-left:4px solid #f57f17;border-radius:4px;font-size:12px;color:#5f7285;">
-        <strong>Action Required:</strong> Log in to AeroQualify Pro to submit your Corrective Action Plan.
-      </div>
-    `),
+
+      ${alert(`<strong>Immediate Action Required:</strong> Please log in to AeroQualify Pro and submit your Corrective Action Plan as soon as possible. Continued non-submission will be escalated to the Quality Manager.`, RED, '🚨')}
+    `, RED),
   }),
 
-  cap_submitted: (r) => ({
-    subject: `[AeroQualify] CAP Ready for Verification: ${r.id}`,
+  // ── Overdue CAR reminder — Day 7 escalation ─────────────────
+  car_overdue_escalation: (r) => ({
+    subject: `ESCALATION: CAR ${r.id} — ${r.days_overdue} Days Overdue`,
     html: base(`
-      <h2 style="color:#4527a0;margin:0 0 6px;font-size:18px;">CAP Submitted - Awaiting Verification</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">A Corrective Action Plan has been submitted and is pending your review.</p>
-      <div style="background:#ede7f6;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-        <div style="font-family:monospace;font-size:15px;font-weight:700;color:#4527a0;">${r.id}</div>
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">CAR Escalation Notice</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        This is an escalation notice. The Corrective Action Plan for the CAR below has not been submitted and is significantly overdue.
+      </p>
+
+      <div style="background:${RED}12;border:1.5px solid ${RED}40;border-radius:8px;padding:16px 18px;margin-bottom:20px;text-align:center;">
+        <div style="font-size:32px;font-weight:800;color:${RED};">${r.days_overdue}</div>
+        <div style="font-size:12px;font-weight:700;color:${RED};text-transform:uppercase;letter-spacing:1px;">Days Overdue</div>
+        <div style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:${NAVY};margin-top:8px;">${r.id}</div>
       </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('Submitted By', r.submitted_by_name)}
-        ${row('Root Cause', r.root_cause)}
-        ${row('Corrective Action', r.corrective_action)}
-        ${row('Evidence', r.evidence_filename)}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Finding', r.finding_description)}
+        ${row('Severity', `<span style="color:${sevColor(r.severity)};font-weight:700;">${r.severity}</span>`)}
+        ${row('Original Due Date', r.due_date)}
+        ${row('Assigned To', r.responsible_manager)}
+        ${row('Department', r.department)}
       </table>
-      <div style="padding:12px 16px;background:#e8f5e9;border-left:4px solid #2e7d32;border-radius:4px;font-size:12px;color:#5f7285;">
-        <strong>Action Required:</strong> Log in to AeroQualify Pro to verify this CAP and close the CAR.
-      </div>
-    `),
+
+      ${alert(`<strong>Escalation:</strong> This CAR is ${r.days_overdue} days overdue. The Quality Manager has been notified. Please submit your Corrective Action Plan immediately to avoid further escalation.`, RED, '🔴')}
+    `, RED),
   }),
 
-  verification_submitted: (r) => ({
-    subject: `[AeroQualify] CAPA Verified: ${r.id} - ${r.status}`,
+  // ── Overdue CAR — QM notification at 14 days ────────────────
+  car_overdue_qm_alert: (r) => ({
+    subject: `QM Alert: CAR ${r.id} — ${r.days_overdue} Days Overdue — No Response`,
     html: base(`
-      <h2 style="color:${r.status==='Closed'?'#2e7d32':'#e65100'};margin:0 0 6px;font-size:18px;">CAPA Verification: ${r.status}</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">The Quality Manager has completed verification of your CAPA.</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('CAR Number', r.id)}
-        ${row('Final Status', r.status, r.status==='Closed'?'#2e7d32':'#c62828')}
-        ${row('Effectiveness Rating', r.effectiveness_rating)}
-        ${row('Verified By', r.verified_by_name)}
-        ${row('Comments', r.comments)}
-      </table>
-    `),
-  }),
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">Quality Manager Alert — Overdue CAR</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        This CAR has received no response for ${r.days_overdue} days past its due date. No Corrective Action Plan has been submitted. Your intervention is required.
+      </p>
 
-  returned_for_resubmission: (r) => ({
-    subject: `[AeroQualify] CAP Returned for Resubmission: ${r.id}`,
-    html: base(`
-      <h2 style="color:#c62828;margin:0 0 6px;font-size:18px;">CAP Returned - Action Required</h2>
-      <p style="color:#5f7285;font-size:13px;margin:0 0 20px;">Your CAP has been reviewed and returned. Please revise and resubmit.</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-        ${row('CAR Number', r.id)}
-        ${row('Effectiveness Rating', 'Not Effective', '#c62828')}
-        ${row('QM Comments', r.comments)}
-      </table>
-      <div style="padding:12px 16px;background:#ffebee;border-left:4px solid #c62828;border-radius:4px;font-size:12px;color:#5f7285;">
-        <strong>Action Required:</strong> Log in to AeroQualify Pro, review the QM comments, and resubmit your CAP.
+      <div style="background:${RED}12;border:1.5px solid ${RED}40;border-radius:8px;padding:16px 18px;margin-bottom:20px;text-align:center;">
+        <div style="font-size:10px;font-weight:700;color:${RED};text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">No Response Received</div>
+        <div style="font-size:32px;font-weight:800;color:${RED};">${r.days_overdue} days</div>
+        <div style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:${NAVY};margin-top:8px;">${r.id}</div>
       </div>
-    `),
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Finding', r.finding_description)}
+        ${row('Severity', `<span style="color:${sevColor(r.severity)};font-weight:700;">${r.severity}</span>`)}
+        ${row('Original Due Date', r.due_date)}
+        ${row('Responsible Manager', `<span style="font-weight:700;">${r.responsible_manager}</span>`)}
+        ${row('Department', r.department)}
+      </table>
+
+      ${alert(`<strong>Quality Manager Action Required:</strong> The responsible manager (${r.responsible_manager}) has not submitted a CAP for ${r.days_overdue} days. Please follow up directly and consider reassigning or escalating this CAR in accordance with your Quality Manual.`, RED, '🔔')}
+    `, RED),
   }),
 
 };
 
+// ═══════════════════════════════════════════════════════════════
+// SEND EMAIL VIA BREVO
+// ═══════════════════════════════════════════════════════════════
 async function sendEmail(to: string, subject: string, html: string) {
   if (!BREVO_API_KEY) { console.warn("No BREVO_API_KEY set"); return; }
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -280,28 +370,149 @@ async function sendEmail(to: string, subject: string, html: string) {
   return res.json();
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ESCALATING OVERDUE REMINDER LOGIC
+// Runs when type = "check_overdue_cars"
+// Called by pg_cron daily at 08:00 EAT
+// ═══════════════════════════════════════════════════════════════
+async function processOverdueCARs() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn("Supabase credentials not set for overdue check");
+    return { processed: 0 };
+  }
+
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const today = new Date().toISOString().split("T")[0];
+
+  // Fetch all open CARs past due date
+  const { data: cars, error } = await sb
+    .from("cars")
+    .select(`
+      id, finding_description, severity, due_date, department,
+      responsible_manager, org_id, status
+    `)
+    .in("status", ["Open", "In Progress", "Returned for Resubmission"])
+    .lt("due_date", today)
+    .not("due_date", "is", null);
+
+  if (error) { console.error("Overdue query failed:", error); return { processed: 0 }; }
+  if (!cars || cars.length === 0) return { processed: 0 };
+
+  let sent = 0;
+
+  for (const car of cars) {
+    const dueDate  = new Date(car.due_date);
+    const now      = new Date();
+    const daysOver = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Only send on specific escalation days: day 1, day 7, day 14+
+    const shouldSend = daysOver === 1 || daysOver === 7 || daysOver === 14;
+    if (!shouldSend) continue;
+
+    // Get responsible manager email from responsible_managers table
+    const { data: managers } = await sb
+      .from("responsible_managers")
+      .select("email")
+      .eq("org_id", car.org_id)
+      .eq("role_title", car.responsible_manager)
+      .single();
+
+    // Get Quality Manager email from profiles
+    const { data: qmProfile } = await sb
+      .from("profiles")
+      .select("email")
+      .eq("org_id", car.org_id)
+      .eq("role", "quality_manager")
+      .eq("status", "approved")
+      .limit(1)
+      .single();
+
+    const record = {
+      id: car.id,
+      finding_description: car.finding_description || "",
+      severity: car.severity || "Minor",
+      due_date: car.due_date,
+      department: car.department || "",
+      responsible_manager: car.responsible_manager || "",
+      days_overdue: String(daysOver),
+    };
+
+    const managerEmail = managers?.email;
+    const qmEmail      = qmProfile?.email;
+
+    if (daysOver === 1 && managerEmail) {
+      // Day 1: gentle reminder to responsible manager only
+      const { subject, html } = templates.car_overdue_reminder(record);
+      await sendEmail(managerEmail, subject, html);
+      sent++;
+    }
+
+    if (daysOver === 7 && managerEmail) {
+      // Day 7: escalation email to responsible manager
+      const { subject, html } = templates.car_overdue_escalation(record);
+      await sendEmail(managerEmail, subject, html);
+      sent++;
+    }
+
+    if (daysOver === 14) {
+      // Day 14: escalation to manager AND alert to QM
+      if (managerEmail) {
+        const { subject, html } = templates.car_overdue_escalation(record);
+        await sendEmail(managerEmail, subject, html);
+        sent++;
+      }
+      if (qmEmail) {
+        const { subject, html } = templates.car_overdue_qm_alert(record);
+        await sendEmail(qmEmail, subject, html);
+        sent++;
+      }
+    }
+  }
+
+  return { processed: cars.length, sent };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SERVE
+// ═══════════════════════════════════════════════════════════════
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  }});
+  if (req.method === "OPTIONS") return new Response("ok", {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    }
+  });
 
   try {
     const { type, record, recipients } = await req.json();
+
+    // Handle overdue check (triggered by pg_cron)
+    if (type === "check_overdue_cars") {
+      const result = await processOverdueCARs();
+      return new Response(JSON.stringify({ ok: true, ...result }), {
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    }
+
+    // Handle standard notification
     const tmplFn = templates[type];
-    if (!tmplFn) return new Response(JSON.stringify({ ok:true, skipped:true }), { status:200 });
+    if (!tmplFn) return new Response(JSON.stringify({ ok: true, skipped: true }), { status: 200 });
+
     const { subject, html } = tmplFn(record || {});
     const toList = (recipients || []).filter(Boolean);
-    if (toList.length === 0) return new Response(JSON.stringify({ ok:true, message:"No recipients" }), { status:200 });
+    if (toList.length === 0) return new Response(JSON.stringify({ ok: true, message: "No recipients" }), { status: 200 });
+
     await Promise.all(toList.map((email: string) => sendEmail(email, subject, html)));
-    return new Response(JSON.stringify({ ok:true, sent:toList.length }), {
-      headers: { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" },
+
+    return new Response(JSON.stringify({ ok: true, sent: toList.length }), {
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
     });
+
   } catch (err) {
     console.error("send-notification error:", err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
-      headers: { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" },
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
     });
   }
 });
