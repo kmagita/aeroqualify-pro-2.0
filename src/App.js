@@ -6913,6 +6913,12 @@ export default function App() {
     }
     sessionStorage.setItem("aq_loaded", "1");
 
+    // If this is an email confirmation callback, show login screen immediately
+    if(isEmailCallback && urlHash.includes("type=signup")){
+      setShowLogin(true);
+      setLoading(false);
+    }
+
     const{data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="PASSWORD_RECOVERY"){
         setShowPasswordReset(true);
@@ -7132,7 +7138,14 @@ export default function App() {
               Signed in as <strong style={{ color:"#fff" }}>{profile?.full_name||profile?.email}</strong>
             </div>
             <button
-              onClick={()=>{ setLoginOrgOverride(null); setOrg(null); }}
+              onClick={async()=>{
+                const slug = window.prompt("Enter Organisation ID:");
+                if(!slug) return;
+                const { data: orgData } = await supabase.from("organisations").select("*").eq("slug", slug.trim().toUpperCase()).single();
+                if(!orgData){ alert("Organisation not found. Check the ID and try again."); return; }
+                setLoginOrgOverride(orgData.id);
+                setOrg(orgData);
+              }}
               style={{ background:"#1a3a5c", border:"1px solid #2a5a8c", borderRadius:7, padding:"6px 14px", color:"#90b4d4", fontSize:12, cursor:"pointer" }}
               title="Enter an org ID to view as org user">
               🏢 Enter Org
