@@ -131,6 +131,26 @@ const overdueBadge = (days: number) => {
 // ═══════════════════════════════════════════════════════════════
 const templates: Record<string, (r: Record<string, string>) => { subject: string; html: string }> = {
 
+  // ── New access request from landing page ───────────────────
+  access_request: (r) => ({
+    subject: `New Access Request: ${r.company} — ${r.name}`,
+    html: base(`
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">New Access Request</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        A new organisation has requested access to AeroQualify Pro via the website.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Name', r.name)}
+        ${row('Organisation', r.company, BLUE)}
+        ${row('Email', r.email)}
+        ${row('Phone', r.phone || '—')}
+        ${r.message ? row('Message', r.message) : ''}
+        ${row('Submitted', new Date().toLocaleString('en-GB', {timeZone:'Africa/Nairobi'}))}
+      </table>
+      ${alert('Log in to the AeroQualify Pro Super Admin portal to review this request and create the organisation.', BLUE, '🏢')}
+    `, BLUE),
+  }),
+
   // ── New CAR raised ──────────────────────────────────────────
   car_raised: (r) => ({
     subject: `Action Required: New CAR ${r.id} — ${r.severity} Severity`,
