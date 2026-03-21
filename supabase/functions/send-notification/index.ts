@@ -172,7 +172,7 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
         <div style="font-size:11px;font-weight:700;color:${GREEN};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Your Login Credentials</div>
         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
           ${row('Email Address', r.contact_email)}
-          ${row('Temporary Password', \`<span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:#2E7D32;">\${r.temp_password}</span>\`)}
+          ${row('Temporary Password', '<span style="font-family: monospace; font-size:15px; font-weight:700; color:#2E7D32;">' + r.temp_password + '</span>')}
         </table>
         <div style="margin-top:12px;font-size:11px;color:#388E3C;line-height:1.6;">
           ⚠ Please change your password immediately after first login via <strong>Settings → My Profile → Change Password</strong>.
@@ -412,12 +412,12 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
 
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
         ${row('Finding', r.finding_description)}
-        ${row('Severity', \`<span style="color:\${sevColor(r.severity)};font-weight:700;">\${r.severity}</span>\`)}
+        ${row('Severity', r.severity)}
         ${row('Original Due Date', r.due_date)}
         ${row('Assigned To', r.responsible_manager)}
       </table>
 
-      ${alert(\`<strong>Please take immediate action.</strong> The Quality Manager (\${r.qm_name || 'Quality Manager'}) has been notified of this outstanding CAR and may follow up with you directly. Log in to AeroQualify Pro and submit your Corrective Action Plan immediately.\`, RED, '🔴')}
+      ${alert('<strong>Please take immediate action.</strong> The Quality Manager (' + (r.qm_name || 'Quality Manager') + ') has been notified of this outstanding CAR and may follow up with you directly. Log in to AeroQualify Pro and submit your Corrective Action Plan immediately.', RED, '🔴')}
     `, RED),
   }),
 
