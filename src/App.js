@@ -6645,6 +6645,324 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
 
 
 // ─── Pegasus Letterhead ───────────────────────────────────────
+// ─── Pending User Row ────────────────────────────────────────
+const PendingUserRow = ({ u, orgs, onAssign }) => {
+  const [orgId, setOrgId] = useState("");
+  const [role,  setRole]  = useState("viewer");
+  return (
+    <tr className="row-hover">
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1",fontSize:12,color:"#5f7285" }}>{u.email}</td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1",fontSize:13,fontWeight:600,color:"#1a2332" }}>{u.full_name||"—"}</td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1" }}>
+        <select value={orgId} onChange={e=>setOrgId(e.target.value)}
+          style={{ padding:"5px 8px",border:"1px solid #dde3ea",borderRadius:6,fontSize:12,minWidth:160 }}>
+          <option value="">Select org…</option>
+          {orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      </td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1" }}>
+        <select value={role} onChange={e=>setRole(e.target.value)}
+          style={{ padding:"5px 8px",border:"1px solid #dde3ea",borderRadius:6,fontSize:12 }}>
+          {["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ padding:"11px 14px",borderBottom:"1px solid #fff8e1" }}>
+        <button onClick={()=>onAssign(u.id,orgId,role)} disabled={!orgId}
+          style={{ background:orgId?"#01579b":"#e8edf2",color:orgId?"#fff":"#8a9ab0",border:"none",borderRadius:6,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:orgId?"pointer":"default" }}>
+          Approve →
+        </button>
+      </td>
+    </tr>
+  );
+};
+
+// ─── Org Users Page ───────────────────────────────────────────
+const OrgUsersPage = ({ org, user, showToast, onRefresh }) => {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("profiles").select("*").eq("org_id", org?.id).order("created_at",{ascending:false});
+    setUsers(data||[]);
+    setLoading(false);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(()=>{ if(org?.id) loadUsers(); },[org?.id]);
+
+  const sendReset = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast(`Password reset link sent to ${email}`,"success");
+  };
+
+  const updateRole = async (userId, role) => {
+    const { error } = await supabase.from("profiles").update({ role }).eq("id", userId);
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast("Role updated","success"); loadUsers();
+  };
+
+  const updateStatus = async (userId, status) => {
+    const { error } = await supabase.from("profiles").update({ status }).eq("id", userId);
+    if(error){ showToast("Error: "+error.message,"error"); return; }
+    showToast(`User ${status}`,"success"); loadUsers();
+  };
+
+  const pending  = users.filter(u=>u.status==="pending");
+  const approved = users.filter(u=>u.status==="approved");
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:20,maxWidth:900 }}>
+      {pending.length>0&&(
+        <div style={{ background:"#fff",borderRadius:12,border:"1.5px solid #ffe082",overflow:"hidden" }}>
+          <div style={{ padding:"14px 20px",background:"#fff8e1",borderBottom:"1px solid #ffe082",fontWeight:700,fontSize:14,color:"#e65100" }}>⏳ Pending Approval ({pending.length})</div>
+          <table style={{ width:"100%",borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:"#fffde7" }}>
+              {["Name","Email","Joined","Role","Action"].map(h=>(
+                <th key={h} style={{ padding:"9px 16px",borderBottom:"1px solid #ffe082",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {pending.map(u=>(
+                <PendingOrgUserRow key={u.id} u={u} onApproveWithRole={async(role)=>{
+                  await supabase.from("profiles").update({status:"approved",role}).eq("id",u.id);
+                  showToast(`${u.full_name||u.email} approved as ${role}`,"success"); loadUsers();
+                }}/>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
+        <div style={{ padding:"14px 20px",borderBottom:"1px solid #dde3ea",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div style={{ fontWeight:700,fontSize:14,color:"#1a2332" }}>Team Members ({approved.length})</div>
+          <button onClick={loadUsers} style={{ background:"none",border:"1px solid #dde3ea",borderRadius:6,padding:"4px 12px",fontSize:12,color:"#5f7285",cursor:"pointer" }}>↻ Refresh</button>
+        </div>
+        {loading?<div style={{ padding:32,textAlign:"center",color:"#8a9ab0" }}>Loading…</div>:(
+          <table style={{ width:"100%",borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:"#f8fafc" }}>
+              {["Name","Email","Role","Status","Joined","Actions"].map(h=>(
+                <th key={h} style={{ padding:"9px 16px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {approved.map(u=>(
+                <tr key={u.id} style={{ borderBottom:"1px solid #f0f4f8" }}>
+                  <td style={{ padding:"11px 16px",fontSize:13,fontWeight:600,color:"#1a2332" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                      <div style={{ width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,#01579b,#0288d1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff",flexShrink:0 }}>
+                        {(u.full_name||u.email)[0].toUpperCase()}
+                      </div>
+                      {u.full_name||"—"}
+                      {u.id===user?.id&&<span style={{ fontSize:10,color:"#01579b",fontWeight:700,background:"#e3f2fd",borderRadius:10,padding:"1px 6px" }}>You</span>}
+                    </div>
+                  </td>
+                  <td style={{ padding:"11px 16px",fontSize:12,color:"#5f7285" }}>{u.email}</td>
+                  <td style={{ padding:"11px 16px" }}>
+                    <select value={u.role||"viewer"} onChange={e=>updateRole(u.id,e.target.value)}
+                      style={{ padding:"4px 8px",border:"1px solid #dde3ea",borderRadius:6,fontSize:12,background:"#fff" }}>
+                      {["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
+                        <option key={r} value={r}>{r.replace("_"," ")}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td style={{ padding:"11px 16px" }}>
+                    <span style={{ background:"#e8f5e9",color:"#2e7d32",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600 }}>Active</span>
+                  </td>
+                  <td style={{ padding:"11px 16px",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+                  <td style={{ padding:"11px 16px" }}>
+                    <div style={{ display:"flex",gap:6 }}>
+                      <button onClick={()=>sendReset(u.email)}
+                        style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                        📧 Reset Password
+                      </button>
+                      {u.id!==user?.id&&(
+                        <button onClick={()=>{ if(window.confirm(`Suspend ${u.full_name||u.email}?`)) updateStatus(u.id,"suspended"); }}
+                          style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                          Suspend
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PendingOrgUserRow = ({ u, onApproveWithRole }) => {
+  const [role, setRole] = useState("viewer");
+  return (
+    <tr style={{ borderBottom:"1px solid #fff8e1" }}>
+      <td style={{ padding:"11px 16px",fontSize:13,fontWeight:600,color:"#1a2332" }}>{u.full_name||"—"}</td>
+      <td style={{ padding:"11px 16px",fontSize:12,color:"#5f7285" }}>{u.email}</td>
+      <td style={{ padding:"11px 16px",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+      <td style={{ padding:"11px 16px" }}>
+        <select value={role} onChange={e=>setRole(e.target.value)}
+          style={{ padding:"5px 8px",border:"1px solid #dde3ea",borderRadius:6,fontSize:12 }}>
+          {["viewer","manager","quality_auditor","quality_manager","admin"].map(r=>(
+            <option key={r} value={r}>{r.replace("_"," ")}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ padding:"11px 16px" }}>
+        <button onClick={()=>onApproveWithRole(role)}
+          style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>
+          Approve →
+        </button>
+      </td>
+    </tr>
+  );
+};
+
+// ─── Profile Page ─────────────────────────────────────────────
+const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
+  const [name,    setName]    = useState(profile?.full_name||"");
+  const [pw,      setPw]      = useState("");
+  const [pw2,     setPw2]     = useState("");
+  const [saving,  setSaving]  = useState(false);
+  const [pwSaving,setPwSaving]= useState(false);
+
+  const saveName = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update({ full_name: name }).eq("id", user.id);
+    if(error){ showToast("Error: "+error.message,"error"); setSaving(false); return; }
+    showToast("Profile updated","success"); onRefresh(); setSaving(false);
+  };
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    if(pw !== pw2){ showToast("Passwords do not match","error"); return; }
+    if(pw.length < 6){ showToast("Password must be at least 6 characters","error"); return; }
+    setPwSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if(error){ showToast("Error: "+error.message,"error"); setPwSaving(false); return; }
+    showToast("Password updated successfully","success");
+    setPw(""); setPw2(""); setPwSaving(false);
+  };
+
+  const cardStyle = { background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28,maxWidth:500 };
+  const sectionHead = (title, sub) => (
+    <div style={{ marginBottom:20 }}>
+      <div style={{ fontWeight:700,fontSize:15,color:"#1a2332" }}>{title}</div>
+      {sub&&<div style={{ fontSize:12,color:"#5f7285",marginTop:2 }}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:20,maxWidth:520 }}>
+      <div style={cardStyle}>
+        {sectionHead("My Profile","Update your display name")}
+        <div style={{ display:"flex",alignItems:"center",gap:16,marginBottom:20 }}>
+          <div style={{ width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#01579b,#0288d1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:700,color:"#fff",flexShrink:0 }}>
+            {(profile?.full_name||user?.email||"?")[0].toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontWeight:700,fontSize:14,color:"#1a2332" }}>{profile?.full_name||"—"}</div>
+            <div style={{ fontSize:12,color:"#5f7285" }}>{user?.email}</div>
+            <div style={{ fontSize:11,color:"#8a9ab0",marginTop:2 }}>{profile?.role?.replace(/_/g," ")||"viewer"}</div>
+          </div>
+        </div>
+        <Input label="Display Name" value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name"/>
+        <Btn onClick={saveName} disabled={saving} style={{ opacity:saving?0.7:1 }}>{saving?"Saving…":"Save Name"}</Btn>
+      </div>
+      <div style={cardStyle}>
+        {sectionHead("Change Password","Enter a new password for your account")}
+        <form onSubmit={changePassword}>
+          <Input label="New Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="At least 6 characters"/>
+          <Input label="Confirm New Password" type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Repeat new password"/>
+          <Btn type="submit" disabled={pwSaving||!pw||!pw2} style={{ opacity:(pwSaving||!pw||!pw2)?0.7:1 }}>
+            {pwSaving?"Updating…":"Update Password"}
+          </Btn>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ─── Org Settings Page ────────────────────────────────────────
+const OrgSettingsPage = ({ org, onSave }) => {
+  const [prefix, setPrefix] = useState(org?.car_prefix||"ORG");
+  const [areas,  setAreas]  = useState(()=>{
+    try{ return JSON.parse(org?.audit_areas||"null") || ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
+    catch{ return ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
+  });
+  const [newArea, setNewArea] = useState("");
+  const [saving,  setSaving]  = useState(false);
+
+  const addArea = () => {
+    const trimmed = newArea.trim();
+    if(!trimmed || areas.includes(trimmed)) return;
+    setAreas(prev=>[...prev, trimmed]); setNewArea("");
+  };
+  const removeArea = (a) => setAreas(prev=>prev.filter(x=>x!==a));
+  const moveArea = (idx, dir) => {
+    const next = [...areas]; const swap = idx+dir;
+    if(swap<0||swap>=next.length) return;
+    [next[idx],next[swap]]=[next[swap],next[idx]]; setAreas(next);
+  };
+  const save = async() => {
+    if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
+    setSaving(true);
+    await onSave({ car_prefix: prefix.trim().toUpperCase(), audit_areas: JSON.stringify(areas) });
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ maxWidth:700,display:"flex",flexDirection:"column",gap:28 }}>
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>CAR Naming Convention</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Set the prefix used to generate CAR and CAPA reference numbers.</div>
+        <input value={prefix} onChange={e=>setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))}
+          style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1,boxSizing:"border-box" }}
+          maxLength={6} placeholder="e.g. PGF, KQA, AMO"/>
+        <div style={{ background:"#f0f4f8",borderRadius:8,padding:"12px 16px",marginTop:12 }}>
+          <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Preview</div>
+          <div style={{ fontFamily:"monospace",fontSize:13,color:"#1a2332" }}>
+            <div>CAR ID: <strong>{prefix||"ORG"}-QMS-001-13032026-CAPA001</strong></div>
+          </div>
+        </div>
+      </div>
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Audit Areas</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Customise audit areas for your organisation.</div>
+        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
+          {areas.map((a,i)=>(
+            <div key={a} style={{ display:"flex",alignItems:"center",gap:8,background:"#f5f8fc",borderRadius:8,padding:"8px 12px",border:"1px solid #dde3ea" }}>
+              <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
+                <button onClick={()=>moveArea(i,-1)} disabled={i===0} style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▲</button>
+                <button onClick={()=>moveArea(i,1)} disabled={i===areas.length-1} style={{ background:"none",border:"none",cursor:i===areas.length-1?"default":"pointer",color:i===areas.length-1?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▼</button>
+              </div>
+              <span style={{ flex:1,fontSize:13,color:"#1a2332",fontWeight:500 }}>{a}</span>
+              <button onClick={()=>removeArea(a)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"3px 9px" }}>✕</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:"flex",gap:8 }}>
+          <input value={newArea} onChange={e=>setNewArea(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addArea()}
+            style={{ flex:1,padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
+            placeholder="Add new area…"/>
+          <button onClick={addArea} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer" }}>+ Add</button>
+        </div>
+      </div>
+      <div style={{ display:"flex",justifyContent:"flex-end" }}>
+        <button onClick={save} disabled={saving}
+          style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"12px 32px",fontWeight:700,fontSize:14,cursor:saving?"wait":"pointer",opacity:saving?0.7:1 }}>
+          {saving?"Saving…":"Save Settings"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [user,setUser]         = useState(null);
   const [showLogin,setShowLogin]           = useState(false);
