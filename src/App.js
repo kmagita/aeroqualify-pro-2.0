@@ -251,8 +251,32 @@ function LandingPage({ onShowLogin, onShowSignup }) {
   const handleDemoSubmit = async (e) => {
     e.preventDefault();
     setSending(true);
-    // Simulate send delay — replace with actual email/Supabase call if needed
-    await new Promise(r => setTimeout(r, 1200));
+    try {
+      // Save to access_requests table
+      await supabase.from("access_requests").insert({
+        name: demoForm.name,
+        company: demoForm.company,
+        email: demoForm.email,
+        phone: demoForm.phone || null,
+        message: demoForm.message || null,
+        submitted_at: new Date().toISOString(),
+        status: "new",
+      });
+      // Notify super admin via edge function
+      await sendNotification({
+        type: "access_request",
+        record: {
+          name: demoForm.name,
+          company: demoForm.company,
+          email: demoForm.email,
+          phone: demoForm.phone || "",
+          message: demoForm.message || "",
+        },
+        recipients: ["kmagita.pegasus@gmail.com"],
+      });
+    } catch(err) {
+      console.warn("Access request notification failed:", err);
+    }
     setSending(false);
     setDemoSent(true);
   };
@@ -6261,17 +6285,25 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
   };
 
   // Computed stats
+  const [accessRequests, setAccessRequests] = useState([]);
+  useEffect(()=>{
+    supabase.from("access_requests").select("*").order("submitted_at",{ascending:false}).then(({data})=>{
+      setAccessRequests((data||[]).filter(r=>r.status==="new"));
+    });
+  },[]);
+
   const activeOrgs   = orgs.filter(o=>o.status==="active").length;
   const totalUsers   = orgUsers.length;
   const pendingUsers = orgUsers.filter(u=>u.status==="pending");
   const approvedUsers= orgUsers.filter(u=>u.status==="approved").length;
 
   const TABS = [
-    {id:"dashboard", label:"📊 Dashboard", },
-    {id:"orgs",      label:"🏢 Organisations"},
-    {id:"users",     label:`👥 Users${pendingUsers.length>0?` (${pendingUsers.length} pending)`:""}` },
-    {id:"new",       label:"➕ New Org"},
-    {id:"activity",  label:"📋 Activity Log"},
+    {id:"dashboard",  label:"📊 Dashboard"},
+    {id:"requests",   label:`📬 Access Requests${accessRequests.length>0?` (${accessRequests.length})`:""}`},
+    {id:"orgs",       label:"🏢 Organisations"},
+    {id:"users",      label:`👥 Users${pendingUsers.length>0?` (${pendingUsers.length} pending)`:""}`},
+    {id:"new",        label:"➕ New Org"},
+    {id:"activity",   label:"📋 Activity Log"},
   ];
 
   const StatCard = ({icon,label,value,sub,color="#01579b",bg="#e3f2fd"}) => (
@@ -6481,42 +6513,135 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
 
       {/* ── Users Tab ── */}
       {tab==="users"&&<SuperAdminUsersTab orgUsers={orgUsers} orgs={orgs} pendingUsers={pendingUsers} assignUser={assignUser} sendResetLink={sendResetLink} showToast={showToast} onRefresh={onRefresh}/>}
+
+      {/* ── Access Requests Tab ── */}
+      {tab==="requests"&&(
+        <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
+          <div style={{ padding:"14px 20px",borderBottom:"1px solid #dde3ea",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+            <div style={{ fontWeight:700,fontSize:15,color:"#1a2332" }}>📬 Access Requests ({accessRequests.length})</div>
+            <button onClick={()=>supabase.from("access_requests").select("*").order("submitted_at",{ascending:false}).then(({data})=>setAccessRequests((data||[]).filter(r=>r.status==="new")))}
+              style={{ background:"none",border:"1px solid #dde3ea",borderRadius:6,padding:"4px 12px",fontSize:12,color:"#5f7285",cursor:"pointer" }}>↻ Refresh</button>
+          </div>
+          {accessRequests.length===0?(
+            <div style={{ padding:32,textAlign:"center",color:"#8a9ab0",fontSize:13 }}>No new access requests</div>
+          ):(
+            <table style={{ width:"100%",borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:"#f8fafc" }}>
+                  {["Name","Organisation","Email","Phone","Message","Submitted","Action"].map(h=>(
+                    <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {accessRequests.map(r=>(
+                  <tr key={r.id} className="row-hover">
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:600,color:"#1a2332" }}>{r.name}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:700,color:"#01579b" }}>{r.company}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{r.email}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{r.phone||"—"}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.message||"—"}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0",whiteSpace:"nowrap" }}>{fmt(r.submitted_at)}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                      <div style={{ display:"flex",gap:6 }}>
+                        <button onClick={()=>{ setTab("new"); }}
+                          style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                          ➕ Create Org
+                        </button>
+                        <button onClick={async()=>{
+                          await supabase.from("access_requests").update({status:"done"}).eq("id",r.id);
+                          setAccessRequests(p=>p.filter(x=>x.id!==r.id));
+                          showToast("Marked as done","success");
+                        }} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                          ✓ Done
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
-      <div style={{ fontWeight:600, fontSize:13, color:T.text, marginBottom:10 }}>Verification Checklist</div>
-      {checks.map(c=><Checkbox key={c.key} label={c.label} checked={!!form[c.key]} onChange={()=>set(c.key,!form[c.key])} />)}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 20px", marginTop:8 }}>
-        <Select label="Effectiveness Rating" value={form.effectiveness_rating||""} onChange={e=>set("effectiveness_rating",e.target.value)}>
-          {["Pending","Effective","Not Effective"].map(o=><option key={o}>{o}</option>)}
-        </Select>
-        <Select label="Final Status" value={form.status||""} onChange={e=>set("status",e.target.value)}>
-          {["Pending","Closed","Overdue"].map(o=><option key={o}>{o}</option>)}
-        </Select>
-        <div style={{ gridColumn:"1/-1" }}>
-          <Textarea label="Verifier Comments" value={form.verifier_comments||""} onChange={e=>set("verifier_comments",e.target.value)} />
+
+      {/* ── New Org Tab ── */}
+      {tab==="new"&&(
+        <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28,maxWidth:560 }}>
+          <div style={{ fontWeight:700,fontSize:16,color:"#1a2332",marginBottom:4 }}>Create New Organisation</div>
+          <div style={{ fontSize:12,color:"#8a9ab0",marginBottom:20 }}>Set up a new client organisation on the AeroQualify platform.</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
+            <div style={{ gridColumn:"1/-1" }}>
+              <Input label="Organisation Name *" value={newOrg.name} onChange={e=>setNewOrg(p=>({...p,name:e.target.value,slug:slugify(e.target.value)}))} placeholder="e.g. Precision Air Services Ltd"/>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",letterSpacing:0.8,textTransform:"uppercase",display:"block",marginBottom:6 }}>Login Code (auto-generated)</label>
+              <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                <input value={newOrg.slug} onChange={e=>setNewOrg(p=>({...p,slug:e.target.value}))}
+                  style={{ flex:1,padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1 }}
+                  placeholder="Auto-generated on create"/>
+                <button type="button" onClick={()=>setNewOrg(p=>({...p,slug:generateOrgCode()}))}
+                  style={{ background:"#e8eaf6",color:"#3949ab",border:"none",borderRadius:8,padding:"9px 14px",fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap" }}>
+                  🔄 Generate
+                </button>
+              </div>
+              <div style={{ fontSize:11,color:"#8a9ab0",marginTop:4 }}>Share this code privately with your staff — they need it to log in.</div>
+            </div>
+            <Input label="Country" value={newOrg.country} onChange={e=>setNewOrg(p=>({...p,country:e.target.value}))} placeholder="Kenya"/>
+            <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name"/>
+            <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com"/>
+          </div>
+          <div style={{ marginTop:20,display:"flex",gap:10 }}>
+            <Btn onClick={createOrg} disabled={!newOrg.name.trim()||creating} style={{ opacity:creating?0.7:1 }}>
+              {creating?"Creating…":"Create Organisation"}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>setTab("orgs")}>Cancel</Btn>
+          </div>
         </div>
-      </div>
-      {allChecked&&form.status==="Closed"&&<div style={{ background:T.greenLt, borderRadius:8, padding:"10px 14px", fontSize:12, color:T.green, marginBottom:14 }}>✓ All checklist items verified -- CAR will be marked <strong>Closed</strong>.</div>}
-      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn variant="success" onClick={()=>onSave(form)}>Submit Verification</Btn>
-      </div>
-    </ModalShell>
+      )}
+
+      {/* ── Activity Log Tab ── */}
+      {tab==="activity"&&(
+        <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
+          <div style={{ padding:"14px 20px",borderBottom:"1px solid #dde3ea",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+            <div style={{ fontWeight:700,fontSize:15,color:"#1a2332" }}>Platform Activity Log</div>
+            <button onClick={loadActivity} style={{ background:"none",border:"1px solid #dde3ea",borderRadius:6,padding:"4px 12px",fontSize:12,color:"#5f7285",cursor:"pointer" }}>↻ Refresh</button>
+          </div>
+          {loadingLog?(
+            <div style={{ padding:32,textAlign:"center",color:"#8a9ab0" }}>Loading activity…</div>
+          ):(
+            <table style={{ width:"100%",borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:"#f8fafc" }}>
+                  {["Time","User","Action","Record","Table"].map(h=>(
+                    <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activityLog.length===0?(
+                  <tr><td colSpan={5} style={{ padding:32,textAlign:"center",color:"#8a9ab0" }}>No activity yet — click Refresh to load.</td></tr>
+                ):activityLog.map((log,i)=>(
+                  <tr key={i} className="row-hover">
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0",whiteSpace:"nowrap" }}>{fmt(log.created_at)}</td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#1a2332" }}>{log.user_name||"—"}</td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8" }}><Badge label={log.action}/></td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{log.record_title||log.record_id||"—"}</td>
+                    <td style={{ padding:"10px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0" }}>{log.table_name||"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+    </div>
   );
 };
 
+
 // ─── Generic Modal Shell ──────────────────────────────────────
-const ModalShell = ({ title, children, onClose, wide }) => (
-  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", zIndex:2100, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }} onClick={onClose}>
-    <div style={{ background:"#fff", borderRadius:14, padding:28, width:wide?680:480, maxHeight:"90vh", overflowY:"auto", animation:"fadeIn 0.2s ease", boxShadow:"0 8px 40px rgba(0,0,0,0.15)" }} onClick={e=>e.stopPropagation()}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
-        <h2 style={{ fontFamily:"'Oxanium',sans-serif", fontSize:18, fontWeight:700, color:T.primaryDk }}>{title}</h2>
-        <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, color:T.muted, cursor:"pointer" }}>✕</button>
-      </div>
-      {children}
-    </div>
-  </div>
-);
 
 
 // ─── Pegasus Letterhead ───────────────────────────────────────
