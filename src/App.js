@@ -1101,16 +1101,16 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
             )}
             {mode!=="reset"&&(
               <div style={{ marginBottom:16 }}>
-                <Input label="Organisation ID" value={orgSlug}
+                <Input label="Organisation ID (optional)" value={orgSlug}
                   onChange={e=>{ setOrgSlug(e.target.value); resolveSlug(e.target.value); }}
-                  placeholder={mode==="login"?"Ask your organisation admin for the code":"Ask your organisation admin for the code"}
+                  placeholder={mode==="login"?"Optional — leave blank if you have one organisation":"Ask your organisation admin for the code"}
                 />
                 {/* Live org resolution feedback */}
                 {orgSlug.trim()&&orgHint===null&&<div style={{ fontSize:11, color:T.muted, marginTop:-10, marginBottom:8 }}>Checking…</div>}
                 {orgSlug.trim()&&orgHint&&<div style={{ fontSize:11, color:T.green, marginTop:-10, marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>✓ {orgHint.name}</div>}
                 <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>
                   {mode==="login"
-                    ? "Enter your organisation's ID to load the correct dashboard."
+                    ? "Only required if you belong to multiple organisations."
                     : "Enter the organisation ID provided by your administrator."}
                 </div>
               </div>
