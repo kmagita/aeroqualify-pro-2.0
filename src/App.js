@@ -6001,7 +6001,7 @@ Planned: ${slot.planned_date||"Not set"}`}
 
 // ─── TABS ─────────────────────────────────────────────────────
 const TABS = [
-  {id:"dashboard",    label:"Dashboard",       icon:"▦",  group:"main"},
+  {id:"dashboard",    label:"Dashboard",       icon:"📊",  group:"main"},
   {id:"cars",         label:"CARs",            icon:"📋", group:"main"},
   {id:"documents",    label:"Documents",       icon:"📄", group:"main"},
   {id:"flightdocs",   label:"Company Documents",icon:"📂",group:"main"},
