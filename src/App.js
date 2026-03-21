@@ -6645,18 +6645,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
 
 
 // ─── Pegasus Letterhead ───────────────────────────────────────
-const PegasusLetterhead = () => (
-  <div style={{ borderBottom:`2px solid #01579b`, paddingBottom:14, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-    <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:"#01579b", letterSpacing:1 }}>✈ Pegasus Flyers (E.A.) Ltd.</div>
-    <div style={{ textAlign:"right" }}>
-      <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:13, color:"#01579b" }}>CORRECTIVE ACTION REQUEST</div>
-      <div style={{ fontSize:10, color:"#5f7285", marginTop:2 }}>P.O Box 3341-00100 Wilson Airport, Nairobi Kenya</div>
-      <div style={{ fontSize:10, color:"#5f7285" }}>Tel: +254206001467/8 · Email: pegasus@africaonline.co.ke</div>
-    </div>
-  </div>
-);
-
-// ─── CAPA Detail / Progress Modal ────────────────────────────
 const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }) => {
   const steps = [
     { label:"CAR Raised",           done:true,                                  active:car.status==="Open" },
