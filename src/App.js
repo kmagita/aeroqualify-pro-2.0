@@ -220,7 +220,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
   const [scrolled,    setScrolled]    = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const [demoModal,   setDemoModal]   = useState(false);
-  const [demoForm,    setDemoForm]    = useState({ name:"", company:"", email:"", role:"", message:"" });
+  const [demoForm,    setDemoForm]    = useState({ name:"", company:"", email:"", phone:"", role:"", message:"" });
   const [demoSent,    setDemoSent]    = useState(false);
   const [sending,     setSending]     = useState(false);
   const heroRef = useRef(null);
@@ -712,6 +712,10 @@ function LandingPage({ onShowLogin, onShowSignup }) {
                   <div>
                     <label className="lp-label">Work Email</label>
                     <input className="lp-input" type="email" required placeholder="you@company.com" value={demoForm.email} onChange={e => setDemoForm(p => ({ ...p, email: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="lp-label">Phone Number</label>
+                    <input className="lp-input" type="tel" placeholder="e.g. +254 700 000 000" value={demoForm.phone} onChange={e => setDemoForm(p => ({ ...p, phone: e.target.value }))} />
                   </div>
                   <div>
                     <label className="lp-label">Your Role</label>
@@ -6154,6 +6158,8 @@ const SuperAdminUsersTab = ({ orgUsers, orgs, pendingUsers, assignUser, sendRese
 const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
   const [tab, setTab]           = useState("dashboard");
   const [newOrg, setNewOrg]     = useState({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
+  const [newOrgDemo, setNewOrgDemo] = useState(false);
+  const [demoDays,   setDemoDays]   = useState(14);
   const [creating, setCreating] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState(null);
   const [activityLog, setActivityLog] = useState([]);
@@ -6170,9 +6176,20 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     if(!newOrg.name.trim()) return;
     setCreating(true);
     const slug = newOrg.slug || generateOrgCode();
-    const { error } = await supabase.from("organisations").insert({ ...newOrg, slug });
+    const demoExpiry = newOrgDemo
+      ? new Date(Date.now() + demoDays * 86400000).toISOString()
+      : null;
+    const { error } = await supabase.from("organisations").insert({
+      ...newOrg, slug,
+      demo_expires_at: demoExpiry,
+    });
     if(error){ showToast("Error: "+error.message,"error"); }
-    else { showToast("Organisation created","success"); setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" }); onRefresh(); setTab("orgs"); }
+    else {
+      showToast(newOrgDemo ? `Demo organisation created — expires in ${demoDays} days` : "Organisation created","success");
+      setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
+      setNewOrgDemo(false); setDemoDays(14);
+      onRefresh(); setTab("orgs");
+    }
     setCreating(false);
   };
 
@@ -6544,8 +6561,16 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0",whiteSpace:"nowrap" }}>{fmt(r.submitted_at)}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
                       <div style={{ display:"flex",gap:6 }}>
-                        <button onClick={()=>{ setTab("new"); }}
-                          style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                        <button onClick={()=>{
+                          setNewOrg({
+                            name: r.company,
+                            slug: "",
+                            country: "Kenya",
+                            contact_name: r.name,
+                            contact_email: r.email,
+                          });
+                          setTab("new");
+                        }} style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
                           ➕ Create Org
                         </button>
                         <button onClick={async()=>{
@@ -6591,9 +6616,51 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name"/>
             <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com"/>
           </div>
-          <div style={{ marginTop:20,display:"flex",gap:10 }}>
-            <Btn onClick={createOrg} disabled={!newOrg.name.trim()||creating} style={{ opacity:creating?0.7:1 }}>
-              {creating?"Creating…":"Create Organisation"}
+          {/* Demo / Full Access toggle */}
+          <div style={{ marginTop:20,background:"#f8fafc",borderRadius:10,padding:"14px 16px",border:"1px solid #dde3ea" }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:newOrgDemo?12:0 }}>
+              <div>
+                <div style={{ fontWeight:700,fontSize:13,color:"#1a2332" }}>Access Type</div>
+                <div style={{ fontSize:11,color:"#8a9ab0",marginTop:2 }}>
+                  {newOrgDemo ? `Demo access — expires in ${demoDays} days` : "Full access — no expiry"}
+                </div>
+              </div>
+              <div style={{ display:"flex",gap:6 }}>
+                <button type="button" onClick={()=>setNewOrgDemo(false)}
+                  style={{ padding:"6px 14px",borderRadius:6,border:`1.5px solid ${!newOrgDemo?"#01579b":"#dde3ea"}`,
+                    background:!newOrgDemo?"#e3f2fd":"#fff",color:!newOrgDemo?"#01579b":"#8a9ab0",
+                    fontWeight:700,fontSize:12,cursor:"pointer" }}>
+                  ✓ Full Access
+                </button>
+                <button type="button" onClick={()=>setNewOrgDemo(true)}
+                  style={{ padding:"6px 14px",borderRadius:6,border:`1.5px solid ${newOrgDemo?"#e65100":"#dde3ea"}`,
+                    background:newOrgDemo?"#fff3e0":"#fff",color:newOrgDemo?"#e65100":"#8a9ab0",
+                    fontWeight:700,fontSize:12,cursor:"pointer" }}>
+                  ⏱ Demo
+                </button>
+              </div>
+            </div>
+            {newOrgDemo&&(
+              <div style={{ display:"flex",alignItems:"center",gap:10,marginTop:8 }}>
+                <label style={{ fontSize:12,color:"#5f7285",fontWeight:600,whiteSpace:"nowrap" }}>Demo duration:</label>
+                {[7,14,30].map(d=>(
+                  <button key={d} type="button" onClick={()=>setDemoDays(d)}
+                    style={{ padding:"4px 12px",borderRadius:6,border:`1.5px solid ${demoDays===d?"#e65100":"#dde3ea"}`,
+                      background:demoDays===d?"#fff3e0":"#fff",color:demoDays===d?"#e65100":"#5f7285",
+                      fontWeight:demoDays===d?700:500,fontSize:12,cursor:"pointer" }}>
+                    {d} days
+                  </button>
+                ))}
+                <input type="number" min={1} max={365} value={demoDays} onChange={e=>setDemoDays(Number(e.target.value))}
+                  style={{ width:60,padding:"4px 8px",border:"1px solid #dde3ea",borderRadius:6,fontSize:12,textAlign:"center" }}/>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop:16,display:"flex",gap:10 }}>
+            <Btn onClick={createOrg} disabled={!newOrg.name.trim()||creating} style={{ opacity:creating?0.7:1,
+              background:newOrgDemo?"#e65100":undefined }}>
+              {creating?"Creating…":newOrgDemo?"Create Demo Org":"Create Organisation"}
             </Btn>
             <Btn variant="ghost" onClick={()=>setTab("orgs")}>Cancel</Btn>
           </div>
@@ -7374,6 +7441,39 @@ export default function App() {
 
         {/* Content */}
         <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+
+          {/* Demo banner */}
+          {org?.demo_expires_at&&(()=>{
+            const daysLeft = Math.ceil((new Date(org.demo_expires_at)-new Date())/86400000);
+            if(daysLeft<=0) return null;
+            const urgent = daysLeft<=3;
+            const color  = urgent?"#c62828":"#e65100";
+            const bg     = urgent?"#ffebee":"#fff3e0";
+            const border = urgent?"#ef9a9a":"#ffcc80";
+            return (
+              <div style={{ background:bg,border:`1.5px solid ${border}`,borderRadius:10,padding:"12px 18px",
+                marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between",gap:16 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+                  <span style={{ fontSize:20 }}>{urgent?"🚨":"⏱"}</span>
+                  <div>
+                    <div style={{ fontWeight:700,fontSize:13,color }}>
+                      {urgent ? "Demo expiring soon!" : "Demo Access"}
+                    </div>
+                    <div style={{ fontSize:12,color,marginTop:2 }}>
+                      Your demo access expires in <strong>{daysLeft} day{daysLeft!==1?"s":""}</strong>
+                      {" "}({new Date(org.demo_expires_at).toLocaleDateString("en-GB")}).
+                      {" "}Contact your administrator to upgrade to full access.
+                    </div>
+                  </div>
+                </div>
+                <div style={{ background:color,color:"#fff",borderRadius:20,padding:"4px 14px",
+                  fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0 }}>
+                  {daysLeft}d left
+                </div>
+              </div>
+            );
+          })()}
+
           {activeTab==="dashboard" && <Dashboard data={data}/>}
           {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
