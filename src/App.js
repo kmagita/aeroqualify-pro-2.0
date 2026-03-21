@@ -6906,25 +6906,28 @@ export default function App() {
 
     const{data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="PASSWORD_RECOVERY"){
-        // User clicked the reset link — show the password reset form
         setShowPasswordReset(true);
         setShowLogin(false);
+        setLoading(false);
         return;
+      }
+      // Handle email confirmation redirect — user clicked verify link in email
+      if(event==="SIGNED_IN" && session?.user){
+        const hash = window.location.hash;
+        if(hash && (hash.includes("type=signup") || hash.includes("type=email_change"))){
+          // Email confirmed — sign them out and show login with success message
+          supabase.auth.signOut();
+          setLoading(false);
+          setShowLogin(true);
+          window.location.hash = "";
+          return;
+        }
       }
       if(!session?.user){
         setLoading(false);
         setProfile(null);
         setUser(null);
         setShowLogin(prev => prev ? prev : false);
-      }
-    });
-
-    // Handle password reset redirect via Supabase auth state change
-    // Supabase automatically detects the recovery token in the URL hash
-    supabase.auth.onAuthStateChange((event, session) => {
-      if(event === "PASSWORD_RECOVERY"){
-        setShowPasswordReset(true);
-        setLoading(false);
       }
     });
 
