@@ -6346,69 +6346,141 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
       )}
 
       {/* ── Users Tab ── */}
-      {tab==="users"&&(
-        <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
-          {pendingUsers.length>0&&(
-            <div style={{ background:"#fff",borderRadius:12,border:"1.5px solid #ffe082",overflow:"hidden" }}>
-              <div style={{ padding:"14px 20px",background:"#fff8e1",borderBottom:"1px solid #ffe082",fontWeight:700,fontSize:14,color:"#e65100" }}>⏳ Pending Approval ({pendingUsers.length})</div>
-              <table style={{ width:"100%",borderCollapse:"collapse" }}>
-                <thead>
-                  <tr style={{ background:"#fffde7" }}>
-                    {["Email","Name","Joined","Assign Organisation","Role","Action"].map(h=>(
-                      <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #ffe082",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingUsers.map(u=>{
-                    const [assignOrg,setAssignOrg] = [u._org||"",v=>u._org=v];
-                    return (
-                      <PendingUserRow key={u.id} u={u} orgs={orgs} onAssign={assignUser}/>
-                    );
-                  })}
-                </tbody>
-              </table>
+      {tab==="users"&&(()=>{
+        const [selOrgTab, setSelOrgTab] = React.useState("__pending__");
+
+        // Group users by org
+        const orgTabList = [
+          { id:"__pending__", name:`Pending Approval`, count: pendingUsers.length },
+          ...orgs.map(o=>({
+            id: o.id,
+            name: o.name,
+            count: orgUsers.filter(u=>u.org_id===o.id).length,
+          }))
+        ];
+
+        const tabUsers = selOrgTab === "__pending__"
+          ? pendingUsers
+          : orgUsers.filter(u=>u.org_id===selOrgTab);
+
+        const selOrg = orgs.find(o=>o.id===selOrgTab);
+
+        return (
+          <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
+            {/* Org tab strip */}
+            <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:16 }}>
+              {orgTabList.map(ot=>{
+                const isPending = ot.id==="__pending__";
+                const active = selOrgTab===ot.id;
+                return (
+                  <button key={ot.id} onClick={()=>setSelOrgTab(ot.id)}
+                    style={{ padding:"7px 14px",borderRadius:20,border:`1.5px solid ${active?(isPending?"#ffe082":"#90caf9"):"#dde3ea"}`,
+                      background:active?(isPending?"#fff8e1":"#e3f2fd"):"#fff",
+                      color:active?(isPending?"#e65100":"#01579b"):"#5f7285",
+                      fontWeight:active?700:500,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6 }}>
+                    {isPending?"⏳":""}{ot.name}
+                    <span style={{ background:active?(isPending?"#ffe082":"#bbdefb"):"#f0f4f8",
+                      color:active?(isPending?"#e65100":"#01579b"):"#8a9ab0",
+                      borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700 }}>
+                      {ot.count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          )}
-          <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden" }}>
-            <div style={{ padding:"14px 20px",borderBottom:"1px solid #dde3ea",fontWeight:700,fontSize:14,color:"#1a2332" }}>All Users ({orgUsers.length})</div>
-            <table style={{ width:"100%",borderCollapse:"collapse" }}>
-              <thead>
-                <tr style={{ background:"#f8fafc" }}>
-                  {["Name","Email","Organisation","Role","Status","Joined",""].map(h=>(
-                    <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orgUsers.map(u=>{
-                  const uOrg=orgs.find(o=>o.id===u.org_id);
-                  return (
-                    <tr key={u.id} className="row-hover">
-                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:600,color:"#1a2332" }}>{u.full_name||"—"}</td>
-                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{u.email}</td>
-                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#1a2332" }}>{uOrg?.name||<span style={{ color:"#8a9ab0" }}>Unassigned</span>}</td>
-                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}><Badge label={u.role||"viewer"}/></td>
-                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
-                        <span style={{ background:u.status==="approved"?"#e8f5e9":u.status==="pending"?"#fff8e1":"#ffebee",color:u.status==="approved"?"#2e7d32":u.status==="pending"?"#e65100":"#c62828",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600 }}>
-                          {u.status}
-                        </span>
-                      </td>
-                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
-                      <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
-                        <button onClick={()=>sendResetLink(u.email)}
-                          style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
-                          📧 Reset Password
-                        </button>
-                      </td>
+
+            {/* Users panel */}
+            <div style={{ background:"#fff",borderRadius:12,
+              border:`1.5px solid ${selOrgTab==="__pending__"?"#ffe082":"#dde3ea"}`,overflow:"hidden" }}>
+
+              {/* Panel header */}
+              <div style={{ padding:"14px 20px",
+                background:selOrgTab==="__pending__"?"#fff8e1":"#f8fafc",
+                borderBottom:`1px solid ${selOrgTab==="__pending__"?"#ffe082":"#dde3ea"}`,
+                display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                <div>
+                  <div style={{ fontWeight:700,fontSize:14,color:selOrgTab==="__pending__"?"#e65100":"#1a2332" }}>
+                    {selOrgTab==="__pending__"
+                      ? `⏳ Pending Approval (${pendingUsers.length})`
+                      : `${selOrg?.name || "Organisation"} — ${tabUsers.length} user${tabUsers.length!==1?"s":""}`}
+                  </div>
+                  {selOrgTab!=="__pending__"&&selOrg?.slug&&(
+                    <div style={{ fontSize:11,color:"#8a9ab0",marginTop:2,fontFamily:"monospace" }}>
+                      Login Code: {selOrg.slug}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Table */}
+              {tabUsers.length===0?(
+                <div style={{ padding:32,textAlign:"center",color:"#8a9ab0",fontSize:13 }}>
+                  {selOrgTab==="__pending__"?"No accounts pending approval":"No users in this organisation yet"}
+                </div>
+              ):(
+                <table style={{ width:"100%",borderCollapse:"collapse" }}>
+                  <thead>
+                    <tr style={{ background:"#f8fafc" }}>
+                      {(selOrgTab==="__pending__"
+                        ? ["Email","Name","Joined","Assign Org","Role","Action"]
+                        : ["Name","Email","Role","Status","Joined","Actions"]
+                      ).map(h=>(
+                        <th key={h} style={{ padding:"9px 14px",borderBottom:`1px solid ${selOrgTab==="__pending__"?"#ffe082":"#dde3ea"}`,
+                          textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {selOrgTab==="__pending__"
+                      ? tabUsers.map(u=><PendingUserRow key={u.id} u={u} orgs={orgs} onAssign={assignUser}/>)
+                      : tabUsers.map(u=>(
+                          <tr key={u.id} className="row-hover">
+                            <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:600,color:"#1a2332" }}>
+                              <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                                <div style={{ width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#01579b,#0288d1)",
+                                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0 }}>
+                                  {(u.full_name||u.email)[0].toUpperCase()}
+                                </div>
+                                {u.full_name||"—"}
+                              </div>
+                            </td>
+                            <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{u.email}</td>
+                            <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}><Badge label={u.role||"viewer"}/></td>
+                            <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                              <span style={{ background:u.status==="approved"?"#e8f5e9":u.status==="pending"?"#fff8e1":"#ffebee",
+                                color:u.status==="approved"?"#2e7d32":u.status==="pending"?"#e65100":"#c62828",
+                                borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600 }}>
+                                {u.status}
+                              </span>
+                            </td>
+                            <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0" }}>{fmt(u.created_at)}</td>
+                            <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
+                              <div style={{ display:"flex",gap:6 }}>
+                                <button onClick={()=>sendResetLink(u.email)}
+                                  style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                                  📧 Reset
+                                </button>
+                                {u.status==="approved"&&(
+                                  <button onClick={async()=>{
+                                    if(!window.confirm(`Suspend ${u.full_name||u.email}?`)) return;
+                                    await supabase.from("profiles").update({status:"suspended"}).eq("id",u.id);
+                                    showToast("User suspended","success"); onRefresh();
+                                  }} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                                  Suspend
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                    }
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── New Org Tab ── */}
       {tab==="new"&&(
