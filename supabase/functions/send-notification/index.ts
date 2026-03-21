@@ -322,6 +322,33 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
     `, RED),
   }),
 
+  // ── Overdue CAR — Manager notice at 14 days (escalated to QM) ─
+  car_overdue_escalated_manager: (r) => ({
+    subject: `Notice: CAR ${r.id} — Escalated to Quality Manager`,
+    html: base(`
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">CAR Escalated to Quality Manager</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        This CAR has been outstanding for ${r.days_overdue} days without a submitted Corrective Action Plan. This matter has now been formally escalated to the Quality Manager.
+      </p>
+
+      <div style="background:${RED}12;border:1.5px solid ${RED}40;border-radius:8px;padding:16px 18px;margin-bottom:20px;text-align:center;">
+        <div style="font-size:10px;font-weight:700;color:${RED};text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Escalated to Quality Manager</div>
+        <div style="font-size:32px;font-weight:800;color:${RED};">${r.days_overdue}</div>
+        <div style="font-size:12px;font-weight:700;color:${RED};text-transform:uppercase;letter-spacing:1px;">days overdue</div>
+        <div style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:${NAVY};margin-top:8px;">${r.id}</div>
+      </div>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+        ${row('Finding', r.finding_description)}
+        ${row('Severity', \`<span style="color:\${sevColor(r.severity)};font-weight:700;">\${r.severity}</span>\`)}
+        ${row('Original Due Date', r.due_date)}
+        ${row('Assigned To', r.responsible_manager)}
+      </table>
+
+      ${alert(\`<strong>Please take immediate action.</strong> The Quality Manager (\${r.qm_name || 'Quality Manager'}) has been notified of this outstanding CAR and may follow up with you directly. Log in to AeroQualify Pro and submit your Corrective Action Plan immediately.\`, RED, '🔴')}
+    `, RED),
+  }),
+
   // ── Overdue CAR — QM notification at 14 days ────────────────
   car_overdue_qm_alert: (r) => ({
     subject: `QM Alert: CAR ${r.id} — ${r.days_overdue} Days Overdue — No Response`,
@@ -455,9 +482,10 @@ async function processOverdueCARs() {
     }
 
     if (daysOver === 14) {
-      // Day 14: escalation to manager AND alert to QM
+      // Day 14: manager gets escalation notice, QM gets alert
       if (managerEmail) {
-        const { subject, html } = templates.car_overdue_escalation(record);
+        const managerRecord = { ...record, qm_name: qmProfile?.email || "Quality Manager" };
+        const { subject, html } = templates.car_overdue_escalated_manager(managerRecord);
         await sendEmail(managerEmail, subject, html);
         sent++;
       }
