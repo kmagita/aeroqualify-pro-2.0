@@ -6316,6 +6316,26 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     onRefresh();
   };
 
+  const deleteOrg = async (org) => {
+    const confirmed = window.prompt(
+      `This will permanently delete "${org.name}" and ALL its data (CARs, CAPs, audits, documents, risks, users).
+
+Type the organisation name to confirm:`
+    );
+    if(confirmed !== org.name){ showToast("Deletion cancelled — name did not match","error"); return; }
+    // Delete all org data in order
+    const tables = ["cars","caps","capa_verifications","audits","audit_schedule","documents",
+      "flight_school_docs","contractors","risk_register","responsible_managers","change_log","profiles"];
+    for(const table of tables){
+      await supabase.from(table).delete().eq("org_id", org.id);
+    }
+    // Delete the org itself
+    const { error } = await supabase.from("organisations").delete().eq("id", org.id);
+    if(error){ showToast("Error deleting org: "+error.message,"error"); return; }
+    showToast(`"${org.name}" permanently deleted`,"success");
+    onRefresh();
+  };
+
   const sendResetLink = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: "https://aeroqualify.co.ke"
@@ -6473,6 +6493,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                               :<button onClick={e=>{e.stopPropagation();updateOrgStatus(o.id,"active");}} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
                           )}
                           <button onClick={e=>{e.stopPropagation();seedDemoOrg(o.id);}} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
+                          <button onClick={e=>{e.stopPropagation();deleteOrg(o);}} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🗑 Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -6555,6 +6576,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                               :<button onClick={()=>updateOrgStatus(o.id,"active")} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
                           )}
                           <button onClick={()=>seedDemoOrg(o.id)} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
+                          <button onClick={()=>deleteOrg(o)} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🗑 Delete</button>
                         </div>
                       </td>
                     </tr>
