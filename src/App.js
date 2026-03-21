@@ -6179,17 +6179,39 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     const demoExpiry = newOrgDemo
       ? new Date(Date.now() + demoDays * 86400000).toISOString()
       : null;
-    const { error } = await supabase.from("organisations").insert({
+
+    // 1. Create the organisation
+    const { data: orgRow, error } = await supabase.from("organisations").insert({
       ...newOrg, slug,
       demo_expires_at: demoExpiry,
-    });
-    if(error){ showToast("Error: "+error.message,"error"); }
-    else {
-      showToast(newOrgDemo ? `Demo organisation created — expires in ${demoDays} days` : "Organisation created","success");
-      setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
-      setNewOrgDemo(false); setDemoDays(14);
-      onRefresh(); setTab("orgs");
+    }).select().single();
+
+    if(error){ showToast("Error: "+error.message,"error"); setCreating(false); return; }
+
+    // 2. Create user account + send welcome email with credentials
+    if(newOrg.contact_email){
+      await sendNotification({
+        type: "create_org_user",
+        record: {
+          org_id:       orgRow.id,
+          org_name:     orgRow.name,
+          org_slug:     slug,
+          contact_name: newOrg.contact_name || newOrg.contact_email.split("@")[0],
+          contact_email:newOrg.contact_email,
+          is_demo:      newOrgDemo ? "true" : "false",
+          demo_days:    String(demoDays),
+        },
+        recipients: [newOrg.contact_email],
+      });
     }
+
+    showToast(newOrgDemo
+      ? `Demo organisation created — expires in ${demoDays} days. Welcome email sent.`
+      : "Organisation created. Welcome email sent.",
+      "success");
+    setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
+    setNewOrgDemo(false); setDemoDays(14);
+    onRefresh(); setTab("orgs");
     setCreating(false);
   };
 
@@ -6199,9 +6221,12 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     const today = new Date();
     const daysAgo = (n) => new Date(today-n*86400000).toISOString().slice(0,10);
     const daysFromNow = (n) => new Date(today.getTime()+n*86400000).toISOString().slice(0,10);
-    // Set 7-day demo expiry
-    const demoExpiry = new Date(today.getTime()+7*86400000).toISOString();
-    await supabase.from("organisations").update({ demo_expires_at: demoExpiry }).eq("id", orgId);
+    // Only set demo expiry if not already set on the org
+    const { data: orgData } = await supabase.from("organisations").select("demo_expires_at").eq("id", orgId).single();
+    if(!orgData?.demo_expires_at){
+      const demoExpiry = new Date(today.getTime()+14*86400000).toISOString();
+      await supabase.from("organisations").update({ demo_expires_at: demoExpiry }).eq("id", orgId);
+    }
     const managers = [
       {id:`${orgId}-mgr-1`,org_id:orgId,role_title:"Accountable Manager",person_name:"James Mwangi",email:"accountable@demo-aviation.com",phone:"+254700000001"},
       {id:`${orgId}-mgr-2`,org_id:orgId,role_title:"Quality Manager",person_name:"Sarah Ochieng",email:"qm@demo-aviation.com",phone:"+254700000002"},
