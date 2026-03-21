@@ -6397,21 +6397,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     onRefresh();
   };
 
-Type the organisation name to confirm:`
-    );
-    if(confirmed !== org.name){ showToast("Deletion cancelled — name did not match","error"); return; }
-    // Delete all org data in order
-    const tables = ["cars","caps","capa_verifications","audits","audit_schedule","documents",
-      "flight_school_docs","contractors","risk_register","responsible_managers","change_log","profiles"];
-    for(const table of tables){
-      await supabase.from(table).delete().eq("org_id", org.id);
-    }
-    // Delete the org itself
-    const { error } = await supabase.from("organisations").delete().eq("id", org.id);
-    if(error){ showToast("Error deleting org: "+error.message,"error"); return; }
-    showToast(`"${org.name}" permanently deleted`,"success");
-    onRefresh();
-  };
+
 
   const sendResetLink = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
