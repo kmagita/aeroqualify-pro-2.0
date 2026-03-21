@@ -6189,20 +6189,33 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     if(error){ showToast("Error: "+error.message,"error"); setCreating(false); return; }
 
     // 2. Create user account + send welcome email with credentials
+    // Uses direct fetch with service role key so edge function can call auth.admin.createUser
     if(newOrg.contact_email){
-      await sendNotification({
-        type: "create_org_user",
-        record: {
-          org_id:       orgRow.id,
-          org_name:     orgRow.name,
-          org_slug:     slug,
-          contact_name: newOrg.contact_name || newOrg.contact_email.split("@")[0],
-          contact_email:newOrg.contact_email,
-          is_demo:      newOrgDemo ? "true" : "false",
-          demo_days:    String(demoDays),
-        },
-        recipients: [newOrg.contact_email],
-      });
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_ANON}`,
+            "x-supabase-service-role": "true",
+          },
+          body: JSON.stringify({
+            type: "create_org_user",
+            record: {
+              org_id:       orgRow.id,
+              org_name:     orgRow.name,
+              org_slug:     slug,
+              contact_name: newOrg.contact_name || newOrg.contact_email.split("@")[0],
+              contact_email:newOrg.contact_email,
+              is_demo:      newOrgDemo ? "true" : "false",
+              demo_days:    String(demoDays),
+            },
+            recipients: [newOrg.contact_email],
+          }),
+        });
+        const result = await resp.json();
+        if(!result.ok) console.warn("create_org_user response:", result);
+      } catch(e) { console.error("create_org_user failed:", e); }
     }
 
     showToast(newOrgDemo
