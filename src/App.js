@@ -6899,7 +6899,16 @@ export default function App() {
     // so the user always starts at the landing page.
     // On a page refresh, preserve the session so they stay logged in.
     const isRefresh = sessionStorage.getItem("aq_loaded");
-    if(!isRefresh){
+    const urlHash = window.location.hash;
+    const isEmailCallback = urlHash && (
+      urlHash.includes("type=signup") ||
+      urlHash.includes("type=recovery") ||
+      urlHash.includes("type=email_change") ||
+      urlHash.includes("access_token")
+    );
+
+    // Don't sign out if we're handling an email callback link
+    if(!isRefresh && !isEmailCallback){
       supabase.auth.signOut();
     }
     sessionStorage.setItem("aq_loaded", "1");
@@ -6909,17 +6918,20 @@ export default function App() {
         setShowPasswordReset(true);
         setShowLogin(false);
         setLoading(false);
+        window.location.hash = "";
         return;
       }
-      // Handle email confirmation redirect — user clicked verify link in email
+      // Handle email confirmation — user clicked verify link
       if(event==="SIGNED_IN" && session?.user){
         const hash = window.location.hash;
         if(hash && (hash.includes("type=signup") || hash.includes("type=email_change"))){
-          // Email confirmed — sign them out and show login with success message
-          supabase.auth.signOut();
-          setLoading(false);
-          setShowLogin(true);
-          window.location.hash = "";
+          // Verified — sign out and show login with pending message
+          supabase.auth.signOut().then(()=>{
+            setLoading(false);
+            setShowLogin(true);
+            setAuthPopup("pending");
+            window.location.hash = "";
+          });
           return;
         }
       }
@@ -6931,9 +6943,8 @@ export default function App() {
       }
     });
 
-    // Check hash for recovery token
-    const hash = window.location.hash;
-    if(hash && hash.includes("type=recovery")){
+    // Check hash for recovery token immediately
+    if(urlHash && urlHash.includes("type=recovery")){
       setShowPasswordReset(true);
       setLoading(false);
       return;
