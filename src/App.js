@@ -272,7 +272,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
           phone: demoForm.phone || "",
           message: demoForm.message || "",
         },
-        recipients: ["kmagita.pegasus@gmail.com"],
+        recipients: ["kmagita.pegasus@gmail.com", "aeroqualify@gmail.com"],
       });
     } catch(err) {
       console.warn("Access request notification failed:", err);
