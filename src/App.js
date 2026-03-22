@@ -1029,6 +1029,31 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         // If org slug provided, store the intended org on the profile
         if(resolvedOrgId){
           await supabase.from("profiles").update({ org_id: resolvedOrgId }).eq("id", signUpData.user.id);
+          // Notify the org admin that a new user is waiting for approval
+          const { data: adminProfiles } = await supabase
+            .from("profiles")
+            .select("email,full_name")
+            .eq("org_id", resolvedOrgId)
+            .eq("role", "admin")
+            .eq("status", "approved");
+          const { data: orgInfo } = await supabase
+            .from("organisations")
+            .select("name")
+            .eq("id", resolvedOrgId)
+            .single();
+          const adminEmails = (adminProfiles||[]).map(a=>a.email).filter(Boolean);
+          if(adminEmails.length > 0){
+            await sendNotification({
+              type: "user_signup_request",
+              record: {
+                full_name: fullName || email.split("@")[0],
+                email: email,
+                org_name: orgInfo?.name || "",
+                registered_at: new Date().toLocaleString("en-GB", {timeZone:"Africa/Nairobi"}),
+              },
+              recipients: adminEmails,
+            });
+          }
         }
         await supabase.auth.signOut();
         setMode("login");
@@ -3303,7 +3328,23 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
   const approveUser = async(userId, role="viewer") => {
     const{error}=await supabase.from("profiles").update({status:"approved",role}).eq("id",userId);
     if(error){showToast("Error: "+error.message,"error");return;}
-    showToast("User approved","success");
+    // Send approval email to the user
+    const approvedU = [...pendingUsers,...allUsers].find(u=>u.id===userId);
+    if(approvedU?.email){
+      await sendNotification({
+        type: "user_approved",
+        record: {
+          full_name: approvedU.full_name || approvedU.email.split("@")[0],
+          email: approvedU.email,
+          org_name: org?.name || "",
+          org_id: org?.slug || "",
+          role: role.replace(/_/g," "),
+          app_url: "https://aeroqualify.co.ke",
+        },
+        recipients: [approvedU.email],
+      });
+    }
+    showToast("User approved — confirmation email sent","success");
     setPendingUsers(p=>p.filter(u=>u.id!==userId));
     setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"approved",role}:u));
   };
