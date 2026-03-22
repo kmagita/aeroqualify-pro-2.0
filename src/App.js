@@ -11,6 +11,7 @@ const GlobalStyle = () => (
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { height: 100%; }
       body { background: #eef2f7; overflow: hidden; font-family: 'Source Sans 3', sans-serif; }
+      body.scrollable { overflow: auto; }
       ::-webkit-scrollbar { width: 5px; height: 5px; }
       ::-webkit-scrollbar-track { background: #e8edf3; }
       ::-webkit-scrollbar-thumb { background: #b0bec5; border-radius: 3px; }
@@ -6407,7 +6408,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
   );
 
   return (
-    <div style={{ display:"flex",flexDirection:"column",gap:0,height:"100%",minHeight:0 }}>
+    <div style={{ display:"flex",flexDirection:"column",gap:0,height:"100%",minHeight:0,overflow:"visible" }}>
 
       {/* ── Header ── */}
       <div style={{ background:"linear-gradient(135deg,#0d1b2a,#1a3a5c)",borderRadius:12,padding:"24px 28px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
@@ -7351,7 +7352,7 @@ export default function App() {
   // ── Super admin fullscreen portal (no org ID entered at login) ──
   if(isSuperAdmin && !loginOrgOverride && !org) {
     return (
-      <div style={{ minHeight:"100vh", background:"#f0f4f8", display:"flex", flexDirection:"column" }}>
+      <div style={{ height:"100vh", maxHeight:"100vh", background:"#f0f4f8", display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <GlobalStyle/>
         {/* Top stripe */}
         <div style={{ position:"fixed", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,#0d1b2a,#1a3a5c,#01579b)`, zIndex:200 }} />
@@ -7389,7 +7390,7 @@ export default function App() {
           </div>
         </div>
         {/* Portal content */}
-        <div style={{ flex:1, padding:"24px 28px", overflowY:"auto" }}>
+        <div style={{ flex:1, padding:"24px 28px", overflowY:"auto", overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
           <SuperAdminPanel
             orgs={orgs} orgUsers={orgUsers}
             showToast={showToast}
@@ -7406,7 +7407,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
+    <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden", minWidth:0 }}>
       <GlobalStyle/>
       {/* Top stripe */}
       <div style={{ position:"fixed", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})`, zIndex:200 }} />
@@ -7492,7 +7493,7 @@ export default function App() {
       </aside>
 
       {/* ── Main ─────────────────────────────────── */}
-      <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",marginTop:3 }}>
+      <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",marginTop:3,minWidth:0 }}>
         <AlertBanner items={alertItems}/>
 
         {/* Header */}
@@ -7512,7 +7513,7 @@ export default function App() {
         </header>
 
         {/* Content */}
-        <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+        <div style={{ flex:1,overflowY:"auto",overflowX:"auto",padding:24,WebkitOverflowScrolling:"touch",minWidth:0 }}>
 
           {/* Demo banner */}
           {org?.demo_expires_at&&(()=>{
