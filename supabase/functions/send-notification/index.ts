@@ -179,7 +179,7 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
         </div>
       </div>` : ''}
 
-      ${alert('Keep your Organisation ID and password confidential — they grant access to your organisation's quality management data.', BLUE, '🔐')}
+      ${alert(`Keep your Organisation ID and password confidential — they grant access to your organisation's quality management data.`, BLUE, '🔐')}
     `, BLUE),
   }),
 
