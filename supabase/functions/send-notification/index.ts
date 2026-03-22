@@ -140,6 +140,19 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
         Hi ${r.contact_name}, your organisation has been set up on AeroQualify Pro. Here are your access details.
       </p>
 
+      ${r.account_created === 'true' ? `
+      <div style="background:#e8f5e9;border:1.5px solid #a5d6a7;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
+        <div style="font-size:11px;font-weight:700;color:${GREEN};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Your Login Credentials</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${row('Login URL', `<a href="${r.app_url}" style="color:${BLUE};">${r.app_url}</a>`)}
+          ${row('Organisation ID', `<span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:${BLUE};">${r.org_id}</span>`)}
+          ${row('Email Address', r.contact_email)}
+          ${row('Temporary Password', '<span style="font-family:monospace;font-size:15px;font-weight:700;color:#2E7D32;">' + r.temp_password + '</span>')}
+        </table>
+        <div style="margin-top:12px;font-size:11px;color:#388E3C;line-height:1.6;">
+          ⚠ Please change your password after first login via <strong>Settings → My Profile → Change Password</strong>.
+        </div>
+      </div>` : `
       <div style="background:${LTBLUE};border-radius:10px;padding:20px 24px;margin-bottom:24px;">
         <div style="font-size:11px;font-weight:700;color:${BLUE};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Your Access Details</div>
         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
@@ -147,15 +160,7 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
           ${row('Organisation ID', `<span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:${BLUE};">${r.org_id}</span>`)}
           ${row('Login URL', `<a href="${r.app_url}" style="color:${BLUE};">${r.app_url}</a>`)}
         </table>
-      </div>
-
-      <div style="background:#f8fafc;border-radius:8px;padding:16px 18px;margin-bottom:20px;font-size:12px;color:#1A2332;line-height:1.8;">
-        <div style="font-weight:700;margin-bottom:8px;color:${NAVY};">Getting Started</div>
-        <div><strong>Step 1:</strong> Go to <a href="${r.app_url}" style="color:${BLUE};">${r.app_url}</a></div>
-        <div><strong>Step 2:</strong> Click <em>Create Account</em> and register with your email address</div>
-        <div><strong>Step 3:</strong> Enter Organisation ID: <span style="font-family:'Courier New',monospace;font-weight:700;color:${BLUE};">${r.org_id}</span></div>
-        <div><strong>Step 4:</strong> Verify your email, then contact your AeroQualify administrator to approve your account</div>
-      </div>
+      </div>`}
 
       ${r.is_demo === 'true' ? `
       <div style="background:#fff3e0;border:1.5px solid #ffcc80;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
@@ -167,20 +172,63 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
         </div>
       </div>` : ''}
 
-      ${r.account_created === 'true' ? `
-      <div style="background:#e8f5e9;border:1.5px solid #a5d6a7;border-radius:10px;padding:20px 24px;margin-bottom:20px;">
-        <div style="font-size:11px;font-weight:700;color:${GREEN};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Your Login Credentials</div>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-          ${row('Email Address', r.contact_email)}
-          ${row('Temporary Password', '<span style="font-family: monospace; font-size:15px; font-weight:700; color:#2E7D32;">' + r.temp_password + '</span>')}
-        </table>
-        <div style="margin-top:12px;font-size:11px;color:#388E3C;line-height:1.6;">
-          ⚠ Please change your password immediately after first login via <strong>Settings → My Profile → Change Password</strong>.
-        </div>
-      </div>` : ''}
+      <div style="background:#f8fafc;border-radius:8px;padding:16px 18px;margin-bottom:20px;font-size:12px;color:#1A2332;line-height:1.8;">
+        <div style="font-weight:700;margin-bottom:8px;color:${NAVY};">Onboarding Your Team</div>
+        <p style="margin:0 0 10px;color:${MUTED};">Share the following instructions with each team member who needs access to your organisation on AeroQualify Pro:</p>
+        <div><strong>Step 1:</strong> Go to <a href="${r.app_url}" style="color:${BLUE};">${r.app_url}</a> and click <em>Create Account</em></div>
+        <div><strong>Step 2:</strong> Register with their work email address</div>
+        <div><strong>Step 3:</strong> Enter your Organisation ID: <span style="font-family:'Courier New',monospace;font-weight:700;color:${BLUE};">${r.org_id}</span></div>
+        <div><strong>Step 4:</strong> Once registered, you will receive a notification to approve their access — they will be notified by email once approved</div>
+      </div>
 
-      ${alert(`Keep your Organisation ID and password confidential — they grant access to your organisation's quality management data.`, BLUE, '🔐')}
+      ${alert(`Keep your Organisation ID confidential — it links new accounts directly to your organisation's quality management data.`, BLUE, '🔐')}
     `, BLUE),
+  }),
+
+  // ── New user signup request — sent to org admin ─────────────
+  user_signup_request: (r) => ({
+    subject: `Access Request: ${r.full_name} is waiting for approval`,
+    html: base(`
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">New User Access Request</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        A new user has registered and is awaiting your approval to access <strong>${r.org_name}</strong>.
+      </p>
+
+      <div style="background:${LTBLUE};border-radius:10px;padding:20px 24px;margin-bottom:24px;">
+        <div style="font-size:11px;font-weight:700;color:${BLUE};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">User Details</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${row('Full Name', r.full_name)}
+          ${row('Email Address', r.email)}
+          ${row('Organisation', r.org_name)}
+          ${row('Registered', r.registered_at)}
+        </table>
+      </div>
+
+      ${alert(`<strong>Action Required:</strong> Log in to AeroQualify Pro and go to <strong>Settings → User Access Management</strong> to approve or reject this request. The user is unable to access the system until you approve them.`, ORANGE, '⏳')}
+    `, ORANGE),
+  }),
+
+  // ── User approved — sent to the newly approved user ─────────
+  user_approved: (r) => ({
+    subject: `You're approved — Welcome to ${r.org_name} on AeroQualify Pro`,
+    html: base(`
+      <h1 style="margin:0 0 4px;font-size:22px;color:${NAVY};">Your Access Has Been Approved</h1>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};">
+        Hi ${r.full_name}, your account has been reviewed and approved. You can now log in to AeroQualify Pro.
+      </p>
+
+      <div style="background:#e8f5e9;border:1.5px solid #a5d6a7;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
+        <div style="font-size:11px;font-weight:700;color:${GREEN};text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">Your Access Details</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${row('Organisation', r.org_name, NAVY)}
+          ${row('Organisation ID', `<span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:${BLUE};">${r.org_id}</span>`)}
+          ${row('Role', r.role)}
+          ${row('Login URL', `<a href="${r.app_url}" style="color:${BLUE};">${r.app_url}</a>`)}
+        </table>
+      </div>
+
+      ${alert('You can now log in using your email address and the password you set during registration.', GREEN, '✅')}
+    `, GREEN),
   }),
 
   // ── New access request from landing page ───────────────────
