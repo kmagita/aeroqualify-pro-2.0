@@ -12,6 +12,38 @@ const GlobalStyle = () => (
       html, body, #root { height: 100%; }
       body { background: #eef2f7; overflow: hidden; font-family: 'Source Sans 3', sans-serif; }
       body.scrollable { overflow: auto; }
+      @media (max-width: 768px) {
+        body { overflow: auto; }
+        .desktop-sidebar { display: none !important; }
+        .mobile-nav { display: flex !important; }
+        .main-content { margin-bottom: 64px !important; }
+        .app-header { padding: 10px 14px !important; }
+        .hamburger-btn { display: block !important; }
+        .main-scroll-area { padding-bottom: 72px !important; }
+      }
+      @media (min-width: 769px) and (max-width: 1024px) {
+        .desktop-sidebar { width: 60px !important; }
+        .desktop-sidebar .sidebar-label { display: none !important; }
+        .desktop-sidebar .sidebar-logo-text { display: none !important; }
+        .desktop-sidebar .sidebar-user-info { display: none !important; }
+        .desktop-sidebar .sidebar-section-label { display: none !important; }
+      }
+      .mobile-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+        background: #fff; border-top: 1px solid #dde3ea; height: 60px;
+        align-items: stretch; box-shadow: 0 -2px 12px rgba(0,0,0,0.08); }
+      .mobile-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 2px; border: none; background: none; cursor: pointer;
+        font-family: 'Source Sans 3', sans-serif; padding: 6px 2px; color: #8fa0b0;
+        font-size: 10px; font-weight: 500; transition: color 0.15s; min-width: 0; }
+      .mobile-nav-item.active { color: #01579b; }
+      .mobile-nav-item span:first-child { font-size: 20px; }
+      .mobile-drawer { display: none; position: fixed; inset: 0; z-index: 500; }
+      .mobile-drawer.open { display: block; }
+      .mobile-drawer-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
+      .mobile-drawer-panel { position: absolute; left: 0; top: 0; bottom: 0; width: 260px;
+        background: #fff; overflow-y: auto; box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+        display: flex; flex-direction: column; }
+      @media (min-width: 769px) { .mobile-drawer { display: none !important; } }
       ::-webkit-scrollbar { width: 5px; height: 5px; }
       ::-webkit-scrollbar-track { background: #e8edf3; }
       ::-webkit-scrollbar-thumb { background: #b0bec5; border-radius: 3px; }
@@ -7119,6 +7151,7 @@ export default function App() {
   const [org,setOrg]           = useState(null);
   const [loginOrgOverride,setLoginOrgOverride] = useState(null); // org ID forced at login
   const [isSuperAdmin,setIsSuperAdmin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [orgs,setOrgs]         = useState([]);   // super admin: all orgs
   const [orgUsers,setOrgUsers] = useState([]);   // super admin: all users
   const subs                   = useRef([]);
@@ -7406,90 +7439,108 @@ export default function App() {
     );
   }
 
+  // Mobile bottom nav tabs — most used sections
+  const MOBILE_TABS = [
+    { id:"dashboard", icon:"📊", label:"Dashboard" },
+    { id:"cars",      icon:"📋", label:"CARs" },
+    { id:"audits",    icon:"🔍", label:"Audits" },
+    { id:"documents", icon:"📁", label:"Docs" },
+    { id:"_menu",     icon:"☰",  label:"More" },
+  ];
+
+  const SidebarContents = ({ onNav }) => (
+    <>
+      <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0 }}>✈</div>
+          <div className="sidebar-logo-text">
+            <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:17, color:T.primaryDk, lineHeight:1 }}>AeroQualify</div>
+            <div style={{ fontSize:9, color:T.muted, letterSpacing:1.5, textTransform:"uppercase" }}>Pro · QMS</div>
+          </div>
+        </div>
+      </div>
+      <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto" }}>
+        <div className="sidebar-section-label" style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Main</div>
+        {isSuperAdmin&&(
+          <div>
+            <div className="sidebar-section-label" style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Super Admin</div>
+            <button className={`nav-item${activeTab==="superadmin"?" active":""}`} onClick={()=>{ setTab("superadmin"); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:activeTab==="superadmin"?T.red:T.muted,fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:4,transition:"all 0.15s" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
+              <span className="sidebar-label">Organisations</span>
+            </button>
+          </div>
+        )}
+        {TABS.filter(t=>t.group==="main").map(t=>{
+          const cnt=counts[t.id]; const active=activeTab===t.id;
+          return (
+            <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>{ setTab(t.id); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
+              <span className="sidebar-label" style={{ flex:1 }}>{t.label}</span>
+              {cnt?<span style={{ background:T.red,color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700 }}>{cnt}</span>:null}
+            </button>
+          );
+        })}
+        <div className="sidebar-section-label" style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"14px 8px 4px", marginBottom:2 }}>Settings</div>
+        {TABS.filter(t=>t.group==="settings").map(t=>{
+          const active=activeTab===t.id;
+          return (
+            <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>{ setTab(t.id); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
+              <span className="sidebar-label" style={{ flex:1 }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}` }}>
+        <div className="sidebar-user-info" style={{ display:"flex",alignItems:"center",gap:9,marginBottom:10 }}>
+          <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff",flexShrink:0 }}>
+            {(profile?.full_name||user.email)[0].toUpperCase()}
+          </div>
+          <div style={{ flex:1,overflow:"hidden" }}>
+            <div style={{ fontSize:12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{profile?.full_name||user.email}</div>
+            <div style={{ marginTop:2, display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
+              <Badge label={profile?.role||"viewer"}/>
+              {isSuperAdmin&&<span style={{ background:T.redLt, color:T.red, borderRadius:20, padding:"1px 7px", fontSize:10, fontWeight:700 }}>Super Admin</span>}
+            </div>
+            {org&&(
+              <div style={{ fontSize:10, color:T.muted, marginTop:3, display:"flex", alignItems:"center", gap:4, overflow:"hidden" }}>
+                <span>🏢</span>
+                <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={org.name}>{org.name}</span>
+                <button onClick={()=>setShowOrgSwitcher(true)} title="Switch organisation"
+                  style={{ background:"none",border:"none",cursor:"pointer",color:T.primary,fontSize:11,padding:0,flexShrink:0,fontWeight:700 }}>⇄</button>
+              </div>
+            )}
+          </div>
+        </div>
+        <Btn variant="ghost" size="sm" onClick={()=>supabase.auth.signOut()} style={{ width:"100%",textAlign:"center" }}>Sign Out</Btn>
+        <div className="sidebar-user-info" style={{ fontSize:10,color:T.green,marginTop:8,display:"flex",alignItems:"center",gap:5 }}>
+          <span style={{ width:6,height:6,borderRadius:"50%",background:T.green,display:"inline-block",animation:"pulse 2s infinite" }}/>
+          Live sync active
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden", minWidth:0 }}>
       <GlobalStyle/>
       {/* Top stripe */}
       <div style={{ position:"fixed", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})`, zIndex:200 }} />
 
-      {/* ── Sidebar ──────────────────────────────── */}
-      <aside style={{ width:220, flexShrink:0, background:"#fff", borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", marginTop:3, boxShadow:"2px 0 8px rgba(0,0,0,0.04)" }}>
-        {/* Logo */}
-        <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${T.border}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,boxShadow:"0 2px 8px rgba(1,87,155,0.25)" }}>✈</div>
-            <div>
-              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:17, color:T.primaryDk, lineHeight:1 }}>AeroQualify</div>
-              <div style={{ fontSize:9, color:T.muted, letterSpacing:1.5, textTransform:"uppercase" }}>Pro · QMS</div>
-            </div>
-          </div>
+      {/* ── Mobile drawer ── */}
+      <div className={`mobile-drawer${sidebarOpen?" open":""}`}>
+        <div className="mobile-drawer-overlay" onClick={()=>setSidebarOpen(false)}/>
+        <div className="mobile-drawer-panel" style={{ paddingTop:3 }}>
+          <SidebarContents onNav={()=>setSidebarOpen(false)}/>
         </div>
+      </div>
 
-        {/* Nav */}
-        <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto" }}>
-          <div style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Main</div>
-          {isSuperAdmin&&(
-            <div>
-              <div style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Super Admin</div>
-              <button className={`nav-item${activeTab==="superadmin"?" active":""}`} onClick={()=>setTab("superadmin")}
-                style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:activeTab==="superadmin"?T.red:T.muted,fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:4,transition:"all 0.15s" }}>
-                <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
-                <span>Organisations</span>
-              </button>
-            </div>
-          )}
-          {TABS.filter(t=>t.group==="main").map(t=>{
-            const cnt=counts[t.id]; const active=activeTab===t.id;
-            return (
-              <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>setTab(t.id)}
-                style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
-                <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
-                <span style={{ flex:1 }}>{t.label}</span>
-                {cnt?<span style={{ background:T.red,color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700 }}>{cnt}</span>:null}
-              </button>
-            );
-          })}
-          <div style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"14px 8px 4px", marginBottom:2 }}>Settings</div>
-          {TABS.filter(t=>t.group==="settings").map(t=>{
-            const active=activeTab===t.id;
-            return (
-              <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>setTab(t.id)}
-                style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
-                <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
-                <span style={{ flex:1 }}>{t.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User */}
-        <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}` }}>
-          <div style={{ display:"flex",alignItems:"center",gap:9,marginBottom:10 }}>
-            <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff",flexShrink:0 }}>
-              {(profile?.full_name||user.email)[0].toUpperCase()}
-            </div>
-            <div style={{ flex:1,overflow:"hidden" }}>
-              <div style={{ fontSize:12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{profile?.full_name||user.email}</div>
-              <div style={{ marginTop:2, display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
-                <Badge label={profile?.role||"viewer"}/>
-                {isSuperAdmin&&<span style={{ background:T.redLt, color:T.red, borderRadius:20, padding:"1px 7px", fontSize:10, fontWeight:700 }}>Super Admin</span>}
-              </div>
-              {org&&(
-                <div style={{ fontSize:10, color:T.muted, marginTop:3, display:"flex", alignItems:"center", gap:4, overflow:"hidden" }}>
-                  <span>🏢</span>
-                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={org.name}>{org.name}</span>
-                  <button onClick={()=>setShowOrgSwitcher(true)} title="Switch organisation"
-                    style={{ background:"none",border:"none",cursor:"pointer",color:T.primary,fontSize:11,padding:0,flexShrink:0,fontWeight:700 }}>⇄</button>
-                </div>
-              )}
-            </div>
-          </div>
-          <Btn variant="ghost" size="sm" onClick={()=>supabase.auth.signOut()} style={{ width:"100%",textAlign:"center" }}>Sign Out</Btn>
-          <div style={{ fontSize:10,color:T.green,marginTop:8,display:"flex",alignItems:"center",gap:5 }}>
-            <span style={{ width:6,height:6,borderRadius:"50%",background:T.green,display:"inline-block",animation:"pulse 2s infinite" }}/>
-            Live sync active
-          </div>
-        </div>
+      {/* ── Desktop Sidebar ──────────────────────────────── */}
+      <aside className="desktop-sidebar" style={{ width:220, flexShrink:0, background:"#fff", borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", marginTop:3, boxShadow:"2px 0 8px rgba(0,0,0,0.04)" }}>
+        <SidebarContents/>
       </aside>
 
       {/* ── Main ─────────────────────────────────── */}
@@ -7497,7 +7548,9 @@ export default function App() {
         <AlertBanner items={alertItems}/>
 
         {/* Header */}
-        <header style={{ background:"#fff",borderBottom:`1px solid ${T.border}`,padding:"12px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,0.04)" }}>
+        <header className="app-header" style={{ background:"#fff",borderBottom:`1px solid ${T.border}`,padding:"12px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,0.04)" }}>
+          {/* Hamburger — mobile only */}
+          <button onClick={()=>setSidebarOpen(true)} style={{ display:"none", background:"none", border:"none", cursor:"pointer", fontSize:22, color:T.primary, padding:"0 10px 0 0", flexShrink:0 }} className="hamburger-btn">☰</button>
           <div>
             <div style={{ fontFamily:"'Oxanium',sans-serif",fontSize:20,fontWeight:700,color:T.primaryDk }}>
               {TABS.find(t=>t.id===activeTab)?.label}
@@ -7513,7 +7566,7 @@ export default function App() {
         </header>
 
         {/* Content */}
-        <div style={{ flex:1,overflowY:"auto",overflowX:"auto",padding:24,WebkitOverflowScrolling:"touch",minWidth:0 }}>
+        <div className="main-scroll-area" style={{ flex:1,overflowY:"auto",overflowX:"auto",padding:24,WebkitOverflowScrolling:"touch",minWidth:0 }}>
 
           {/* Demo banner */}
           {org?.demo_expires_at&&(()=>{
@@ -7588,12 +7641,22 @@ export default function App() {
             setOrg(newOrg);
             setLoginOrgOverride(newOrg.id);
             setShowOrgSwitcher(false);
-            // Reload all data for the new org
             setTimeout(()=>loadAll(),100);
           }}
           onClose={()=>setShowOrgSwitcher(false)}
         />
       )}
+
+      {/* ── Mobile bottom nav ── */}
+      <nav className="mobile-nav">
+        {MOBILE_TABS.map(t=>(
+          <button key={t.id} className={`mobile-nav-item${activeTab===t.id?" active":""}`}
+            onClick={()=>{ if(t.id==="_menu") setSidebarOpen(true); else setTab(t.id); }}>
+            <span>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
