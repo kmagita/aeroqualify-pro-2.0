@@ -3331,13 +3331,19 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
     // Send approval email to the user
     const approvedU = [...pendingUsers,...allUsers].find(u=>u.id===userId);
     if(approvedU?.email){
+      // Fetch org details using the user's org_id
+      const { data: orgInfo } = await supabase
+        .from("organisations")
+        .select("name,slug")
+        .eq("id", approvedU.org_id)
+        .single();
       await sendNotification({
         type: "user_approved",
         record: {
           full_name: approvedU.full_name || approvedU.email.split("@")[0],
           email: approvedU.email,
-          org_name: org?.name || "",
-          org_id: org?.slug || "",
+          org_name: orgInfo?.name || "",
+          org_id: orgInfo?.slug || "",
           role: role.replace(/_/g," "),
           app_url: "https://aeroqualify.co.ke",
         },
