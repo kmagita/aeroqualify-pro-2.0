@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BREVO_API_KEY  = Deno.env.get("BREVO_API_KEY") || "";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const FROM_EMAIL     = "noreply@aeroqualify.co.ke";
@@ -451,21 +451,24 @@ const templates: Record<string, (r: Record<string, string>) => { subject: string
 };
 
 // ═══════════════════════════════════════════════════════════════
-// SEND EMAIL VIA BREVO
+// SEND EMAIL VIA RESEND
 // ═══════════════════════════════════════════════════════════════
 async function sendEmail(to: string, subject: string, html: string) {
-  if (!BREVO_API_KEY) { console.warn("No BREVO_API_KEY set"); return; }
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+  if (!RESEND_API_KEY) { console.warn("No RESEND_API_KEY set"); return; }
+  const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "api-key": BREVO_API_KEY },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${RESEND_API_KEY}`,
+    },
     body: JSON.stringify({
-      sender: { name: FROM_NAME, email: FROM_EMAIL },
-      to: [{ email: to }],
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      to: [to],
       subject,
-      htmlContent: html,
+      html,
     }),
   });
-  if (!res.ok) throw new Error(`Brevo error ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Resend error ${res.status}: ${await res.text()}`);
   return res.json();
 }
 
