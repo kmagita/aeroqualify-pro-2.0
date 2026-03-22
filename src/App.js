@@ -1,4 +1,3 @@
-// v2.1
 import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
 import { supabase, TABLES, logChange, sendNotification, SUPABASE_URL, SUPABASE_ANON } from "./supabase";
@@ -5997,12 +5996,13 @@ Planned: ${slot.planned_date||"Not set"}`}
           </div>
         </div>
       )}
- );
+    </div>
+  );
 };
 
 // ─── TABS ─────────────────────────────────────────────────────
 const TABS = [
-  {id:"dashboard",    label:"Dashboard",       icon:"📊",  group:"main"},
+  {id:"dashboard",    label:"Dashboard",       icon:"▦",  group:"main"},
   {id:"cars",         label:"CARs",            icon:"📋", group:"main"},
   {id:"documents",    label:"Documents",       icon:"📄", group:"main"},
   {id:"flightdocs",   label:"Company Documents",icon:"📂",group:"main"},
@@ -6189,33 +6189,20 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     if(error){ showToast("Error: "+error.message,"error"); setCreating(false); return; }
 
     // 2. Create user account + send welcome email with credentials
-    // Uses direct fetch with service role key so edge function can call auth.admin.createUser
     if(newOrg.contact_email){
-      try {
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${SUPABASE_ANON}`,
-            "x-supabase-service-role": "true",
-          },
-          body: JSON.stringify({
-            type: "create_org_user",
-            record: {
-              org_id:       orgRow.id,
-              org_name:     orgRow.name,
-              org_slug:     slug,
-              contact_name: newOrg.contact_name || newOrg.contact_email.split("@")[0],
-              contact_email:newOrg.contact_email,
-              is_demo:      newOrgDemo ? "true" : "false",
-              demo_days:    String(demoDays),
-            },
-            recipients: [newOrg.contact_email],
-          }),
-        });
-        const result = await resp.json();
-        if(!result.ok) console.warn("create_org_user response:", result);
-      } catch(e) { console.error("create_org_user failed:", e); }
+      await sendNotification({
+        type: "create_org_user",
+        record: {
+          org_id:       orgRow.id,
+          org_name:     orgRow.name,
+          org_slug:     slug,
+          contact_name: newOrg.contact_name || newOrg.contact_email.split("@")[0],
+          contact_email:newOrg.contact_email,
+          is_demo:      newOrgDemo ? "true" : "false",
+          demo_days:    String(demoDays),
+        },
+        recipients: [newOrg.contact_email],
+      });
     }
 
     showToast(newOrgDemo
@@ -6315,34 +6302,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     showToast(status==="active"?"Organisation activated":"Organisation suspended","success");
     onRefresh();
   };
-
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-
-  const deleteOrg = (org) => {
-    setDeleteConfirm({ org, nameInput:"", passInput:"" });
-  };
-
-  const executeDelete = async () => {
-    const { org, nameInput, passInput } = deleteConfirm;
-    if(nameInput !== org.name){ showToast("Organisation name did not match","error"); return; }
-    const { error: authErr } = await supabase.auth.signInWithPassword({
-      email: "kmagita.pegasus@gmail.com",
-      password: passInput,
-    });
-    if(authErr){ showToast("Incorrect password — deletion cancelled","error"); return; }
-    setDeleteConfirm(null);
-    const tables = ["cars","caps","capa_verifications","audits","audit_schedule","documents",
-      "flight_school_docs","contractors","risk_register","responsible_managers","change_log","profiles"];
-    for(const table of tables){
-      await supabase.from(table).delete().eq("org_id", org.id);
-    }
-    const { error } = await supabase.from("organisations").delete().eq("id", org.id);
-    if(error){ showToast("Error: "+error.message,"error"); return; }
-    showToast(`"${org.name}" permanently deleted`,"success");
-    onRefresh();
-  };
-
-
 
   const sendResetLink = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -6501,7 +6460,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                               :<button onClick={e=>{e.stopPropagation();updateOrgStatus(o.id,"active");}} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
                           )}
                           <button onClick={e=>{e.stopPropagation();seedDemoOrg(o.id);}} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
-                          <button onClick={e=>{e.stopPropagation();deleteOrg(o);}} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🗑 Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -6584,7 +6542,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                               :<button onClick={()=>updateOrgStatus(o.id,"active")} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
                           )}
                           <button onClick={()=>seedDemoOrg(o.id)} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
-                          <button onClick={()=>deleteOrg(o)} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🗑 Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -6771,60 +6728,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
         </div>
       )}
 
-      {/* ── Delete Confirmation Modal ── */}
-      {deleteConfirm&&(
-        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
-          <div style={{ background:"#fff",borderRadius:14,padding:32,width:500,boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-            <div style={{ background:"#ffebee",borderRadius:10,padding:"16px 20px",marginBottom:24,display:"flex",gap:14,alignItems:"flex-start" }}>
-              <span style={{ fontSize:28,flexShrink:0 }}>⚠️</span>
-              <div>
-                <div style={{ fontWeight:800,fontSize:15,color:"#c62828",marginBottom:4 }}>Permanently Delete Organisation</div>
-                <div style={{ fontSize:13,color:"#b71c1c",lineHeight:1.6 }}>
-                  This will permanently delete <strong>{deleteConfirm.org.name}</strong> and all associated data — CARs, CAPs, audits, documents, risks and user profiles. <strong>This cannot be undone.</strong>
-                </div>
-              </div>
-            </div>
-            <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,display:"block",marginBottom:6 }}>
-                Step 1 — Type the organisation name exactly
-              </label>
-              <input value={deleteConfirm.nameInput}
-                onChange={e=>setDeleteConfirm(p=>({...p,nameInput:e.target.value}))}
-                placeholder={deleteConfirm.org.name}
-                style={{ width:"100%",padding:"9px 12px",border:`1.5px solid ${deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.nameInput?"#2e7d32":"#dde3ea"}`,borderRadius:8,fontSize:13,boxSizing:"border-box" }}/>
-              {deleteConfirm.nameInput&&deleteConfirm.nameInput!==deleteConfirm.org.name&&(
-                <div style={{ fontSize:11,color:"#c62828",marginTop:4 }}>Name does not match</div>
-              )}
-              {deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.nameInput&&(
-                <div style={{ fontSize:11,color:"#2e7d32",marginTop:4 }}>✓ Name confirmed</div>
-              )}
-            </div>
-            <div style={{ marginBottom:24 }}>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,display:"block",marginBottom:6 }}>
-                Step 2 — Enter your super admin password
-              </label>
-              <input type="password" value={deleteConfirm.passInput}
-                onChange={e=>setDeleteConfirm(p=>({...p,passInput:e.target.value}))}
-                onKeyDown={e=>e.key==="Enter"&&deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.passInput&&executeDelete()}
-                placeholder="Your password"
-                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box" }}/>
-            </div>
-            <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
-              <button onClick={()=>setDeleteConfirm(null)}
-                style={{ background:"none",border:"1px solid #dde3ea",borderRadius:8,padding:"9px 20px",fontSize:13,fontWeight:600,color:"#5f7285",cursor:"pointer" }}>
-                Cancel
-              </button>
-              <button onClick={executeDelete}
-                disabled={deleteConfirm.nameInput!==deleteConfirm.org.name||!deleteConfirm.passInput}
-                style={{ background:deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.passInput?"#c62828":"#e0e0e0",
-                  color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,fontWeight:700,
-                  cursor:deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.passInput?"pointer":"not-allowed" }}>
-                🗑 Permanently Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
