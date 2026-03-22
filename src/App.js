@@ -1,3 +1,4 @@
+// v2.1
 import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
 import { supabase, TABLES, logChange, sendNotification, SUPABASE_URL, SUPABASE_ANON } from "./supabase";
