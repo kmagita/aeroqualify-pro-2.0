@@ -4513,9 +4513,9 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
                       </div>
                       <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                         {f.level==="Observation"
-                          ? <span style={{ fontSize:10,fontWeight:700,background:"#e3f2fd",color:"#0288d1",border:"1px solid #90caf9",borderRadius:5,padding:"2px 8px" }}>ℹ No CAR Required</span>
-                          : f.car_raised && f.car_id
-                            ? <span style={{ fontFamily:"monospace",fontSize:10,fontWeight:700,background:"#e8f5e9",color:"#2e7d32",border:"1px solid #a5d6a7",borderRadius:5,padding:"2px 7px" }}>✓ {f.car_id}</span>
+                          ? <span style={{ fontSize:10,fontWeight:700,background:"#e3f2fd",color:"#0288d1",border:"1px solid #90caf9",borderRadius:5,padding:"2px 8px" }}>ℹ N/A — Observation</span>
+                          : (f.car_raised || f.car_id)
+                            ? <span style={{ fontFamily:"monospace",fontSize:10,fontWeight:700,background:"#e8f5e9",color:"#2e7d32",border:"1px solid #a5d6a7",borderRadius:5,padding:"2px 7px" }}>✓ {f.car_id||"CAR Raised"}</span>
                             : <button onClick={()=>setCarModal({finding:f})} style={{ fontSize:11,fontWeight:700,color:"#01579b",background:"#e3f2fd",border:"1px solid #90caf9",borderRadius:6,padding:"3px 10px",cursor:"pointer" }}>+ Raise CAR</button>
                         }
                         <button onClick={()=>removeFinding(f.id)} style={{ background:"none",border:"none",color:lc.text,cursor:"pointer",fontSize:16,fontWeight:700 }}>✕</button>
@@ -4802,9 +4802,19 @@ const generateAuditReport = async (slot) => {
       doc.setFillColor(...levelC); doc.rect(M,y,col,7,"F");
       doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
       doc.text(`Finding #${fi+1}  —  ${f.level}${f.ref?" ("+f.ref+")":""}`, M+3, y+4.8);
-      if((f.car_raised||f.car_id) && f.level!=="Observation"){ doc.text("CAR RAISED ✓", W-M-3, y+4.8, {align:"right"}); }
+      const carRaisedForFinding = f.car_id || f.car_raised;
+      if(f.level==="Observation"){
+        doc.text("N/A — OBSERVATION", W-M-3, y+4.8, {align:"right"});
+      } else if(carRaisedForFinding){
+        doc.text(`CAR RAISED ✓${f.car_id?" — "+f.car_id:""}`, W-M-3, y+4.8, {align:"right"});
+      } else {
+        doc.setTextColor(255,200,200);
+        doc.text("NO CAR RAISED", W-M-3, y+4.8, {align:"right"});
+        doc.setTextColor(255,255,255);
+      }
       y += 9;
-      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["Car Raised", f.level==="Observation"?"N/A — Observation":(f.car_raised||f.car_id)?`Yes — ${f.car_id||""}`.trim():"No"]], M, y, col); }
+      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["CAR Raised", f.level==="Observation"?"N/A — Observation":(f.car_id||f.car_raised)?`Yes — ${f.car_id||""}`.trim():"No"]], M, y, col); }
+      if(!f.clause){ y = boxRow([["CAR Raised", f.level==="Observation"?"N/A — Observation":(f.car_id||f.car_raised)?`Yes — ${f.car_id||""}`.trim():"No"],["Level", f.level]], M, y, col); }
       y = needPage(y,20); y = box("Finding Description", f.description||"—", M, y, col);
       if(f.requirement){ y = needPage(y,20); y = box("Requirement / Standard Not Met", f.requirement, M, y, col); }
       if(f.evidence){ y = needPage(y,20); y = box("Objective Evidence", f.evidence, M, y, col); }
