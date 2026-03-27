@@ -4606,7 +4606,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
           <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments})}>🔔 Notification Form</Btn>
-          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG"})}>📄 Audit Report PDF</Btn>}
+          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG"}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
@@ -4644,7 +4644,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
 };
 
 // ─── Audit Report PDF Generator ───────────────────────────────
-const generateAuditReport = async (slot) => {
+const generateAuditReport = async (slot, allCars=[]) => {
   const { jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
@@ -4802,19 +4802,31 @@ const generateAuditReport = async (slot) => {
       doc.setFillColor(...levelC); doc.rect(M,y,col,7,"F");
       doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
       doc.text(`Finding #${fi+1}  —  ${f.level}${f.ref?" ("+f.ref+")":""}`, M+3, y+4.8);
-      const carRaisedForFinding = f.car_id || f.car_raised;
+      // Cross-reference live cars table: find CAR by stored car_id, or by audit_ref + description match
+      const linkedCar = (() => {
+        if(f.car_id){
+          return allCars.find(c => c.id === f.car_id || c.id.toLowerCase() === (f.car_id||"").toLowerCase());
+        }
+        // Fall back: find any CAR with matching audit_ref and similar description
+        const slotCars = allCars.filter(c => c.audit_ref === auditRefNum);
+        if(!slotCars.length) return null;
+        const desc40 = (f.description||"").toLowerCase().slice(0,40);
+        return slotCars.find(c => desc40 && (c.finding_description||"").toLowerCase().includes(desc40)) || null;
+      })();
+      const carRaisedForFinding = linkedCar || f.car_id || f.car_raised;
+      const carIdDisplay = linkedCar?.id || f.car_id || "";
       if(f.level==="Observation"){
         doc.text("N/A — OBSERVATION", W-M-3, y+4.8, {align:"right"});
       } else if(carRaisedForFinding){
-        doc.text(`CAR RAISED ✓${f.car_id?" — "+f.car_id:""}`, W-M-3, y+4.8, {align:"right"});
+        doc.text(`CAR RAISED ✓${carIdDisplay?" — "+carIdDisplay:""}`, W-M-3, y+4.8, {align:"right"});
       } else {
         doc.setTextColor(255,200,200);
         doc.text("NO CAR RAISED", W-M-3, y+4.8, {align:"right"});
         doc.setTextColor(255,255,255);
       }
       y += 9;
-      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["CAR Raised", f.level==="Observation"?"N/A — Observation":(f.car_id||f.car_raised)?`Yes — ${f.car_id||""}`.trim():"No"]], M, y, col); }
-      if(!f.clause){ y = boxRow([["CAR Raised", f.level==="Observation"?"N/A — Observation":(f.car_id||f.car_raised)?`Yes — ${f.car_id||""}`.trim():"No"],["Level", f.level]], M, y, col); }
+      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["CAR Raised", f.level==="Observation"?"N/A — Observation":carRaisedForFinding?`Yes — ${carIdDisplay}`.trim():"No"]], M, y, col); }
+      if(!f.clause){ y = boxRow([["CAR Raised", f.level==="Observation"?"N/A — Observation":carRaisedForFinding?`Yes — ${carIdDisplay}`.trim():"No"],["Level", f.level]], M, y, col); }
       y = needPage(y,20); y = box("Finding Description", f.description||"—", M, y, col);
       if(f.requirement){ y = needPage(y,20); y = box("Requirement / Standard Not Met", f.requirement, M, y, col); }
       if(f.evidence){ y = needPage(y,20); y = box("Objective Evidence", f.evidence, M, y, col); }
@@ -5983,7 +5995,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
                           {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
-                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG"})}>📄 PDF</Btn>}
+                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG"}, data.cars||[])}>📄 PDF</Btn>}
                         </div>
                       </td>
                     </tr>
