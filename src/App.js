@@ -4190,10 +4190,202 @@ const getAuditAreas = (org) => {
     return Array.isArray(parsed) && parsed.length > 0 ? parsed : AUDIT_AREAS;
   } catch { return AUDIT_AREAS; }
 };
+// ─── Signature Pad Modal ──────────────────────────────────────
+const SignaturePadModal = ({ role, existingDataUrl, onSave, onClose }) => {
+  const canvasRef = useRef(null);
+  const [drawing, setDrawing] = useState(false);
+  const [hasStrokes, setHasStrokes] = useState(!!existingDataUrl);
+  const lastPos = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if(existingDataUrl) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0);
+      img.src = existingDataUrl;
+    }
+  }, [existingDataUrl]);
+
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if(e.touches) {
+      return { x:(e.touches[0].clientX - rect.left)*scaleX, y:(e.touches[0].clientY - rect.top)*scaleY };
+    }
+    return { x:(e.clientX - rect.left)*scaleX, y:(e.clientY - rect.top)*scaleY };
+  };
+
+  const startDraw = (e) => {
+    e.preventDefault();
+    setDrawing(true);
+    lastPos.current = getPos(e, canvasRef.current);
+  };
+  const draw = (e) => {
+    e.preventDefault();
+    if(!drawing) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(lastPos.current.x, lastPos.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = "#1a2332";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    lastPos.current = pos;
+    setHasStrokes(true);
+  };
+  const stopDraw = (e) => { e.preventDefault(); setDrawing(false); };
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setHasStrokes(false);
+  };
+
+  const save = () => {
+    const dataUrl = canvasRef.current.toDataURL("image/png");
+    onSave(dataUrl);
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:500,boxShadow:"0 8px 50px rgba(0,0,0,0.3)",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:"linear-gradient(135deg,#01579b,#0277bd)",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div>
+            <div style={{ color:"rgba(255,255,255,0.7)",fontSize:10,textTransform:"uppercase",letterSpacing:1 }}>Digital Signature</div>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:15 }}>{role}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.7)",fontSize:20,cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ padding:20 }}>
+          <div style={{ fontSize:12,color:T.muted,marginBottom:10 }}>Draw your signature below using your mouse or finger:</div>
+          <canvas ref={canvasRef} width={460} height={140}
+            style={{ width:"100%",height:140,border:`2px solid ${T.border}`,borderRadius:8,cursor:"crosshair",touchAction:"none",background:"#fff" }}
+            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+          />
+          <div style={{ display:"flex",gap:8,justifyContent:"space-between",marginTop:12 }}>
+            <button onClick={clear} style={{ background:"#ffebee",color:"#c62828",border:"1px solid #ffcdd2",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>
+              🗑 Clear
+            </button>
+            <div style={{ display:"flex",gap:8 }}>
+              <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+              <Btn onClick={save} disabled={!hasStrokes}>✓ Save Signature</Btn>
+            </div>
+          </div>
+          <div style={{ marginTop:12,fontSize:11,color:T.muted,background:"#f5f8fc",borderRadius:6,padding:"8px 12px" }}>
+            By saving, you confirm this is your authorised signature for this audit report.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const AUDIT_TYPES = ["Internal","Supplier","External","Regulatory","Surveillance"];
 
 const FINDING_LEVELS = ["Level 1 - Critical NC","Level 2 - Major NC","Level 3 - Minor NC","Observation","Repeat Finding","Regulatory"];
+
+// ─── Signature Pad Modal ──────────────────────────────────────
+const SignaturePadModal = ({ role, existingDataUrl, onSave, onClose }) => {
+  const canvasRef = useRef(null);
+  const [drawing, setDrawing]   = useState(false);
+  const [hasStrokes, setHasStrokes] = useState(false);
+  const lastPos = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current; if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#1a2332"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    if(existingDataUrl){
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, 0, 0); setHasStrokes(true); };
+      img.src = existingDataUrl;
+    }
+  }, [existingDataUrl]);
+
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+  };
+
+  const startDraw = (e) => {
+    e.preventDefault();
+    const canvas = canvasRef.current; if(!canvas) return;
+    setDrawing(true); setHasStrokes(true);
+    lastPos.current = getPos(e, canvas);
+  };
+  const draw = (e) => {
+    e.preventDefault();
+    if(!drawing) return;
+    const canvas = canvasRef.current; if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(lastPos.current.x, lastPos.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastPos.current = pos;
+  };
+  const stopDraw = (e) => { e.preventDefault(); setDrawing(false); lastPos.current = null; };
+
+  const clear = () => {
+    const canvas = canvasRef.current; if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setHasStrokes(false);
+  };
+
+  const save = () => {
+    const canvas = canvasRef.current; if(!canvas) return;
+    onSave(canvas.toDataURL("image/png"));
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:480,boxShadow:"0 8px 50px rgba(0,0,0,0.25)",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:"linear-gradient(135deg,#1a2332,#2d3f55)",padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div>
+            <div style={{ color:"rgba(255,255,255,0.6)",fontSize:10,textTransform:"uppercase",letterSpacing:1 }}>Digital Signature</div>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:15 }}>✍ {role}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.7)",fontSize:22,cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ padding:20 }}>
+          <div style={{ fontSize:12,color:T.muted,marginBottom:10 }}>Draw your signature in the box below using your mouse or finger.</div>
+          <div style={{ border:`2px solid ${T.border}`,borderRadius:8,background:"#fafcff",overflow:"hidden",cursor:"crosshair",touchAction:"none" }}>
+            <canvas ref={canvasRef} width={440} height={160}
+              style={{ display:"block",width:"100%",height:160 }}
+              onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+              onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}/>
+          </div>
+          <div style={{ display:"flex",gap:8,justifyContent:"space-between",marginTop:12,alignItems:"center" }}>
+            <button onClick={clear} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>🗑 Clear</button>
+            <div style={{ display:"flex",gap:8 }}>
+              <Btn variant="ghost" size="sm" onClick={onClose}>Cancel</Btn>
+              <Btn size="sm" onClick={save} disabled={!hasStrokes}>✓ Save Signature</Btn>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profile, showToast, onRefresh, org }) => {
   const [tab, setTab] = useState("details");
@@ -4217,11 +4409,22 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
     prepared_by:      slot.prepared_by||"",
     approved_by:      slot.approved_by||"",
     finding_items:    slot.finding_items||"[]",
-    deferred_from:    slot.deferred_from||"",   // original planned date before deferral
-    deferred_reason:  slot.deferred_reason||"",  // reason for deferral
+    deferred_from:    slot.deferred_from||"",
+    deferred_reason:  slot.deferred_reason||"",
   });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const [showDefer, setShowDefer] = useState(false);
+
+  // Signatures — stored as { lead, qm, am } data URLs
+  const [signatures, setSignatures] = useState(()=>{
+    try { return JSON.parse(slot.signatures||"{}"); } catch { return {}; }
+  });
+  const [sigPadModal, setSigPadModal] = useState(null); // "lead" | "qm" | "am"
+  const saveSig = (key, dataUrl) => {
+    setSignatures(p=>({...p,[key]:dataUrl}));
+    setSigPadModal(null);
+  };
+  const clearSig = (key) => setSignatures(p=>({...p,[key]:null}));
 
   // Finding items management
   const [findingItems, setFindingItems] = useState(()=>{
@@ -4307,6 +4510,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
   const handleSave = () => {
     const items = JSON.stringify(findingItems);
     const atts  = JSON.stringify(attachments);
+    const sigs  = JSON.stringify(signatures);
     const level1 = findingItems.filter(f=>f.level.includes("Level 1")||f.level==="Regulatory").length;
     const level2 = findingItems.filter(f=>f.level.includes("Level 2")).length;
     const level3 = findingItems.filter(f=>f.level.includes("Level 3")).length;
@@ -4315,6 +4519,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
       ...slot,...form,
       finding_items: items,
       attachments: atts,
+      signatures: sigs,
       findings: level1+level2+level3,
       observations: obs,
     });
@@ -4340,7 +4545,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
 
         {/* Tabs */}
         <div style={{ display:"flex",borderBottom:"2px solid #eef2f7",background:"#fafbfc",flexShrink:0 }}>
-          {[["details","📋 Details"],["report","📄 Audit Report"],["findings","🔍 Findings ("+findingItems.length+")"],["attachments","📎 Attachments ("+attachments.length+")"]].map(([id,label])=>(
+          {[["details","📋 Details"],["report","📄 Audit Report"],["findings","🔍 Findings ("+findingItems.length+")"],["attachments","📎 Attachments ("+attachments.length+")"],["signatures","✍ Signatures"]].map(([id,label])=>(
             <button key={id} onClick={()=>setTab(id)} style={{ padding:"12px 20px",border:"none",borderBottom:tab===id?"3px solid #01579b":"3px solid transparent",cursor:"pointer",fontSize:13,fontWeight:tab===id?700:400,color:tab===id?"#01579b":"#5f7285",background:"transparent",marginBottom:-2 }}>{label}</button>
           ))}
         </div>
@@ -4616,15 +4821,137 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
           )}
         </div>
 
+          {/* ── SIGNATURES TAB ── */}
+          {tab==="signatures" && (()=>{
+            const qmManager  = managers.find(m=>m.role_title==="Quality Manager");
+            const amManager  = managers.find(m=>m.role_title==="Accountable Manager");
+            const qmName     = qmManager?.person_name||"";
+            const amName     = amManager?.person_name||"";
+            const leadIsQM   = form.lead_auditor && qmName &&
+              form.lead_auditor.toLowerCase().includes((qmName.split(" ")[0]||"").toLowerCase());
+
+            // Resolve profile signature for a given role by matching name to profiles in data
+            const getSigFromProfile = (roleName) => {
+              const allProfiles = data?.profiles||[];
+              // Find profile where full_name matches the manager's person_name
+              const mgr = managers.find(m=>m.role_title===roleName);
+              if(!mgr?.person_name) return null;
+              const prof = allProfiles.find(p=>
+                p.full_name && p.full_name.toLowerCase().includes((mgr.person_name.split(" ")[0]||"").toLowerCase())
+              );
+              return prof?.signature_url||null;
+            };
+
+            // Check if current user is the person for this role
+            const isCurrentUserRole = (roleName) => {
+              const mgr = managers.find(m=>m.role_title===roleName);
+              if(!mgr?.person_name) return false;
+              const myName = profile?.full_name||"";
+              return myName.toLowerCase().includes((mgr.person_name.split(" ")[0]||"").toLowerCase());
+            };
+
+            const SigBox = ({ roleTitle, label, displayName, isConflict }) => {
+              const sigUrl = getSigFromProfile(roleTitle);
+              const isMe   = isCurrentUserRole(roleTitle);
+              return (
+                <div style={{ border:`2px solid ${sigUrl?"#a5d6a7":"#dde3ea"}`,borderRadius:12,padding:18,
+                  background:sigUrl?"#f8fff9":"#fafbfc",marginBottom:14 }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontWeight:700,fontSize:13,color:"#1a2332" }}>{label}</div>
+                      {displayName&&<div style={{ fontSize:12,color:T.muted,marginTop:1 }}>{displayName}</div>}
+                    </div>
+                    {sigUrl
+                      ? <span style={{ background:"#e8f5e9",color:"#2e7d32",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700 }}>✓ Signature on file</span>
+                      : isMe
+                        ? <span style={{ background:"#fff3e0",color:"#e65100",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600 }}>⚠ Upload in My Profile</span>
+                        : <span style={{ background:"#f5f5f5",color:T.muted,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600 }}>Pending</span>
+                    }
+                  </div>
+                  {isConflict&&(
+                    <div style={{ background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#e65100",marginBottom:10 }}>
+                      ⚠ <strong>Independence note:</strong> The lead auditor and Quality Manager appear to be the same person.
+                      The PDF will note <em>"Signed as Lead Auditor"</em> in the QM signature block.
+                    </div>
+                  )}
+                  {sigUrl ? (
+                    <div style={{ border:"1px solid #c8e6c9",borderRadius:8,background:"#fff",padding:6 }}>
+                      <img src={sigUrl} alt="signature" style={{ maxHeight:70,maxWidth:"100%",display:"block",margin:"0 auto",objectFit:"contain" }}/>
+                    </div>
+                  ) : (
+                    <div style={{ border:"1.5px dashed #dde3ea",borderRadius:8,height:56,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:12,flexDirection:"column",gap:4 }}>
+                      <span>No signature on file</span>
+                      {isMe&&<span style={{ fontSize:11,color:"#e65100" }}>Go to My Profile → upload your signature PNG</span>}
+                      {!isMe&&displayName&&<span style={{ fontSize:11 }}>{displayName} must upload their signature in their own profile</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            };
+
+            const leadSig = (() => {
+              // For lead auditor, try to find a profile matching the lead_auditor name
+              const leadName = form.lead_auditor||form.prepared_by||"";
+              if(!leadName) return null;
+              const allProfiles = data?.profiles||[];
+              const prof = allProfiles.find(p=>
+                p.full_name && p.full_name.toLowerCase().includes((leadName.split(" ")[0]||"").toLowerCase())
+              );
+              return prof?.signature_url||null;
+            })();
+
+            return (
+              <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
+                <div style={{ padding:"10px 14px",background:"#e3f2fd",borderRadius:8,fontSize:12,color:"#01579b",borderLeft:"4px solid #01579b",marginBottom:18 }}>
+                  Signatures are pulled automatically from each person's profile. Each signatory must upload their signature PNG in <strong>My Profile → My Signature</strong>. Only the owner of each role can add their own signature.
+                </div>
+                {/* Lead Auditor */}
+                <div style={{ border:`2px solid ${leadSig?"#a5d6a7":"#dde3ea"}`,borderRadius:12,padding:18,background:leadSig?"#f8fff9":"#fafbfc",marginBottom:14 }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontWeight:700,fontSize:13,color:"#1a2332" }}>Lead Auditor</div>
+                      <div style={{ fontSize:12,color:T.muted,marginTop:1 }}>{form.lead_auditor||form.prepared_by||"—"}</div>
+                    </div>
+                    {leadSig
+                      ? <span style={{ background:"#e8f5e9",color:"#2e7d32",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700 }}>✓ Signature on file</span>
+                      : <span style={{ background:"#f5f5f5",color:T.muted,borderRadius:20,padding:"3px 10px",fontSize:11 }}>Pending</span>
+                    }
+                  </div>
+                  {leadSig
+                    ? <div style={{ border:"1px solid #c8e6c9",borderRadius:8,background:"#fff",padding:6 }}><img src={leadSig} alt="lead sig" style={{ maxHeight:70,maxWidth:"100%",display:"block",margin:"0 auto",objectFit:"contain" }}/></div>
+                    : <div style={{ border:"1.5px dashed #dde3ea",borderRadius:8,height:56,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:12 }}>Lead auditor must upload signature in their profile</div>
+                  }
+                </div>
+                <SigBox roleTitle="Quality Manager"    label="Quality Manager"    displayName={qmName||form.approved_by||"—"} isConflict={leadIsQM}/>
+                <SigBox roleTitle="Accountable Manager" label="Accountable Manager" displayName={amName||"—"}/>
+                {leadIsQM&&(
+                  <div style={{ background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#e65100",marginTop:4 }}>
+                    <strong>Audit independence advisory:</strong> The lead auditor ({form.lead_auditor}) appears to be the Quality Manager ({qmName}).
+                    Best practice requires an independent reviewer. Consider assigning an external or deputy auditor for this audit area.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
         {/* Footer */}
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
           <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments})}>🔔 Notification Form</Btn>
-          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG"}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
+          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),signatures:JSON.stringify(signatures),org_prefix:org?.car_prefix||"ORG",_managers:managers}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
     </div>
+    {sigPadModal&&(
+      <SignaturePadModal
+        role={sigPadModal==="lead"?"Lead Auditor":sigPadModal==="qm"?"Quality Manager":"Accountable Manager"}
+        existingDataUrl={signatures[sigPadModal]||null}
+        onSave={(dataUrl)=>saveSig(sigPadModal, dataUrl)}
+        onClose={()=>setSigPadModal(null)}
+      />
+    )}
     {carModal&&(()=>{
       const f = carModal.finding;
       const existing = (data?.cars||[]).filter(c=>c.audit_ref===auditRef).length;
@@ -4859,23 +5186,96 @@ const generateAuditReport = async (slot, allCars=[]) => {
   y += 4;
 
   // ── SIGNATURE BLOCK ───────────────────────────────────────────
-  y = needPage(y, 45);
-  doc.setDrawColor(221,227,234); doc.setLineWidth(0.3);
+  y = needPage(y, 52);
+
+  // Resolve signatures from org profiles passed in allCars context
+  // We re-fetch from Supabase here to get the freshest data
+  let profileSigs = {};
+  try {
+    const { data: sigProfiles } = await supabase
+      .from("profiles")
+      .select("full_name,role,signature_url")
+      .eq("status","approved")
+      .not("signature_url","is",null);
+    const findSig = (name) => {
+      if(!name) return null;
+      const firstName = (name.split(" ")[0]||"").toLowerCase();
+      const match = (sigProfiles||[]).find(p=>
+        p.full_name && p.full_name.toLowerCase().includes(firstName)
+      );
+      return match?.signature_url||null;
+    };
+    const qmMgr = slot._managers?.find?.(m=>m.role_title==="Quality Manager");
+    const amMgr = slot._managers?.find?.(m=>m.role_title==="Accountable Manager");
+    profileSigs = {
+      lead: findSig(slot.lead_auditor||slot.prepared_by),
+      qm:   findSig(qmMgr?.person_name||slot.approved_by),
+      am:   findSig(amMgr?.person_name),
+    };
+  } catch(e) { console.warn("Could not load profile signatures:", e); }
+
+  // Detect lead-auditor-is-QM conflict
+  const qmPersonName = slot._managers?.find?.(m=>m.role_title==="Quality Manager")?.person_name||slot.approved_by||"";
+  const amPersonName = slot._managers?.find?.(m=>m.role_title==="Accountable Manager")?.person_name||"";
+  const leadIsQM = slot.lead_auditor && qmPersonName &&
+    slot.lead_auditor.toLowerCase().includes((qmPersonName.split(" ")[0]||"").toLowerCase());
+
   const sigW3 = (col-8)/3;
-  [["Lead Auditor Signature", slot.lead_auditor||""], ["Quality Manager Signature", slot.approved_by||""], ["Accountable Manager Signature", ""]].forEach(([label, name], i) => {
+  const sigBoxH = 44; // taller box to fit signature image
+  const sigDefs = [
+    { label:"Lead Auditor", name:slot.lead_auditor||slot.prepared_by||"", sigUrl:profileSigs.lead },
+    { label:"Quality Manager", name:qmPersonName||"", sigUrl:leadIsQM?null:profileSigs.qm, conflict:leadIsQM },
+    { label:"Accountable Manager", name:amPersonName||"", sigUrl:profileSigs.am },
+  ];
+  sigDefs.forEach(({ label, name, sigUrl, conflict }, i) => {
     const bx = M + i*(sigW3+4);
-    doc.setFillColor(245,248,252); doc.rect(bx,y,sigW3,30,"F");
-    doc.setDrawColor(221,227,234); doc.rect(bx,y,sigW3,30,"S");
+    doc.setFillColor(sigUrl?232:245, sigUrl?245:248, sigUrl?233:252);
+    doc.rect(bx,y,sigW3,sigBoxH,"F");
+    doc.setDrawColor(sigUrl?165:221, sigUrl?214:227, sigUrl?167:234);
+    doc.setLineWidth(sigUrl?0.5:0.3);
+    doc.rect(bx,y,sigW3,sigBoxH,"S");
+    // Label
     doc.setFont("helvetica","bold"); doc.setFontSize(LABEL_SZ); doc.setTextColor(95,114,133);
     doc.text(label.toUpperCase(), bx+3, y+5);
-    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
-    if(name) doc.text(name, bx+3, y+13);
-    doc.setDrawColor(170,190,210); doc.line(bx+3, y+22, bx+sigW3-3, y+22);
-    doc.setFontSize(7); doc.setTextColor(140,160,180);
-    doc.text("Signature", bx+3, y+26);
-    doc.line(bx+3, y+29, bx+sigW3-3, y+29);
+    // Name
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(26,35,50);
+    if(name){ const nl=doc.splitTextToSize(name,sigW3-6); doc.text(nl[0], bx+3, y+12); }
+    // Signature image or blank line
+    if(sigUrl){
+      try {
+        doc.addImage(sigUrl, "PNG", bx+3, y+15, sigW3-6, 18, undefined, "FAST");
+        doc.setFont("helvetica","bold"); doc.setFontSize(6); doc.setTextColor(46,125,50);
+        doc.text("✓ Digitally signed", bx+3, y+41);
+      } catch(e) {
+        doc.setDrawColor(170,190,210); doc.line(bx+3, y+30, bx+sigW3-3, y+30);
+        doc.setFontSize(6.5); doc.setTextColor(140,160,180); doc.text("Signature", bx+3, y+34);
+      }
+    } else if(conflict){
+      doc.setFont("helvetica","italic"); doc.setFontSize(6.5); doc.setTextColor(230,81,0);
+      doc.text("Signed as Lead Auditor — see left", bx+3, y+24, {maxWidth:sigW3-6});
+      doc.setDrawColor(255,204,128); doc.setLineWidth(0.5); doc.rect(bx+1,y+1,sigW3-2,sigBoxH-2,"S");
+    } else {
+      doc.setDrawColor(170,190,210); doc.setLineWidth(0.3);
+      doc.line(bx+3, y+30, bx+sigW3-3, y+30);
+      doc.setFontSize(6.5); doc.setTextColor(140,160,180);
+      doc.text("Signature", bx+3, y+34);
+      doc.line(bx+3, y+40, bx+sigW3-3, y+40);
+      doc.text("Date", bx+3, y+43.5);
+    }
   });
-  y += 34;
+  y += sigBoxH + 6;
+
+  // Independence warning if lead = QM
+  if(leadIsQM){
+    y = needPage(y, 14);
+    doc.setFillColor(255,243,224); doc.rect(M,y,col,10,"F");
+    doc.setDrawColor(255,204,128); doc.setLineWidth(0.3); doc.rect(M,y,col,10,"S");
+    doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(230,81,0);
+    doc.text("AUDIT INDEPENDENCE NOTE:", M+3, y+4.5);
+    doc.setFont("helvetica","normal"); doc.setTextColor(26,35,50);
+    doc.text(`The lead auditor (${slot.lead_auditor}) is also the Quality Manager. An independent reviewer should be appointed for this audit area.`, M+55, y+4.5, {maxWidth:col-58});
+    y += 14;
+  }
 
   // ── Attached Evidence Files ──────────────────────────────────
   let auditEvidenceFiles = [];
@@ -6007,7 +6407,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
                           {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
-                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG"}, data.cars||[])}>📄 PDF</Btn>}
+                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",_managers:managers}, data.cars||[])}>📄 PDF</Btn>}
                         </div>
                       </td>
                     </tr>
@@ -7046,11 +7446,13 @@ const PendingOrgUserRow = ({ u, onApproveWithRole }) => {
 
 // ─── Profile Page ─────────────────────────────────────────────
 const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
-  const [name,    setName]    = useState(profile?.full_name||"");
-  const [pw,      setPw]      = useState("");
-  const [pw2,     setPw2]     = useState("");
-  const [saving,  setSaving]  = useState(false);
-  const [pwSaving,setPwSaving]= useState(false);
+  const [name,       setName]      = useState(profile?.full_name||"");
+  const [pw,         setPw]        = useState("");
+  const [pw2,        setPw2]       = useState("");
+  const [saving,     setSaving]    = useState(false);
+  const [pwSaving,   setPwSaving]  = useState(false);
+  const [sigSaving,  setSigSaving] = useState(false);
+  const [sigPreview, setSigPreview]= useState(profile?.signature_url||null);
 
   const saveName = async () => {
     setSaving(true);
@@ -7068,6 +7470,39 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
     if(error){ showToast("Error: "+error.message,"error"); setPwSaving(false); return; }
     showToast("Password updated successfully","success");
     setPw(""); setPw2(""); setPwSaving(false);
+  };
+
+  const uploadSignature = async (file) => {
+    if(!file) return;
+    if(!file.type.startsWith("image/")){ showToast("Please upload a PNG or JPG image","error"); return; }
+    if(file.size > 500*1024){ showToast("Signature image must be under 500 KB","error"); return; }
+    setSigSaving(true);
+    try {
+      // Read as base64 data URL and store directly on the profile
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataUrl = e.target.result;
+        const { error } = await supabase.from("profiles")
+          .update({ signature_url: dataUrl })
+          .eq("id", user.id);
+        if(error){ showToast("Error saving signature: "+error.message,"error"); setSigSaving(false); return; }
+        setSigPreview(dataUrl);
+        showToast("Signature saved to your profile","success");
+        onRefresh();
+        setSigSaving(false);
+      };
+      reader.readAsDataURL(file);
+    } catch(e){ showToast("Error: "+e.message,"error"); setSigSaving(false); }
+  };
+
+  const clearSignature = async () => {
+    if(!window.confirm("Remove your signature from your profile?")) return;
+    setSigSaving(true);
+    await supabase.from("profiles").update({ signature_url: null }).eq("id", user.id);
+    setSigPreview(null);
+    showToast("Signature removed","success");
+    onRefresh();
+    setSigSaving(false);
   };
 
   const cardStyle = { background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28,maxWidth:500 };
@@ -7095,6 +7530,48 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
         <Input label="Display Name" value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name"/>
         <Btn onClick={saveName} disabled={saving} style={{ opacity:saving?0.7:1 }}>{saving?"Saving…":"Save Name"}</Btn>
       </div>
+
+      {/* ── Signature Card ── */}
+      <div style={cardStyle}>
+        {sectionHead("My Signature","Upload a signature image (PNG recommended, max 500 KB). It will be automatically embedded in audit reports and CARs where you are listed.")}
+        <div style={{ background:"#f8fafc",border:"1px solid #dde3ea",borderRadius:10,padding:16,marginBottom:16 }}>
+          {sigPreview ? (
+            <div>
+              <div style={{ fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8 }}>Current Signature</div>
+              <div style={{ background:"#fff",border:"1px solid #dde3ea",borderRadius:8,padding:8,marginBottom:10 }}>
+                <img src={sigPreview} alt="Your signature" style={{ maxHeight:80,maxWidth:"100%",display:"block",margin:"0 auto",objectFit:"contain" }}/>
+              </div>
+              <div style={{ display:"flex",gap:8 }}>
+                <label style={{ cursor:"pointer",flex:1 }}>
+                  <input type="file" accept="image/png,image/jpeg,image/jpg" style={{ display:"none" }} onChange={e=>uploadSignature(e.target.files[0])}/>
+                  <div style={{ background:T.primary,color:"#fff",borderRadius:7,padding:"8px 0",fontSize:13,fontWeight:600,textAlign:"center",opacity:sigSaving?0.7:1 }}>
+                    {sigSaving?"Saving…":"↑ Replace Signature"}
+                  </div>
+                </label>
+                <button onClick={clearSignature} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:7,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer" }}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ textAlign:"center",padding:"16px 0 12px",color:T.muted }}>
+                <div style={{ fontSize:32,marginBottom:6 }}>✍</div>
+                <div style={{ fontSize:13,fontWeight:600,marginBottom:4 }}>No signature uploaded yet</div>
+                <div style={{ fontSize:12 }}>Upload a PNG of your handwritten signature on a white background</div>
+              </div>
+              <label style={{ cursor:"pointer",display:"block" }}>
+                <input type="file" accept="image/png,image/jpeg,image/jpg" style={{ display:"none" }} onChange={e=>uploadSignature(e.target.files[0])}/>
+                <div style={{ background:T.primary,color:"#fff",borderRadius:7,padding:"10px 0",fontSize:13,fontWeight:600,textAlign:"center",marginTop:10,opacity:sigSaving?0.7:1 }}>
+                  {sigSaving?"Saving…":"↑ Upload Signature Image"}
+                </div>
+              </label>
+            </div>
+          )}
+        </div>
+        <div style={{ background:"#e3f2fd",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#01579b",borderLeft:"3px solid #01579b" }}>
+          <strong>How it works:</strong> Your signature is linked to your role. When you are listed as Lead Auditor, Quality Manager or Accountable Manager on an audit report, your signature is automatically pulled from this profile and embedded in the PDF signature block.
+        </div>
+      </div>
+
       <div style={cardStyle}>
         {sectionHead("Change Password","Enter a new password for your account")}
         <form onSubmit={changePassword}>
@@ -7283,7 +7760,7 @@ export default function App() {
 
   const loadAll = useCallback(async()=>{
     if(!user)return;
-    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,prof,risks,auditSchedule]=await Promise.all([
+    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,prof,risks,auditSchedule,orgProfiles]=await Promise.all([
       supabase.from(TABLES.cars).select("*").order("created_at",{ascending:false}),
       supabase.from(TABLES.caps).select("*"),
       supabase.from(TABLES.verifications).select("*"),
@@ -7296,6 +7773,8 @@ export default function App() {
       supabase.from(TABLES.profiles).select("*").eq("id",user.id).single(),
       supabase.from(TABLES.risks).select("*").order("created_at",{ascending:false}),
       supabase.from("audit_schedule").select("*").order("year",{ascending:false}),
+      // Fetch all org profiles to resolve signatures — only select non-sensitive fields
+      supabase.from(TABLES.profiles).select("id,full_name,role,signature_url").eq("status","approved"),
     ]);
     // Auto-mark overdue CARs — any non-closed CAR past due date becomes Overdue
     const OVERDUE_ELIGIBLE = ["Open","In Progress"];
@@ -7318,6 +7797,7 @@ export default function App() {
         documents:docs.data||[],flightDocs:fdocs.data||[],audits:audits.data||[],
         contractors:contractors.data||[],changeLog:logs.data||[],
         risks:risks.data||[],
+        profiles:orgProfiles.data||[], // org-wide profiles for signature resolution
       });
       setManagers(mgrs.data||[]);
       setProfile(prof.data);
