@@ -1059,34 +1059,48 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         });
         if(error){ setErr("Signup error: "+error.message); setLoading(false); return; }
         if(!signUpData?.user){ setErr("Signup failed: no user returned. Please try again."); setLoading(false); return; }
-        // If org slug provided, store the intended org on the profile
+
+        // If org slug provided, link the user to the org and notify the org admin
         if(resolvedOrgId){
-          await supabase.from("profiles").update({ org_id: resolvedOrgId }).eq("id", signUpData.user.id);
-          // Notify the org admin that a new user is waiting for approval
-          const { data: adminProfiles } = await supabase
-            .from("profiles")
-            .select("email,full_name")
-            .eq("org_id", resolvedOrgId)
-            .eq("role", "admin")
-            .eq("status", "approved");
-          const { data: orgInfo } = await supabase
-            .from("organisations")
-            .select("name")
-            .eq("id", resolvedOrgId)
-            .single();
-          const adminEmails = (adminProfiles||[]).map(a=>a.email).filter(Boolean);
-          if(adminEmails.length > 0){
-            await sendNotification({
-              type: "user_signup_request",
-              record: {
-                full_name: fullName || email.split("@")[0],
-                email: email,
-                org_name: orgInfo?.name || "",
-                registered_at: new Date().toLocaleString("en-GB", {timeZone:"Africa/Nairobi"}),
-              },
-              recipients: adminEmails,
-            });
+          // Poll for the profile row — the DB trigger creating it is async and may lag
+          let profileExists = false;
+          for(let attempt = 0; attempt < 20; attempt++){
+            const { data: profCheck } = await supabase.from("profiles").select("id").eq("id", signUpData.user.id).single();
+            if(profCheck){ profileExists = true; break; }
+            await new Promise(r => setTimeout(r, 500));
           }
+          if(profileExists){
+            await supabase.from("profiles").update({
+              org_id: resolvedOrgId,
+              full_name: fullName || email.split("@")[0],
+            }).eq("id", signUpData.user.id);
+          }
+
+          // Fetch org info and org admins
+          const [{ data: orgInfo }, { data: adminProfiles }] = await Promise.all([
+            supabase.from("organisations").select("name,slug").eq("id", resolvedOrgId).single(),
+            supabase.from("profiles").select("email,full_name")
+              .eq("org_id", resolvedOrgId)
+              .eq("role", "admin")
+              .eq("status", "approved"),
+          ]);
+
+          const adminEmails = (adminProfiles||[]).map(a=>a.email).filter(Boolean);
+          // Always notify — org admins if found, otherwise fall through to super admin recipients
+          // (edge function handles fallback to super admin if recipients list is empty)
+          await sendNotification({
+            type: "user_signup_request",
+            record: {
+              full_name: fullName || email.split("@")[0],
+              email: email,
+              org_name: orgInfo?.name || "",
+              org_id: orgInfo?.slug || "",
+              registered_at: new Date().toLocaleString("en-GB", {timeZone:"Africa/Nairobi"}),
+            },
+            recipients: adminEmails.length > 0
+              ? adminEmails
+              : ["kmagita.pegasus@gmail.com"], // super admin fallback only if org has no admin yet
+          });
         }
         await supabase.auth.signOut();
         setMode("login");
