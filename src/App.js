@@ -1105,7 +1105,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         if(profErr || !prof){ setPopup("noProfile"); setLoading(false); await supabase.auth.signOut(); return; }
         if(prof.status !== "approved"){ setPopup("pending"); setLoading(false); await supabase.auth.signOut(); return; }
 
-        // Super admin with no org slug → platform portal
+        // Super admin with no org slug → platform portal (no org access)
         if(prof.is_super_admin && !orgSlug.trim()){
           onLogin(data.user, null, true); // null orgId, isSuperAdminMode=true
           setLoading(false);
@@ -1119,7 +1119,6 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           if(!orgData){ const r3 = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim().toLowerCase()).single(); orgData=r3.data; }
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
           if(orgData.status !== "active"){
-            // Check if it's a demo expiry
             if(orgData.demo_expires_at && new Date(orgData.demo_expires_at) < new Date()){
               setErr("Your demo account has expired. Please contact AeroQualify to activate a full account.");
             } else {
@@ -1132,19 +1131,27 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
             setErr("Your demo account has expired. Please contact AeroQualify to activate a full account.");
             await supabase.auth.signOut(); setLoading(false); return;
           }
-          // Verify user belongs to this org
-          if(prof.org_id !== orgData.id){
-            // Check user_organisations junction table for multi-org members
+          // Verify user is an approved member of this org — super admins are NOT exempt.
+          // They must be accepted by the org admin just like any regular user.
+          const isPrimaryMember = prof.org_id === orgData.id && prof.status === "approved";
+          let isJunctionMember = false;
+          if(!isPrimaryMember){
             const { data: membership } = await supabase.from("user_organisations")
               .select("status,role").eq("user_id", data.user.id).eq("org_id", orgData.id).single();
-            if(!membership){ setErr("You do not have access to this organisation. Contact your administrator."); await supabase.auth.signOut(); setLoading(false); return; }
-            if(membership.status !== "approved"){ setErr("Your access to this organisation is pending approval."); await supabase.auth.signOut(); setLoading(false); return; }
+            if(membership && membership.status === "approved") isJunctionMember = true;
+            else if(membership && membership.status !== "approved"){
+              setErr("Your access to this organisation is pending approval."); await supabase.auth.signOut(); setLoading(false); return;
+            } else {
+              // Not a member at all — super admin or not, access denied
+              setErr("You are not a member of this organisation. Ask the organisation admin to add your account first."); await supabase.auth.signOut(); setLoading(false); return;
+            }
           }
           onLogin(data.user, orgData.id, false);
           setLoading(false);
           return;
         }
 
+        // No org slug provided and not super admin → load with profile's default org
         onLogin(data.user, null, false);
       }
     } catch(ex){ setErr(ex.message); }
@@ -7408,11 +7415,24 @@ export default function App() {
                 if(!slug) return;
                 const { data: orgData } = await supabase.from("organisations").select("*").eq("slug", slug.trim().toUpperCase()).single();
                 if(!orgData){ alert("Organisation not found. Check the ID and try again."); return; }
+                // Super admin must be an approved member of the org — no bypass
+                const { data: sessionData } = await supabase.auth.getSession();
+                const userId = sessionData?.session?.user?.id;
+                const { data: prof } = await supabase.from("profiles").select("org_id,status").eq("id", userId).single();
+                const isPrimary = prof?.org_id === orgData.id && prof?.status === "approved";
+                if(!isPrimary){
+                  const { data: junction } = await supabase.from("user_organisations")
+                    .select("status").eq("user_id", userId).eq("org_id", orgData.id).single();
+                  if(!junction || junction.status !== "approved"){
+                    alert("You are not an approved member of this organisation. The org admin must add and approve your account first.");
+                    return;
+                  }
+                }
                 setLoginOrgOverride(orgData.id);
                 setOrg(orgData);
               }}
               style={{ background:"#1a3a5c", border:"1px solid #2a5a8c", borderRadius:7, padding:"6px 14px", color:"#90b4d4", fontSize:12, cursor:"pointer" }}
-              title="Enter an org ID to view as org user">
+              title="Enter an org ID to view as org user (must be an approved member)">
               🏢 Enter Org
             </button>
             <button
@@ -7461,16 +7481,6 @@ export default function App() {
       </div>
       <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto" }}>
         <div className="sidebar-section-label" style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Main</div>
-        {isSuperAdmin&&(
-          <div>
-            <div className="sidebar-section-label" style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Super Admin</div>
-            <button className={`nav-item${activeTab==="superadmin"?" active":""}`} onClick={()=>{ setTab("superadmin"); onNav&&onNav(); }}
-              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:activeTab==="superadmin"?T.red:T.muted,fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:4,transition:"all 0.15s" }}>
-              <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
-              <span className="sidebar-label">Organisations</span>
-            </button>
-          </div>
-        )}
         {TABS.filter(t=>t.group==="main").map(t=>{
           const cnt=counts[t.id]; const active=activeTab===t.id;
           return (
@@ -7493,6 +7503,17 @@ export default function App() {
             </button>
           );
         })}
+        {/* Super admin: platform portal link — only shown when viewing an org */}
+        {isSuperAdmin&&org&&(
+          <>
+            <div className="sidebar-section-label" style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"14px 8px 4px", marginBottom:2 }}>Platform</div>
+            <button onClick={()=>{ setLoginOrgOverride(null); setOrg(null); setTab("superadmin"); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:"#c62828",fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s",cursor:"pointer" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
+              <span className="sidebar-label">Platform Portal</span>
+            </button>
+          </>
+        )}
       </nav>
       <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}` }}>
         <div className="sidebar-user-info" style={{ display:"flex",alignItems:"center",gap:9,marginBottom:10 }}>
