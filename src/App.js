@@ -1478,8 +1478,16 @@ const getAuditRef = (slot, prefix="PGF") => {
 };
 
 const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, fromAudit=false }) => {
-  const [selectedAuditId, setSelectedAuditId] = useState(car?.audit_ref||"");
-  const auditRef = selectedAuditId || car?.audit_ref || "";
+  // When editing an existing CAR, find the audit slot whose computed ref matches car.audit_ref
+  const initialAuditId = (() => {
+    if(!car?.audit_ref) return "";
+    const match = (auditSchedule||[]).find(s => getAuditRef(s, orgPrefix) === car.audit_ref);
+    return match?.id || "";
+  })();
+  const [selectedAuditId, setSelectedAuditId] = useState(initialAuditId);
+  const auditRef = selectedAuditId
+    ? getAuditRef((auditSchedule||[]).find(s=>s.id===selectedAuditId)||{}, orgPrefix)
+    : car?.audit_ref || "";
 
   // Count existing CARs linked to this audit ref to get next CAPA number
   const existingCount = (allCars||[]).filter(c=>c.audit_ref===auditRef && (!car || c.id!==car.id)).length;
