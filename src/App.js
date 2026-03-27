@@ -4816,17 +4816,15 @@ const generateAuditReport = async (slot, allCars=[]) => {
       const carRaisedForFinding = linkedCar || f.car_id || f.car_raised;
       const carIdDisplay = linkedCar?.id || f.car_id || "";
       if(f.level==="Observation"){
-        doc.text("N/A — OBSERVATION", W-M-3, y+4.8, {align:"right"});
+        // no right-side text
       } else if(carRaisedForFinding){
-        doc.text(`CAR RAISED ✓${carIdDisplay?" — "+carIdDisplay:""}`, W-M-3, y+4.8, {align:"right"});
+        // no right-side text
       } else {
-        doc.setTextColor(255,200,200);
-        doc.text("NO CAR RAISED", W-M-3, y+4.8, {align:"right"});
-        doc.setTextColor(255,255,255);
+        // no right-side text
       }
       y += 9;
-      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["CAR Raised", f.level==="Observation"?"N/A — Observation":carRaisedForFinding?`Yes — ${carIdDisplay}`.trim():"No"]], M, y, col); }
-      if(!f.clause){ y = boxRow([["CAR Raised", f.level==="Observation"?"N/A — Observation":carRaisedForFinding?`Yes — ${carIdDisplay}`.trim():"No"],["Level", f.level]], M, y, col); }
+      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["CAR Raised", f.level==="Observation"?"N/A":carRaisedForFinding?"Yes":"No"]], M, y, col); }
+      if(!f.clause){ y = boxRow([["CAR Raised", f.level==="Observation"?"N/A":carRaisedForFinding?"Yes":"No"],["Level", f.level]], M, y, col); }
       y = needPage(y,20); y = box("Finding Description", f.description||"—", M, y, col);
       if(f.requirement){ y = needPage(y,20); y = box("Requirement / Standard Not Met", f.requirement, M, y, col); }
       if(f.evidence){ y = needPage(y,20); y = box("Objective Evidence", f.evidence, M, y, col); }
