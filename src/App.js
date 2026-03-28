@@ -4191,107 +4191,6 @@ const getAuditAreas = (org) => {
   } catch { return AUDIT_AREAS; }
 };
 // ─── Signature Pad Modal ──────────────────────────────────────
-const SignaturePadModal = ({ role, existingDataUrl, onSave, onClose }) => {
-  const canvasRef = useRef(null);
-  const [drawing, setDrawing] = useState(false);
-  const [hasStrokes, setHasStrokes] = useState(!!existingDataUrl);
-  const lastPos = useRef(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if(!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if(existingDataUrl) {
-      const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0);
-      img.src = existingDataUrl;
-    }
-  }, [existingDataUrl]);
-
-  const getPos = (e, canvas) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    if(e.touches) {
-      return { x:(e.touches[0].clientX - rect.left)*scaleX, y:(e.touches[0].clientY - rect.top)*scaleY };
-    }
-    return { x:(e.clientX - rect.left)*scaleX, y:(e.clientY - rect.top)*scaleY };
-  };
-
-  const startDraw = (e) => {
-    e.preventDefault();
-    setDrawing(true);
-    lastPos.current = getPos(e, canvasRef.current);
-  };
-  const draw = (e) => {
-    e.preventDefault();
-    if(!drawing) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const pos = getPos(e, canvas);
-    ctx.beginPath();
-    ctx.moveTo(lastPos.current.x, lastPos.current.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = "#1a2332";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
-    lastPos.current = pos;
-    setHasStrokes(true);
-  };
-  const stopDraw = (e) => { e.preventDefault(); setDrawing(false); };
-
-  const clear = () => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    setHasStrokes(false);
-  };
-
-  const save = () => {
-    const dataUrl = canvasRef.current.toDataURL("image/png");
-    onSave(dataUrl);
-  };
-
-  return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
-      <div style={{ background:"#fff",borderRadius:14,width:500,boxShadow:"0 8px 50px rgba(0,0,0,0.3)",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ background:"linear-gradient(135deg,#01579b,#0277bd)",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-          <div>
-            <div style={{ color:"rgba(255,255,255,0.7)",fontSize:10,textTransform:"uppercase",letterSpacing:1 }}>Digital Signature</div>
-            <div style={{ color:"#fff",fontWeight:700,fontSize:15 }}>{role}</div>
-          </div>
-          <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.7)",fontSize:20,cursor:"pointer" }}>✕</button>
-        </div>
-        <div style={{ padding:20 }}>
-          <div style={{ fontSize:12,color:T.muted,marginBottom:10 }}>Draw your signature below using your mouse or finger:</div>
-          <canvas ref={canvasRef} width={460} height={140}
-            style={{ width:"100%",height:140,border:`2px solid ${T.border}`,borderRadius:8,cursor:"crosshair",touchAction:"none",background:"#fff" }}
-            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-          />
-          <div style={{ display:"flex",gap:8,justifyContent:"space-between",marginTop:12 }}>
-            <button onClick={clear} style={{ background:"#ffebee",color:"#c62828",border:"1px solid #ffcdd2",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>
-              🗑 Clear
-            </button>
-            <div style={{ display:"flex",gap:8 }}>
-              <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-              <Btn onClick={save} disabled={!hasStrokes}>✓ Save Signature</Btn>
-            </div>
-          </div>
-          <div style={{ marginTop:12,fontSize:11,color:T.muted,background:"#f5f8fc",borderRadius:6,padding:"8px 12px" }}>
-            By saving, you confirm this is your authorised signature for this audit report.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const AUDIT_TYPES = ["Internal","Supplier","External","Regulatory","Surveillance"];
 
@@ -4823,111 +4722,97 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
 
           {/* ── SIGNATURES TAB ── */}
           {tab==="signatures" && (()=>{
-            const qmManager  = managers.find(m=>m.role_title==="Quality Manager");
-            const amManager  = managers.find(m=>m.role_title==="Accountable Manager");
-            const qmName     = qmManager?.person_name||"";
-            const amName     = amManager?.person_name||"";
-            const leadIsQM   = form.lead_auditor && qmName &&
-              form.lead_auditor.toLowerCase().includes((qmName.split(" ")[0]||"").toLowerCase());
+            const qmName  = managers.find(m=>m.role_title==="Quality Manager")?.person_name||"";
+            const amName  = managers.find(m=>m.role_title==="Accountable Manager")?.person_name||"";
+            const leadName = form.lead_auditor||form.prepared_by||"";
+            const leadIsQM = leadName && qmName &&
+              leadName.toLowerCase().includes((qmName.split(" ")[0]||"").toLowerCase());
 
-            // Resolve profile signature for a given role by matching name to profiles in data
-            const getSigFromProfile = (roleName) => {
-              const allProfiles = data?.profiles||[];
-              // Find profile where full_name matches the manager's person_name
-              const mgr = managers.find(m=>m.role_title===roleName);
-              if(!mgr?.person_name) return null;
-              const prof = allProfiles.find(p=>
-                p.full_name && p.full_name.toLowerCase().includes((mgr.person_name.split(" ")[0]||"").toLowerCase())
-              );
-              return prof?.signature_url||null;
-            };
+            // Determine which slot key (lead/qm/am) the current logged-in user maps to
+            const myName = profile?.full_name||"";
+            const myFirstName = (myName.split(" ")[0]||"").toLowerCase();
+            const iAmLead = leadName && myFirstName && leadName.toLowerCase().includes(myFirstName);
+            const iAmQM   = qmName  && myFirstName && qmName.toLowerCase().includes(myFirstName);
+            const iAmAM   = amName  && myFirstName && amName.toLowerCase().includes(myFirstName);
+            // Also check system role as fallback
+            const myRole  = profile?.role||"";
+            const iAmQMByRole = myRole==="quality_manager" || myRole==="admin";
+            const iAmAMByRole = myRole==="admin";
 
-            // Check if current user is the person for this role
-            const isCurrentUserRole = (roleName) => {
-              const mgr = managers.find(m=>m.role_title===roleName);
-              if(!mgr?.person_name) return false;
-              const myName = profile?.full_name||"";
-              return myName.toLowerCase().includes((mgr.person_name.split(" ")[0]||"").toLowerCase());
-            };
+            const mySigUrl = profile?.signature_url||null;
 
-            const SigBox = ({ roleTitle, label, displayName, isConflict }) => {
-              const sigUrl = getSigFromProfile(roleTitle);
-              const isMe   = isCurrentUserRole(roleTitle);
+            // SigBox: shows the signature slot, lets current user append if it's their slot
+            const SigBox = ({ sigKey, label, displayName, isConflict, canSign }) => {
+              const existingSig = signatures[sigKey]||null;
+              const signed = !!existingSig;
               return (
-                <div style={{ border:`2px solid ${sigUrl?"#a5d6a7":"#dde3ea"}`,borderRadius:12,padding:18,
-                  background:sigUrl?"#f8fff9":"#fafbfc",marginBottom:14 }}>
-                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
+                <div style={{ border:`2px solid ${signed?"#a5d6a7":"#dde3ea"}`,borderRadius:12,padding:18,
+                  background:signed?"#f8fff9":"#fafbfc",marginBottom:14 }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,gap:10,flexWrap:"wrap" }}>
                     <div>
                       <div style={{ fontWeight:700,fontSize:13,color:"#1a2332" }}>{label}</div>
                       {displayName&&<div style={{ fontSize:12,color:T.muted,marginTop:1 }}>{displayName}</div>}
                     </div>
-                    {sigUrl
-                      ? <span style={{ background:"#e8f5e9",color:"#2e7d32",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700 }}>✓ Signature on file</span>
-                      : isMe
-                        ? <span style={{ background:"#fff3e0",color:"#e65100",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600 }}>⚠ Upload in My Profile</span>
-                        : <span style={{ background:"#f5f5f5",color:T.muted,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600 }}>Pending</span>
-                    }
+                    <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+                      {signed&&(
+                        <span style={{ background:"#e8f5e9",color:"#2e7d32",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700 }}>✓ Signed</span>
+                      )}
+                      {canSign&&mySigUrl&&!signed&&(
+                        <button onClick={()=>setSigPadModal(sigKey)}
+                          style={{ background:T.primary,color:"#fff",border:"none",borderRadius:7,padding:"5px 14px",fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                          ✍ Append My Signature
+                        </button>
+                      )}
+                      {canSign&&!mySigUrl&&!signed&&(
+                        <span style={{ background:"#fff3e0",color:"#e65100",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600 }}>
+                          Upload signature in My Profile first
+                        </span>
+                      )}
+                      {canSign&&signed&&(
+                        <button onClick={()=>clearSig(sigKey)}
+                          style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                          Withdraw
+                        </button>
+                      )}
+                      {!canSign&&!signed&&(
+                        <span style={{ background:"#f5f5f5",color:T.muted,borderRadius:20,padding:"3px 10px",fontSize:11 }}>Awaiting signatory</span>
+                      )}
+                    </div>
                   </div>
                   {isConflict&&(
                     <div style={{ background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#e65100",marginBottom:10 }}>
-                      ⚠ <strong>Independence note:</strong> The lead auditor and Quality Manager appear to be the same person.
-                      The PDF will note <em>"Signed as Lead Auditor"</em> in the QM signature block.
+                      ⚠ <strong>Independence note:</strong> Lead auditor and Quality Manager appear to be the same person. The PDF will note this.
                     </div>
                   )}
-                  {sigUrl ? (
+                  {signed ? (
                     <div style={{ border:"1px solid #c8e6c9",borderRadius:8,background:"#fff",padding:6 }}>
-                      <img src={sigUrl} alt="signature" style={{ maxHeight:70,maxWidth:"100%",display:"block",margin:"0 auto",objectFit:"contain" }}/>
+                      <img src={existingSig} alt="signature" style={{ maxHeight:70,maxWidth:"100%",display:"block",margin:"0 auto",objectFit:"contain" }}/>
+                      <div style={{ fontSize:10,color:T.muted,textAlign:"center",marginTop:4 }}>
+                        Signed · {new Date().toLocaleDateString("en-GB")}
+                      </div>
                     </div>
                   ) : (
-                    <div style={{ border:"1.5px dashed #dde3ea",borderRadius:8,height:56,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:12,flexDirection:"column",gap:4 }}>
-                      <span>No signature on file</span>
-                      {isMe&&<span style={{ fontSize:11,color:"#e65100" }}>Go to My Profile → upload your signature PNG</span>}
-                      {!isMe&&displayName&&<span style={{ fontSize:11 }}>{displayName} must upload their signature in their own profile</span>}
+                    <div style={{ border:"1.5px dashed #dde3ea",borderRadius:8,height:52,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:12 }}>
+                      {canSign ? "Click 'Append My Signature' above to sign" : `${displayName||"Signatory"} must append their own signature`}
                     </div>
                   )}
                 </div>
               );
             };
 
-            const leadSig = (() => {
-              // For lead auditor, try to find a profile matching the lead_auditor name
-              const leadName = form.lead_auditor||form.prepared_by||"";
-              if(!leadName) return null;
-              const allProfiles = data?.profiles||[];
-              const prof = allProfiles.find(p=>
-                p.full_name && p.full_name.toLowerCase().includes((leadName.split(" ")[0]||"").toLowerCase())
-              );
-              return prof?.signature_url||null;
-            })();
-
             return (
               <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
-                <div style={{ padding:"10px 14px",background:"#e3f2fd",borderRadius:8,fontSize:12,color:"#01579b",borderLeft:"4px solid #01579b",marginBottom:18 }}>
-                  Signatures are pulled automatically from each person's profile. Each signatory must upload their signature PNG in <strong>My Profile → My Signature</strong>. Only the owner of each role can add their own signature.
+                <div style={{ padding:"10px 14px",background:"#e3f2fd",borderRadius:8,fontSize:12,color:"#01579b",borderLeft:"4px solid #01579b",marginBottom:18,lineHeight:1.6 }}>
+                  <strong>Manual sign-off required.</strong> Each signatory must append their own signature — signatures cannot be added on behalf of others.
+                  Your signature image must first be uploaded in <strong>My Profile → My Signature</strong>.
                 </div>
-                {/* Lead Auditor */}
-                <div style={{ border:`2px solid ${leadSig?"#a5d6a7":"#dde3ea"}`,borderRadius:12,padding:18,background:leadSig?"#f8fff9":"#fafbfc",marginBottom:14 }}>
-                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10 }}>
-                    <div>
-                      <div style={{ fontWeight:700,fontSize:13,color:"#1a2332" }}>Lead Auditor</div>
-                      <div style={{ fontSize:12,color:T.muted,marginTop:1 }}>{form.lead_auditor||form.prepared_by||"—"}</div>
-                    </div>
-                    {leadSig
-                      ? <span style={{ background:"#e8f5e9",color:"#2e7d32",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700 }}>✓ Signature on file</span>
-                      : <span style={{ background:"#f5f5f5",color:T.muted,borderRadius:20,padding:"3px 10px",fontSize:11 }}>Pending</span>
-                    }
-                  </div>
-                  {leadSig
-                    ? <div style={{ border:"1px solid #c8e6c9",borderRadius:8,background:"#fff",padding:6 }}><img src={leadSig} alt="lead sig" style={{ maxHeight:70,maxWidth:"100%",display:"block",margin:"0 auto",objectFit:"contain" }}/></div>
-                    : <div style={{ border:"1.5px dashed #dde3ea",borderRadius:8,height:56,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:12 }}>Lead auditor must upload signature in their profile</div>
-                  }
-                </div>
-                <SigBox roleTitle="Quality Manager"    label="Quality Manager"    displayName={qmName||form.approved_by||"—"} isConflict={leadIsQM}/>
-                <SigBox roleTitle="Accountable Manager" label="Accountable Manager" displayName={amName||"—"}/>
+                <SigBox sigKey="lead" label="Lead Auditor"       displayName={leadName||"—"} canSign={iAmLead}/>
+                <SigBox sigKey="qm"   label="Quality Manager"    displayName={qmName||"—"}   canSign={iAmQM||iAmQMByRole} isConflict={leadIsQM}/>
+                <SigBox sigKey="am"   label="Accountable Manager" displayName={amName||"—"}  canSign={iAmAM||iAmAMByRole}/>
                 {leadIsQM&&(
-                  <div style={{ background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#e65100",marginTop:4 }}>
-                    <strong>Audit independence advisory:</strong> The lead auditor ({form.lead_auditor}) appears to be the Quality Manager ({qmName}).
-                    Best practice requires an independent reviewer. Consider assigning an external or deputy auditor for this audit area.
+                  <div style={{ background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#e65100" }}>
+                    <strong>Audit independence advisory:</strong> {leadName} is also the Quality Manager.
+                    Best practice requires an independent reviewer for this audit area.
                   </div>
                 )}
               </div>
@@ -4947,7 +4832,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
     {sigPadModal&&(
       <SignaturePadModal
         role={sigPadModal==="lead"?"Lead Auditor":sigPadModal==="qm"?"Quality Manager":"Accountable Manager"}
-        existingDataUrl={signatures[sigPadModal]||null}
+        existingDataUrl={profile?.signature_url||null}
         onSave={(dataUrl)=>saveSig(sigPadModal, dataUrl)}
         onClose={()=>setSigPadModal(null)}
       />
@@ -5188,44 +5073,21 @@ const generateAuditReport = async (slot, allCars=[]) => {
   // ── SIGNATURE BLOCK ───────────────────────────────────────────
   y = needPage(y, 52);
 
-  // Resolve signatures from org profiles passed in allCars context
-  // We re-fetch from Supabase here to get the freshest data
-  let profileSigs = {};
-  try {
-    const { data: sigProfiles } = await supabase
-      .from("profiles")
-      .select("full_name,role,signature_url")
-      .eq("status","approved")
-      .not("signature_url","is",null);
-    const findSig = (name) => {
-      if(!name) return null;
-      const firstName = (name.split(" ")[0]||"").toLowerCase();
-      const match = (sigProfiles||[]).find(p=>
-        p.full_name && p.full_name.toLowerCase().includes(firstName)
-      );
-      return match?.signature_url||null;
-    };
-    const qmMgr = slot._managers?.find?.(m=>m.role_title==="Quality Manager");
-    const amMgr = slot._managers?.find?.(m=>m.role_title==="Accountable Manager");
-    profileSigs = {
-      lead: findSig(slot.lead_auditor||slot.prepared_by),
-      qm:   findSig(qmMgr?.person_name||slot.approved_by),
-      am:   findSig(amMgr?.person_name),
-    };
-  } catch(e) { console.warn("Could not load profile signatures:", e); }
+  // Use manually appended signatures stored on the slot — never auto-resolved from profiles
+  let slotSigs = {};
+  try { slotSigs = JSON.parse(slot.signatures||"{}"); } catch(e) {}
 
-  // Detect lead-auditor-is-QM conflict
   const qmPersonName = slot._managers?.find?.(m=>m.role_title==="Quality Manager")?.person_name||slot.approved_by||"";
   const amPersonName = slot._managers?.find?.(m=>m.role_title==="Accountable Manager")?.person_name||"";
   const leadIsQM = slot.lead_auditor && qmPersonName &&
     slot.lead_auditor.toLowerCase().includes((qmPersonName.split(" ")[0]||"").toLowerCase());
 
   const sigW3 = (col-8)/3;
-  const sigBoxH = 44; // taller box to fit signature image
+  const sigBoxH = 44;
   const sigDefs = [
-    { label:"Lead Auditor", name:slot.lead_auditor||slot.prepared_by||"", sigUrl:profileSigs.lead },
-    { label:"Quality Manager", name:qmPersonName||"", sigUrl:leadIsQM?null:profileSigs.qm, conflict:leadIsQM },
-    { label:"Accountable Manager", name:amPersonName||"", sigUrl:profileSigs.am },
+    { label:"Lead Auditor",       name:slot.lead_auditor||slot.prepared_by||"", sigUrl:slotSigs.lead||null },
+    { label:"Quality Manager",    name:qmPersonName||"",  sigUrl:leadIsQM?null:(slotSigs.qm||null), conflict:leadIsQM },
+    { label:"Accountable Manager",name:amPersonName||"",  sigUrl:slotSigs.am||null },
   ];
   sigDefs.forEach(({ label, name, sigUrl, conflict }, i) => {
     const bx = M + i*(sigW3+4);
@@ -5234,18 +5096,15 @@ const generateAuditReport = async (slot, allCars=[]) => {
     doc.setDrawColor(sigUrl?165:221, sigUrl?214:227, sigUrl?167:234);
     doc.setLineWidth(sigUrl?0.5:0.3);
     doc.rect(bx,y,sigW3,sigBoxH,"S");
-    // Label
     doc.setFont("helvetica","bold"); doc.setFontSize(LABEL_SZ); doc.setTextColor(95,114,133);
     doc.text(label.toUpperCase(), bx+3, y+5);
-    // Name
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(26,35,50);
     if(name){ const nl=doc.splitTextToSize(name,sigW3-6); doc.text(nl[0], bx+3, y+12); }
-    // Signature image or blank line
     if(sigUrl){
       try {
         doc.addImage(sigUrl, "PNG", bx+3, y+15, sigW3-6, 18, undefined, "FAST");
         doc.setFont("helvetica","bold"); doc.setFontSize(6); doc.setTextColor(46,125,50);
-        doc.text("✓ Digitally signed", bx+3, y+41);
+        doc.text("✓ Signed", bx+3, y+41);
       } catch(e) {
         doc.setDrawColor(170,190,210); doc.line(bx+3, y+30, bx+sigW3-3, y+30);
         doc.setFontSize(6.5); doc.setTextColor(140,160,180); doc.text("Signature", bx+3, y+34);
