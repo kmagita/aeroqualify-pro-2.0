@@ -7391,7 +7391,7 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
 
       {/* ── Signature Card ── */}
       <div style={cardStyle}>
-        {sectionHead("My Signature","Upload a signature image (PNG recommended, max 500 KB). It will be automatically embedded in audit reports and CARs where you are listed.")}
+        {sectionHead("My Signature","Upload a PNG of your handwritten signature (max 500 KB, white background recommended). Once uploaded, you can manually append it to audit reports from the Signatures tab.")}
         <div style={{ background:"#f8fafc",border:"1px solid #dde3ea",borderRadius:10,padding:16,marginBottom:16 }}>
           {sigPreview ? (
             <div>
@@ -7426,7 +7426,7 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
           )}
         </div>
         <div style={{ background:"#e3f2fd",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#01579b",borderLeft:"3px solid #01579b" }}>
-          <strong>How it works:</strong> Your signature is linked to your role. When you are listed as Lead Auditor, Quality Manager or Accountable Manager on an audit report, your signature is automatically pulled from this profile and embedded in the PDF signature block.
+          <strong>How it works:</strong> Upload your signature here once. When an audit report requires your sign-off, open the audit record, go to the <strong>Signatures tab</strong>, and click <strong>"Append My Signature"</strong> on your slot. Only you can append your own signature — it cannot be added by anyone else.
         </div>
       </div>
 
