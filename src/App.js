@@ -4431,7 +4431,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
   return (
     <>
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
-      <div style={{ background:"#fff",borderRadius:14,width:720,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 8px 50px rgba(0,0,0,0.2)",display:"flex",flexDirection:"column" }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:"#fff",borderRadius:14,width:720,maxHeight:"92vh",boxShadow:"0 8px 50px rgba(0,0,0,0.2)",display:"flex",flexDirection:"column",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ background:"linear-gradient(135deg,#01579b,#0277bd)",padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0 }}>
