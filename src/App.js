@@ -4818,7 +4818,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
               </div>
             );
           })()}
-        </div>
+        </div>{/* end scroll area */}
 
         {/* Footer */}
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
@@ -4828,7 +4828,6 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
-    </div>
     {sigPadModal&&(
       <SignaturePadModal
         role={sigPadModal==="lead"?"Lead Auditor":sigPadModal==="qm"?"Quality Manager":"Accountable Manager"}
