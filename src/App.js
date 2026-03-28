@@ -4630,6 +4630,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
+    </div>
     {carModal&&(()=>{
       const f = carModal.finding;
       const existing = (data?.cars||[]).filter(c=>c.audit_ref===auditRef).length;
