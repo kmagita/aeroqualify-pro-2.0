@@ -4618,7 +4618,6 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
               </div>
             </div>
           )}
-        </div>
 
           {/* ── SIGNATURES TAB ── */}
         </div>{/* end scroll area */}
