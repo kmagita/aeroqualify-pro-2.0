@@ -4738,17 +4738,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
   let y = 34;
 
   // ── AUDIT IDENTITY BAR ───────────────────────────────────────
-  const AREA_CODES_PDF = {
-    "Ground School Training":"007","Flight Training Records":"008",
-    "Company Manuals & Documents":"009","Base Training Facilities":"010",
-    "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
-    "Ground & Flight Instructor Records":"014","Quality Management":"016",
-    "Safety Management Systems":"017","Fuel Supplier":"022",
-  };
-  const _aCode = AREA_CODES_PDF[slot.area]||"000";
-  const _aDate = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
-  const _dd=String(_aDate.getDate()).padStart(2,"0"),_mm=String(_aDate.getMonth()+1).padStart(2,"0"),_yyyy=_aDate.getFullYear();
-  const auditRefNum = `${slot.org_prefix||"ORG"}-QMS-${_aCode}-${_dd}${_mm}${_yyyy}`;
+  const auditRefNum = getAuditRef(slot, slot.org_prefix||"ORG");
   const statusColors = {
     Completed:[46,125,50], "In Progress":[1,87,155],
     Scheduled:[245,127,23], Overdue:[198,40,40], Cancelled:[117,117,117]
