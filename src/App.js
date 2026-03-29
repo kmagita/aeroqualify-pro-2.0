@@ -1825,7 +1825,7 @@ const RCAView = ({ data, user, profile }) => {
 };
 
 // ─── Risk Assessment Modal (from CAP) ─────────────────────────
-const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, onAccept, onClose }) => {
+const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, org, onAccept, onClose }) => {
   const [severity,   setSeverity]   = useState(3);
   const [likelihood, setLikelihood] = useState(3);
   const [category,   setCategory]   = useState("Training");
@@ -1856,6 +1856,7 @@ const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, on
         status: "Open",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        ...(org?.id ? { org_id: org.id } : {}),
       };
       const { error } = await supabase.from(TABLES.risks).insert(riskEntry);
       if(error) throw new Error(error.message);
@@ -1930,7 +1931,7 @@ const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, on
 };
 
 // ─── CAP Form Modal ───────────────────────────────────────────
-const CAPModal = ({ car, cap, onSave, onClose, data, user, profile, managers, showToast }) => {
+const CAPModal = ({ car, cap, onSave, onClose, data, user, profile, managers, showToast, org }) => {
   const [form, setForm] = useState(cap || { id:`CAP-${String(Date.now()).slice(-6)}`, car_id:car?.id, status:"Pending" });
   const [newFiles, setNewFiles] = useState([]); // files staged for upload
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
@@ -2066,6 +2067,7 @@ const CAPModal = ({ car, cap, onSave, onClose, data, user, profile, managers, sh
           user={user}
           profile={profile}
           showToast={showToast}
+          org={org}
           onAccept={(summary, riskId)=>{ set("risk_assessment", summary); set("linked_risk_id", riskId); setShowRisk(false); }}
           onClose={()=>setShowRisk(false)}
         />
@@ -2435,6 +2437,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     delete payload.additional_notify_text;
     if(isNew) {
       payload.raised_by=user.id; payload.raised_by_name=profile?.full_name||user.email;
+      if(org?.id) payload.org_id = org.id; // ensure org scoping on insert
       const{error}=await supabase.from(TABLES.cars).insert(payload);
       if(error){showToast(`Error: ${error.message}`,"error");return;}
       await logChange({user,action:"created",table:"cars",recordId:form.id,recordTitle:form.title||form.id,newData:form});
@@ -2497,7 +2500,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const allFilled = form.immediate_action&&form.root_cause_analysis&&form.corrective_action&&form.preventive_action&&hasEvidence;
     const isResubmission = selected.status==="Returned for Resubmission";
     const capId = isResubmission ? `${selected.id}-cap-${Date.now()}` : form.id;
-    const capPayload={...form,id:capId,evidence_files,evidence_url,evidence_filename,submitted_by:user.id,submitted_by_name:profile?.full_name||user.email,submitted_at:new Date().toISOString(),status:allFilled?"Complete":"Pending"};
+    const capPayload={...form,id:capId,evidence_files,evidence_url,evidence_filename,submitted_by:user.id,submitted_by_name:profile?.full_name||user.email,submitted_at:new Date().toISOString(),status:allFilled?"Complete":"Pending",...(org?.id?{org_id:org.id}:{})};
     const{error}=await supabase.from(TABLES.caps).upsert(capPayload);
     if(error){showToast(`Error saving CAP: ${error.message}`,"error");return;}
     if(allFilled){
@@ -3242,7 +3245,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       </div>
 
       {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} />}
-      {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast}/>}
+      {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast} org={org}/>}
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
       {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} />}
     </div>
@@ -3369,11 +3372,12 @@ const GenericModal = ({ title, fields, defaults, onSave, onClose }) => {
 };
 
 // ─── Managers Settings Page ───────────────────────────────────
-const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
+const ManagersPage = ({ managers, onRefresh, showToast, isAdmin, user }) => {
   const [editing, setEditing] = useState(null);
   const save = async(mgr) => {
     const{error}=await supabase.from(TABLES.managers).update({person_name:mgr.person_name,email:mgr.email,updated_at:new Date().toISOString()}).eq("id",mgr.id);
     if(error){showToast(`Error: ${error.message}`,"error");return;}
+    await logChange({user,action:"updated manager",table:"responsible_managers",recordId:mgr.id,recordTitle:mgr.role_title,newData:{person_name:mgr.person_name,email:mgr.email}});
     showToast("Manager updated","success"); setEditing(null); onRefresh();
   };
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -3412,6 +3416,7 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
         recipients: [approvedU.email],
       });
     }
+    await logChange({user,action:"approved user",table:"profiles",recordId:userId,recordTitle:approvedU?.email||userId,newData:{status:"approved",role}});
     showToast("User approved — confirmation email sent","success");
     setPendingUsers(p=>p.filter(u=>u.id!==userId));
     setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"approved",role}:u));
@@ -3420,6 +3425,8 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
   const revokeUser = async(userId) => {
     const{error}=await supabase.from("profiles").update({status:"pending"}).eq("id",userId);
     if(error){showToast("Error: "+error.message,"error");return;}
+    const revokedU = allUsers.find(u=>u.id===userId);
+    await logChange({user,action:"revoked user access",table:"profiles",recordId:userId,recordTitle:revokedU?.email||userId,newData:{status:"pending"}});
     showToast("User access revoked","success");
     setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"pending"}:u));
     setPendingUsers(p=>[...p,allUsers.find(u=>u.id===userId)].filter(Boolean));
@@ -4011,7 +4018,7 @@ const RiskModal = ({ risk, cars, onSave, onClose }) => {
   );
 };
 
-const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast }) => {
+const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
   const [modal, setModal]     = useState(false);
   const [editing, setEditing] = useState(null);
   const [filter, setFilter]   = useState("all");
@@ -4037,7 +4044,7 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast 
 
   const save = async(form) => {
     const isNew=!(data.risks||[]).find(r=>r.id===form.id);
-    const payload={...form, updated_at:new Date().toISOString()};
+    const payload={...form, updated_at:new Date().toISOString(), ...(org?.id&&isNew?{org_id:org.id}:{})};
     if(isNew) payload.created_at=new Date().toISOString();
     const{error}=await supabase.from(TABLES.risks).upsert(payload);
     if(error){showToast(`Error: ${error.message}`,"error");return;}
@@ -4272,6 +4279,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
       raised_by: user?.id,
       raised_by_name: profile?.full_name||user?.email,
       updated_at: new Date().toISOString(),
+      ...(org?.id ? { org_id: org.id } : {}),
     };
     const extraEmails = (carForm.additional_notify_text||"").split(",").map(s=>s.trim()).filter(Boolean);
     delete payload.additional_notify_text;
@@ -5022,7 +5030,9 @@ const generateAuditReport = async (slot, allCars=[]) => {
 };
 
 
-const SCHEDULE_PASSWORD = "QM2024!";
+// Schedule password is stored per-org in organisations.qm_password (set via Org Settings).
+// Falls back to a default only if the org has not yet configured one.
+const SCHEDULE_PASSWORD_DEFAULT = "QM2024!";
 
 // ── Schedule PDF export ────────────────────────────────────────
 const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUDIT_AREAS) => {
@@ -5745,11 +5755,12 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
       orgAuditAreas.forEach((area, idx) => {
         const month1 = 1 + (idx % 6);
         const month2 = 7 + (idx % 6);
-        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-1`, year, area, slot:1, month:month1, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date });
-        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-2`, year, area, slot:2, month:month2, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date });
+        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-1`, year, area, slot:1, month:month1, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date, ...(org?.id?{org_id:org.id}:{}) });
+        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-2`, year, area, slot:2, month:month2, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date, ...(org?.id?{org_id:org.id}:{}) });
       });
       const { error } = await supabase.from("audit_schedule").upsert(rows, { onConflict:"id" });
       if(error) { showToast(`Error: ${error.message}`,"error"); return; }
+      await logChange({user,action:`generated ${year} audit schedule`,table:"audit_schedule",recordId:`schedule-${year}`,recordTitle:`${year} Audit Programme (${rows.length} slots)`,newData:{year,rows:rows.length}});
       showToast(`${year} audit schedule generated — ${rows.length} slots created`,"success");
       setApprovalModal(false);
       onRefresh();
@@ -5759,9 +5770,10 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
 
   // Save a slot + send notification email
   const saveSlot = async (slot) => {
-    const payload = { id: slot.id||`AS-${slot.year||year}-${slot.area?.replace(/\s+/g,"-")}-${slot.slot}`, year:slot.year||year, area:slot.area, slot:slot.slot, month:slot.month, ...slot };
+    const payload = { id: slot.id||`AS-${slot.year||year}-${slot.area?.replace(/\s+/g,"-")}-${slot.slot}`, year:slot.year||year, area:slot.area, slot:slot.slot, month:slot.month, ...slot, ...(org?.id?{org_id:org.id}:{}) };
     const { error } = await supabase.from("audit_schedule").upsert(payload, { onConflict:"id" });
     if(error) { showToast(`Error: ${error.message}`,"error"); return; }
+    await logChange({user,action:"updated audit slot",table:"audit_schedule",recordId:payload.id,recordTitle:`${slot.area} ${slot.year} Slot ${slot.slot}`,newData:payload});
 
     // Send notification emails when a slot has a planned date and lead auditor set
     if(slot.planned_date && slot.lead_auditor) {
@@ -6043,8 +6055,10 @@ Planned: ${slot.planned_date||"Not set"}`}
           year={year}
           existingSlots={schedule}
           onSave={async(slot)=>{
-            const { error } = await supabase.from("audit_schedule").upsert(slot, { onConflict:"id" });
+            const slotWithOrg = { ...slot, ...(org?.id?{org_id:org.id}:{}) };
+            const { error } = await supabase.from("audit_schedule").upsert(slotWithOrg, { onConflict:"id" });
             if(error){ showToast("Error: "+error.message,"error"); return; }
+            await logChange({user,action:"added ad-hoc audit",table:"audit_schedule",recordId:slotWithOrg.id,recordTitle:`Ad-hoc: ${slot.area} ${slot.year}`,newData:slotWithOrg});
             showToast("Ad-hoc audit added to schedule","success");
             setAdHocModal(false);
             onRefresh();
@@ -6069,7 +6083,8 @@ Planned: ${slot.planned_date||"Not set"}`}
               style={{ width:"100%",padding:"10px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,boxSizing:"border-box",marginBottom:14 }}
               onKeyDown={e=>{
                 if(e.key==="Enter"){
-                  if(e.target.value===SCHEDULE_PASSWORD){ setPwModal(false); setApprovalModal(true); e.target.value=""; }
+                  const correctPw = org?.qm_password || SCHEDULE_PASSWORD_DEFAULT;
+                  if(e.target.value===correctPw){ setPwModal(false); setApprovalModal(true); e.target.value=""; }
                   else { e.target.style.borderColor="#c62828"; setTimeout(()=>e.target.style.borderColor="#dde3ea",1000); }
                 }
               }}
@@ -6078,7 +6093,8 @@ Planned: ${slot.planned_date||"Not set"}`}
               <Btn variant="ghost" onClick={()=>setPwModal(false)}>Cancel</Btn>
               <Btn onClick={()=>{
                 const val=document.getElementById("pw-input").value;
-                if(val===SCHEDULE_PASSWORD){ setPwModal(false); setApprovalModal(true); document.getElementById("pw-input").value=""; }
+                const correctPw = org?.qm_password || SCHEDULE_PASSWORD_DEFAULT;
+                if(val===correctPw){ setPwModal(false); setApprovalModal(true); document.getElementById("pw-input").value=""; }
                 else { document.getElementById("pw-input").style.borderColor="#c62828"; setTimeout(()=>document.getElementById("pw-input").style.borderColor="#dde3ea",1000); }
               }}>Confirm</Btn>
             </div>
@@ -7118,8 +7134,9 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
 
 // ─── Org Settings Page ────────────────────────────────────────
 const OrgSettingsPage = ({ org, onSave }) => {
-  const [prefix, setPrefix] = useState(org?.car_prefix||"ORG");
-  const [areas,  setAreas]  = useState(()=>{
+  const [prefix,   setPrefix]  = useState(org?.car_prefix||"ORG");
+  const [qmPw,     setQmPw]    = useState(org?.qm_password||"");
+  const [areas,    setAreas]   = useState(()=>{
     try{ return JSON.parse(org?.audit_areas||"null") || ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
     catch{ return ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
   });
@@ -7140,7 +7157,9 @@ const OrgSettingsPage = ({ org, onSave }) => {
   const save = async() => {
     if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
     setSaving(true);
-    await onSave({ car_prefix: prefix.trim().toUpperCase(), audit_areas: JSON.stringify(areas) });
+    const updates = { car_prefix: prefix.trim().toUpperCase(), audit_areas: JSON.stringify(areas) };
+    if(qmPw.trim()) updates.qm_password = qmPw.trim();
+    await onSave(updates);
     setSaving(false);
   };
 
@@ -7157,6 +7176,16 @@ const OrgSettingsPage = ({ org, onSave }) => {
           <div style={{ fontFamily:"monospace",fontSize:13,color:"#1a2332" }}>
             <div>CAR ID: <strong>{prefix||"ORG"}-QMS-001-13032026-CAPA001</strong></div>
           </div>
+        </div>
+      </div>
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Schedule Generation Password</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Password required to generate the annual audit schedule. Leave blank to keep current password.</div>
+        <input type="password" value={qmPw} onChange={e=>setQmPw(e.target.value)}
+          style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,boxSizing:"border-box" }}
+          placeholder="Enter new password (leave blank to keep existing)"/>
+        <div style={{ fontSize:11,color:"#8a9ab0",marginTop:8 }}>
+          Only Quality Managers should know this password. It gates the generation of a new annual audit programme.
         </div>
       </div>
       <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
@@ -7290,62 +7319,78 @@ export default function App() {
 
   const loadAll = useCallback(async()=>{
     if(!user)return;
-    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,prof,risks,auditSchedule,orgProfiles]=await Promise.all([
-      supabase.from(TABLES.cars).select("*").order("created_at",{ascending:false}),
-      supabase.from(TABLES.caps).select("*"),
-      supabase.from(TABLES.verifications).select("*"),
-      supabase.from(TABLES.documents).select("*").order("created_at",{ascending:false}),
-      supabase.from(TABLES.flightDocs).select("*").order("expiry_date",{ascending:true}),
-      supabase.from(TABLES.audits).select("*").order("date",{ascending:true}),
-      supabase.from(TABLES.contractors).select("*").order("name",{ascending:true}),
-      supabase.from(TABLES.changeLog).select("*").order("created_at",{ascending:false}).limit(200),
-      supabase.from(TABLES.managers).select("*").order("id"),
-      supabase.from(TABLES.profiles).select("*").eq("id",user.id).single(),
-      supabase.from(TABLES.risks).select("*").order("created_at",{ascending:false}),
-      supabase.from("audit_schedule").select("*").order("year",{ascending:false}),
-      // Fetch all org profiles to resolve signatures — only select non-sensitive fields
-      supabase.from(TABLES.profiles).select("id,full_name,role").eq("status","approved"),
+
+    // ── Step 1: resolve profile & org identity first ──────────────────
+    const profRes = await supabase.from(TABLES.profiles).select("*").eq("id",user.id).single();
+    const prof = profRes.data;
+    const isSuperAdminMode = prof?.is_super_admin && !loginOrgOverride;
+    const orgIdToLoad = loginOrgOverride || (!isSuperAdminMode ? prof?.org_id : null);
+
+    // ── Step 2: if we have an org, load & validate it first ───────────
+    let currentOrg = null;
+    if(orgIdToLoad){
+      const { data: orgData } = await supabase.from("organisations").select("*").eq("id",orgIdToLoad).single();
+      if(orgData){
+        // Demo expiry check — enforce mid-session, not just at login
+        if(orgData.demo_expires_at && new Date(orgData.demo_expires_at) < new Date()){
+          await supabase.auth.signOut();
+          return; // signOut triggers onAuthStateChange which resets state
+        }
+        currentOrg = orgData;
+        setOrg(orgData);
+      }
+    } else if(isSuperAdminMode){
+      setOrg(null);
+    }
+
+    // ── Step 3: scope all data queries to org_id (defence-in-depth) ───
+    // RLS is the primary guard; these client-side filters are the backstop.
+    const scope = (q) => orgIdToLoad ? q.eq("org_id", orgIdToLoad) : q;
+
+    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,risks,auditSchedule]=await Promise.all([
+      scope(supabase.from(TABLES.cars).select("*")).order("created_at",{ascending:false}),
+      scope(supabase.from(TABLES.caps).select("*")),
+      scope(supabase.from(TABLES.verifications).select("*")),
+      scope(supabase.from(TABLES.documents).select("*")).order("created_at",{ascending:false}),
+      scope(supabase.from(TABLES.flightDocs).select("*")).order("expiry_date",{ascending:true}),
+      scope(supabase.from(TABLES.audits).select("*")).order("date",{ascending:true}),
+      scope(supabase.from(TABLES.contractors).select("*")).order("name",{ascending:true}),
+      scope(supabase.from(TABLES.changeLog).select("*")).order("created_at",{ascending:false}).limit(200),
+      scope(supabase.from(TABLES.managers).select("*")).order("id"),
+      scope(supabase.from(TABLES.risks).select("*")).order("created_at",{ascending:false}),
+      scope(supabase.from("audit_schedule").select("*")).order("year",{ascending:false}),
     ]);
-    // Auto-mark overdue CARs — any non-closed CAR past due date becomes Overdue
+
+    // ── Step 4: auto-mark overdue CARs ────────────────────────────────
     const OVERDUE_ELIGIBLE = ["Open","In Progress"];
-    const today = new Date(); today.setHours(0,0,0,0);
+    const todayD = new Date(); todayD.setHours(0,0,0,0);
     const processedCars = (cars.data||[]).map(c => {
-      if(!OVERDUE_ELIGIBLE.includes(c.status)) return c; // only Open/In Progress can become Overdue
+      if(!OVERDUE_ELIGIBLE.includes(c.status)) return c;
       if(!c.due_date) return c;
       const due = new Date(c.due_date); due.setHours(0,0,0,0);
-      if(due < today) {
+      if(due < todayD) {
         supabase.from(TABLES.cars).update({status:"Overdue",updated_at:new Date().toISOString()}).eq("id",c.id).then(()=>{});
         return {...c, status:"Overdue"};
       }
       return c;
     });
 
-    // Batch all state updates together to prevent intermediate empty renders
+    // ── Step 5: batch all state updates ───────────────────────────────
     flushSync(()=>{
       setData({
         cars:processedCars,caps:caps.data||[],verifications:verifs.data||[],auditSchedule:auditSchedule.data||[],
         documents:docs.data||[],flightDocs:fdocs.data||[],audits:audits.data||[],
         contractors:contractors.data||[],changeLog:logs.data||[],
         risks:risks.data||[],
-        profiles:orgProfiles.data||[], // org-wide profiles for signature resolution
       });
       setManagers(mgrs.data||[]);
-      setProfile(prof.data);
-      setIsSuperAdmin(prof.data?.is_super_admin||false);
+      setProfile(prof);
+      setIsSuperAdmin(prof?.is_super_admin||false);
       setLoading(false);
     });
-    // Load org details — use login override if provided, otherwise use profile org_id
-    // If super admin logged in without an org override, don't load an org (stay in platform mode)
-    const isSuperAdminMode = prof.data?.is_super_admin && !loginOrgOverride;
-    const orgIdToLoad = loginOrgOverride || (!isSuperAdminMode ? prof.data?.org_id : null);
-    if(orgIdToLoad){
-      supabase.from("organisations").select("*").eq("id",orgIdToLoad).single()
-        .then(({data})=>{ if(data) setOrg(data); });
-    } else if(isSuperAdminMode){
-      setOrg(null); // clear org so sidebar shows platform mode
-    }
-    // Super admin: load all orgs and all users
-    if(prof.data?.is_super_admin){
+
+    // ── Step 6: super admin supplemental loads ────────────────────────
+    if(prof?.is_super_admin){
       supabase.from("organisations").select("*").order("name")
         .then(({data})=>{ if(data) setOrgs(data); });
       supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false})
@@ -7357,11 +7402,14 @@ export default function App() {
 
   useEffect(()=>{
     if(!user||loading)return;
+    // Debounce: rapid successive changes fire only one reload
+    let debounceTimer = null;
+    const debouncedLoad = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(()=>loadAll(), 300); };
     const tables=["cars","caps","capa_verifications","documents","flight_school_docs","audits","contractors","change_log","risk_register","audit_schedule"];
     subs.current=tables.map(t=>
-      supabase.channel(`rt-${t}`).on("postgres_changes",{event:"*",schema:"public",table:t},()=>loadAll()).subscribe()
+      supabase.channel(`rt-${t}`).on("postgres_changes",{event:"*",schema:"public",table:t},debouncedLoad).subscribe()
     );
-    return()=>{subs.current.forEach(s=>s.unsubscribe());};
+    return()=>{ clearTimeout(debounceTimer); subs.current.forEach(s=>s.unsubscribe()); };
   },[user,loading,loadAll]);
 
   const isAdmin  = profile?.role==="admin" || isSuperAdmin;
@@ -7679,14 +7727,15 @@ export default function App() {
           {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="contractors" && <GenericPage title="Contractors" subtitle="Approved contractor register" table="contractors" columns={CONTRACTOR_COLS} modalFields={CONTRACTOR_FIELDS} modalTitle="Contractor" modalDefaults={{status:"Approved",rating:"A"}} data={data} canEdit={isAdmin} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="rca"      && <RCAView data={data} user={user} profile={profile}/>}
-          {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin}/>}
+          {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin} user={user}/>}
           {activeTab==="users" && isAdmin && <OrgUsersPage org={org} user={user} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="profile" && <ProfilePage user={user} profile={profile} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="orgsettings" && isAdmin && <OrgSettingsPage org={org} onSave={async(updates)=>{
             const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
             if(error){showToast("Error saving settings: "+error.message,"error");return;}
+            await logChange({user,action:"updated org settings",table:"organisations",recordId:org.id,recordTitle:org.name,newData:updates});
             setOrg(prev=>({...prev,...updates}));
             showToast("Organisation settings saved","success");
           }} />}
