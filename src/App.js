@@ -892,6 +892,7 @@ const PasswordResetScreen = ({ onDone }) => {
     setLoading(true); setMsg("");
     const { error } = await supabase.auth.updateUser({ password: pw });
     if(error){ setMsg("Error: "+error.message); setLoading(false); return; }
+    window.location.hash = ""; // safe to clear now — token has been consumed
     setDone(true);
     setTimeout(async()=>{ await supabase.auth.signOut(); onDone(); }, 2000);
   };
@@ -7274,7 +7275,9 @@ export default function App() {
         setShowPasswordReset(true);
         setShowLogin(false);
         setLoading(false);
-        window.location.hash = "";
+        // Do NOT clear the hash here — Supabase needs the recovery token
+        // in the URL to establish the session used by updateUser().
+        // The hash is cleared after the password is successfully updated.
         return;
       }
       // Handle email confirmation — user clicked verify link
