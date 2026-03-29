@@ -7134,15 +7134,27 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
 };
 
 // ─── Org Settings Page ────────────────────────────────────────
+const ORG_DEFAULT_AREAS = ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"];
+const parseAreas = (audit_areas) => {
+  try{ const p = JSON.parse(audit_areas||"null"); return (Array.isArray(p)&&p.length>0) ? p : ORG_DEFAULT_AREAS; }
+  catch{ return ORG_DEFAULT_AREAS; }
+};
+
 const OrgSettingsPage = ({ org, onSave }) => {
   const [prefix,   setPrefix]  = useState(org?.car_prefix||"ORG");
   const [qmPw,     setQmPw]    = useState(org?.qm_password||"");
-  const [areas,    setAreas]   = useState(()=>{
-    try{ return JSON.parse(org?.audit_areas||"null") || ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
-    catch{ return ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
-  });
+  const [areas,    setAreas]   = useState(()=>parseAreas(org?.audit_areas));
   const [newArea, setNewArea] = useState("");
   const [saving,  setSaving]  = useState(false);
+
+  // Re-sync when org prop changes (e.g. after save propagates back, or on initial load)
+  const orgId = org?.id;
+  useEffect(()=>{
+    setPrefix(org?.car_prefix||"ORG");
+    setQmPw(org?.qm_password||"");
+    setAreas(parseAreas(org?.audit_areas));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[orgId]);
 
   const addArea = () => {
     const trimmed = newArea.trim();
@@ -7210,6 +7222,9 @@ const OrgSettingsPage = ({ org, onSave }) => {
             placeholder="Add new area…"/>
           <button onClick={addArea} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer" }}>+ Add</button>
         </div>
+      </div>
+      <div style={{ background:"#e3f2fd",borderRadius:10,padding:"14px 18px",border:"1px solid #90caf9",fontSize:12,color:"#01579b",lineHeight:1.6 }}>
+        <strong>ℹ️ After saving audit areas:</strong> Go to the <strong>Audits</strong> module and use <strong>Generate Schedule</strong> to create slots for the new areas. Saving here only updates the template — it does not create schedule rows automatically.
       </div>
       <div style={{ display:"flex",justifyContent:"flex-end" }}>
         <button onClick={save} disabled={saving}
@@ -7740,6 +7755,7 @@ export default function App() {
             if(error){showToast("Error saving settings: "+error.message,"error");return;}
             await logChange({user,action:"updated org settings",table:"organisations",recordId:org.id,recordTitle:org.name,newData:updates});
             setOrg(prev=>({...prev,...updates}));
+            await loadAll(); // re-fetch so all views pick up the updated org immediately
             showToast("Organisation settings saved","success");
           }} />}
           {activeTab==="changelog" && <ChangeLogView logs={data.changeLog}/>}
