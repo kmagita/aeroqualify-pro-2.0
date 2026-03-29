@@ -7750,13 +7750,14 @@ export default function App() {
           {activeTab==="users" && isAdmin && <OrgUsersPage org={org} user={user} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="profile" && <ProfilePage user={user} profile={profile} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="orgsettings" && isAdmin && <OrgSettingsPage org={org} onSave={async(updates)=>{
-            const{error,data:savedOrg}=await supabase.from("organisations").update(updates).eq("id",org.id).select("*").single();
+            const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
             if(error){showToast("Error saving settings: "+error.message,"error");return;}
             await logChange({user,action:"updated org settings",table:"organisations",recordId:org.id,recordTitle:org.name,newData:updates});
-            // Use the returned row directly — avoids a race with loadAll overwriting stale state
-            if(savedOrg) setOrg(savedOrg);
-            await loadAll();
+            // Apply updates to local org state immediately so UI reflects changes
+            // without waiting for loadAll (which re-fetches from DB and could race)
+            setOrg(prev=>({...prev,...updates}));
             showToast("Organisation settings saved","success");
+            loadAll(); // fire-and-forget refresh in background
           }} />}
           {activeTab==="changelog" && <ChangeLogView logs={data.changeLog}/>}
           {activeTab==="about"     && <AboutView />}
