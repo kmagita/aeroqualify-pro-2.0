@@ -952,7 +952,7 @@ const OrgSwitcherModal = ({ userId, currentOrgId, onSwitch, onClose }) => {
       if(profRes.data?.org_id) orgIds.add(profRes.data.org_id);
       (memberRes.data||[]).forEach(m=>orgIds.add(m.org_id));
       if(orgIds.size > 0){
-        const { data: orgs } = await supabase.from("organisations").select("id,name,slug,car_prefix").in("id",[...orgIds]);
+        const { data: orgs } = await supabase.from("organisations").select("*").in("id",[...orgIds]);
         setMemberships(orgs||[]);
       }
       setLoading(false);
@@ -7147,14 +7147,13 @@ const OrgSettingsPage = ({ org, onSave }) => {
   const [newArea, setNewArea] = useState("");
   const [saving,  setSaving]  = useState(false);
 
-  // Re-sync when org prop changes (e.g. after save propagates back, or on initial load)
-  const orgId = org?.id;
+  // Re-sync whenever any org field we care about changes (covers race between mount and loadAll)
   useEffect(()=>{
     setPrefix(org?.car_prefix||"ORG");
     setQmPw(org?.qm_password||"");
     setAreas(parseAreas(org?.audit_areas));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[orgId]);
+  },[org?.id, org?.car_prefix, org?.audit_areas, org?.qm_password]);
 
   const addArea = () => {
     const trimmed = newArea.trim();
@@ -7751,11 +7750,12 @@ export default function App() {
           {activeTab==="users" && isAdmin && <OrgUsersPage org={org} user={user} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="profile" && <ProfilePage user={user} profile={profile} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="orgsettings" && isAdmin && <OrgSettingsPage org={org} onSave={async(updates)=>{
-            const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
+            const{error,data:savedOrg}=await supabase.from("organisations").update(updates).eq("id",org.id).select("*").single();
             if(error){showToast("Error saving settings: "+error.message,"error");return;}
             await logChange({user,action:"updated org settings",table:"organisations",recordId:org.id,recordTitle:org.name,newData:updates});
-            setOrg(prev=>({...prev,...updates}));
-            await loadAll(); // re-fetch so all views pick up the updated org immediately
+            // Use the returned row directly — avoids a race with loadAll overwriting stale state
+            if(savedOrg) setOrg(savedOrg);
+            await loadAll();
             showToast("Organisation settings saved","success");
           }} />}
           {activeTab==="changelog" && <ChangeLogView logs={data.changeLog}/>}
