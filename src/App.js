@@ -1482,22 +1482,19 @@ const Dashboard = ({ data }) => {
 };
 
 // ─── CAR Form Modal ───────────────────────────────────────────
-const ORG_DEFAULT_AREAS = [
-  {name:"Flight Operations",code:"001"},{name:"Maintenance",code:"002"},
-  {name:"Training",code:"003"},{name:"Safety",code:"004"},
-  {name:"Quality",code:"005"},{name:"Administration",code:"006"},
-  {name:"Engineering",code:"007"},{name:"Ground Operations",code:"008"},
-];
+// ORG_DEFAULT_AREAS is empty — each org must configure their own areas in Org Settings.
+const ORG_DEFAULT_AREAS = [];
 // Parse audit_areas — supports both legacy string[] and new {name,code}[] formats
+// Returns [] when no areas configured — callers must handle empty state explicitly.
 const parseAreas = (audit_areas) => {
   try{
     const p = JSON.parse(audit_areas||"null");
-    if(!Array.isArray(p)||!p.length) return ORG_DEFAULT_AREAS;
+    if(!Array.isArray(p)||!p.length) return [];
     // Migrate legacy string[] to object[]
     if(typeof p[0]==="string") return p.map((name,i)=>({name, code:String(i+1).padStart(3,"0")}));
     return p;
   }
-  catch{ return ORG_DEFAULT_AREAS; }
+  catch{ return []; }
 };
 // Get area name strings from parsed areas (for backward compat with string-only consumers)
 const areaNames = (areas) => areas.map(a=>typeof a==="string"?a:a.name);
@@ -1514,11 +1511,16 @@ const getAreaCode = (areaName, org) => {
 };
 
 const AREA_CODES_CAR = {
-  "Ground School Training":"007","Flight Training Records":"008",
-  "Company Manuals & Documents":"009","Base Training Facilities":"010",
+  // Exact area names as they appear in the Pegasus audit_schedule table
+  "Ground School Training Records":"007","Flight Training Records":"008",
+  "Company Manuals and Relevant Documents":"009","Classrooms and Facilities":"010",
   "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
-  "Personnel Records & Qualifications":"014","Quality Management":"016",
+  "Ground & Flight Instructor Records":"014","Quality Management Systems":"016",
   "Safety Management Systems":"017","Fuel Supplier":"022",
+  // Legacy aliases — kept so old CARs with these names still resolve correctly
+  "Ground School Training":"007","Company Manuals & Documents":"009",
+  "Base Training Facilities":"010","Personnel Records & Qualifications":"014",
+  "Quality Management":"016",
 };
 const getAuditRef = (slot, prefix="PGF", org=null) => {
   const code = getAreaCode(slot.area, org);
@@ -4233,19 +4235,9 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast,
 
 
 // ─── Annual Audit Schedule Builder ────────────────────────────
-const AUDIT_AREAS = [
-  "Management Personnel Records",
-  "Ground & Flight Instructor Records",
-  "Ground School Training Records",
-  "Flight Training Records",
-  "Company Manuals and Relevant Documents",
-  "Classrooms and Facilities",
-  "Aircraft",
-  "AMO",
-  "Fuel Supplier",
-  "Safety Management Systems",
-  "Quality Management Systems",
-];
+// AUDIT_AREAS kept as empty — areas are configured per-org in Org Settings.
+// Hardcoded defaults have been removed to prevent contamination of new org schedules.
+const AUDIT_AREAS = [];
 // Helper: get org-specific audit areas, falling back to defaults
 const getAuditAreas = (org) => {
   return areaNames(parseAreas(org?.audit_areas||null));
@@ -5735,10 +5727,18 @@ const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=A
 const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
   // orgAuditAreas = name strings used for GENERATING new schedule slots
   const orgAuditAreas = areaNames(parseAreas(org?.audit_areas||null));
-  // displayAuditAreas = orgAuditAreas + legacy area names still in existing slots (grid display only)
+  // displayAuditAreas: show configured areas + any legacy slots that have real activity.
+  // Pure Scheduled slots from old/default generates are excluded — they are artifacts, not records.
+  // Completed, In Progress, Overdue, or slots with findings/observations are always shown.
   const displayAuditAreas = (() => {
-    const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
-    return [...new Set([...orgAuditAreas, ...scheduleAreas.filter(a=>!orgAuditAreas.includes(a))])];
+    const ACTIVE_STATUSES = ["Completed","In Progress","Overdue"];
+    const activeAreas = [...new Set(
+      (data.auditSchedule||[])
+        .filter(s => ACTIVE_STATUSES.includes(s.status) || Number(s.findings)>0 || Number(s.observations)>0)
+        .map(s=>s.area).filter(Boolean)
+    )];
+    // Union: configured areas + areas with real activity
+    return [...new Set([...orgAuditAreas, ...activeAreas.filter(a=>!orgAuditAreas.includes(a))])];
   })();
   const isQM    = ["admin","quality_manager"].includes(profile?.role);
   const isAdmin = profile?.role==="admin";
@@ -5747,6 +5747,8 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
   const [modal,     setModal]     = useState(null);
   const [generating, setGenerating] = useState(false);
   const [pwModal,   setPwModal]   = useState(false);    // password gate
+  const [pwPurpose, setPwPurpose] = useState("generate"); // "generate" | "unlock"
+  const [scheduleUnlocked, setScheduleUnlocked] = useState(false); // locked by default
   const [approvalModal, setApprovalModal] = useState(false); // approval fields before generate
   const [approval,  setApproval]  = useState({ qm_name:"", qm_date:"", am_name:"", am_date:"" });
   const [adHocModal, setAdHocModal] = useState(false); // ad-hoc audit creator
@@ -5770,7 +5772,8 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
   };
 
   // Password gate → approval modal → generate
-  const handleGenerateClick = () => setPwModal(true);
+  const handleGenerateClick = () => { setPwPurpose("generate"); setPwModal(true); };
+  const handleUnlockClick = () => { setPwPurpose("unlock"); setPwModal(true); };
 
   const generateSchedule = async () => {
     setGenerating(true);
@@ -5865,15 +5868,25 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
               📥 Export Schedule PDF
             </Btn>
           )}
-          {isQM && (
+          {isQM && scheduleUnlocked && (
             <Btn variant="ghost" onClick={()=>setAdHocModal(true)}>
               ＋ Ad-Hoc Audit
             </Btn>
           )}
           {isQM && (
-            <Btn onClick={handleGenerateClick} disabled={generating}>
-              {generating?"Generating...":"⚡ Generate "+year+" Schedule"}
-            </Btn>
+            scheduleUnlocked ? (
+              <span style={{ display:"flex",alignItems:"center",gap:8 }}>
+                {orgAuditAreas.length===0
+                  ? <Btn disabled title="Configure audit areas in Org Settings first">⚡ Generate {year} Schedule</Btn>
+                  : <Btn onClick={handleGenerateClick} disabled={generating}>{generating?"Generating...":"⚡ Generate "+year+" Schedule"}</Btn>
+                }
+                <Btn variant="ghost" onClick={()=>setScheduleUnlocked(false)} style={{ color:"#e65100",borderColor:"#ffcc80" }}>🔒 Lock</Btn>
+              </span>
+            ) : (
+              <Btn variant="ghost" onClick={handleUnlockClick} style={{ color:"#01579b",fontWeight:700,display:"flex",alignItems:"center",gap:6 }}>
+                🔒 Unlock Schedule
+              </Btn>
+            )
           )}
         </div>
       </div>
@@ -5905,15 +5918,35 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
         </div>
       </div>
 
+      {/* Lock status banner */}
+      {isQM && hasSchedule && !scheduleUnlocked && (
+        <div style={{ display:"flex",alignItems:"center",gap:12,background:"#fff8e1",border:"1px solid #ffe082",borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#795548" }}>
+          <span style={{ fontSize:18 }}>🔒</span>
+          <span style={{ flex:1 }}><strong>Schedule is locked.</strong> Click <strong>Unlock Schedule</strong> and enter the QM password to edit individual slots or generate a new schedule.</span>
+        </div>
+      )}
+
       {/* Schedule Grid View */}
       {view==="schedule" && (
         <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)" }}>
           {!hasSchedule ? (
             <div style={{ padding:60,textAlign:"center" }}>
               <div style={{ fontSize:48,marginBottom:16 }}>📅</div>
-              <div style={{ fontSize:18,fontWeight:700,color:T.primaryDk,marginBottom:8 }}>No schedule for {year}</div>
-              <div style={{ fontSize:13,color:T.muted,marginBottom:24 }}>Generate the annual audit programme to populate the schedule</div>
-              {isQM&&<Btn onClick={handleGenerateClick} disabled={generating}>{generating?"Generating...":"⚡ Generate "+year+" Audit Schedule"}</Btn>}
+              {orgAuditAreas.length===0 ? (
+                <>
+                  <div style={{ fontSize:18,fontWeight:700,color:T.primaryDk,marginBottom:8 }}>No audit areas configured</div>
+                  <div style={{ fontSize:13,color:T.muted,marginBottom:24,maxWidth:400,margin:"0 auto 24px" }}>
+                    Set up your audit areas before generating a schedule.<br/>Go to <strong>Org Settings → Audit Areas</strong> to add your areas and codes.
+                  </div>
+                  {isAdmin&&<Btn onClick={()=>{}}>Go to Org Settings</Btn>}
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize:18,fontWeight:700,color:T.primaryDk,marginBottom:8 }}>No schedule for {year}</div>
+                  <div style={{ fontSize:13,color:T.muted,marginBottom:24 }}>Generate the annual audit programme to populate the schedule</div>
+                  {isQM&&<Btn onClick={handleGenerateClick} disabled={generating}>{generating?"Generating...":"⚡ Generate "+year+" Audit Schedule"}</Btn>}
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -5948,12 +5981,12 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
                         return (
                           <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                             <div
-                              onClick={()=>isQM&&setModal(slot)}
+                              onClick={()=>isQM&&scheduleUnlocked&&setModal(slot)}
                               title={`${area} — Slot ${slot.slot}
 Status: ${slot.status||"Scheduled"}
 Lead: ${slot.lead_auditor||"Not assigned"}
 Planned: ${slot.planned_date||"Not set"}`}
-                              style={{ width:28,height:28,borderRadius:6,background:c.bg,border:`2px solid ${c.border}`,margin:"0 auto",cursor:isQM?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s" }}
+                              style={{ width:28,height:28,borderRadius:6,background:c.bg,border:`2px solid ${c.border}`,margin:"0 auto",cursor:isQM?(scheduleUnlocked?"pointer":"not-allowed"):"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:isQM&&!scheduleUnlocked?0.75:1 }}
                               onMouseEnter={e=>{if(isQM)e.target.style.transform="scale(1.2)";}}
                               onMouseLeave={e=>{e.target.style.transform="scale(1)";}}
                             >
@@ -5999,9 +6032,9 @@ Planned: ${slot.planned_date||"Not set"}`}
                             return (
                               <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                                 <div
-                                  onClick={()=>isQM&&setModal(s)}
+                                  onClick={()=>isQM&&scheduleUnlocked&&setModal(s)}
                                   title={s.area+" (Ad-Hoc)\nTrigger: "+(s.trigger||"—")+"\nStatus: "+(s.status||"Scheduled")+"\nLead: "+(s.lead_auditor||"Not assigned")+"\nPlanned: "+(s.planned_date||"Not set")}
-                                  style={{ width:28,height:28,borderRadius:6,background:c.bg,border:"2px dashed "+c.border,margin:"0 auto",cursor:isQM?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s" }}
+                                  style={{ width:28,height:28,borderRadius:6,background:c.bg,border:"2px dashed "+c.border,margin:"0 auto",cursor:isQM?(scheduleUnlocked?"pointer":"not-allowed"):"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:isQM&&!scheduleUnlocked?0.75:1 }}
                                   onMouseEnter={e=>{if(isQM)e.currentTarget.style.transform="scale(1.2)";}}
                                   onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
                                 >
@@ -6057,7 +6090,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                       </td>
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
-                          {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
+                          {isQM&&scheduleUnlocked&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
                           {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",_managers:managers,_org:org}, data.cars||[])}>📄 PDF</Btn>}
                         </div>
                       </td>
@@ -6107,7 +6140,11 @@ Planned: ${slot.planned_date||"Not set"}`}
           <div style={{ background:"#fff",borderRadius:14,width:380,padding:32,boxShadow:"0 8px 50px rgba(0,0,0,0.3)" }} onClick={e=>e.stopPropagation()}>
             <div style={{ fontSize:32,textAlign:"center",marginBottom:12 }}>🔐</div>
             <div style={{ fontWeight:800,fontSize:18,color:"#1a2332",textAlign:"center",marginBottom:6 }}>Quality Manager Authorisation</div>
-            <div style={{ fontSize:13,color:"#5f7285",textAlign:"center",marginBottom:20 }}>Enter the QM password to generate or overwrite the {year} audit schedule</div>
+            <div style={{ fontSize:13,color:"#5f7285",textAlign:"center",marginBottom:20 }}>
+              {pwPurpose==="unlock"
+                ? "Enter the QM password to unlock the schedule for editing"
+                : }
+            </div>
             <input
               id="pw-input"
               type="password"
@@ -6117,8 +6154,11 @@ Planned: ${slot.planned_date||"Not set"}`}
               onKeyDown={e=>{
                 if(e.key==="Enter"){
                   const correctPw = org?.qm_password || SCHEDULE_PASSWORD_DEFAULT;
-                  if(e.target.value===correctPw){ setPwModal(false); setApprovalModal(true); e.target.value=""; }
-                  else { e.target.style.borderColor="#c62828"; setTimeout(()=>e.target.style.borderColor="#dde3ea",1000); }
+                  if(e.target.value===correctPw){
+                    setPwModal(false); e.target.value="";
+                    if(pwPurpose==="unlock"){ setScheduleUnlocked(true); showToast("Schedule unlocked for editing","success"); }
+                    else { setApprovalModal(true); }
+                  } else { e.target.style.borderColor="#c62828"; setTimeout(()=>e.target.style.borderColor="#dde3ea",1000); }
                 }
               }}
             />
@@ -6127,8 +6167,11 @@ Planned: ${slot.planned_date||"Not set"}`}
               <Btn onClick={()=>{
                 const val=document.getElementById("pw-input").value;
                 const correctPw = org?.qm_password || SCHEDULE_PASSWORD_DEFAULT;
-                if(val===correctPw){ setPwModal(false); setApprovalModal(true); document.getElementById("pw-input").value=""; }
-                else { document.getElementById("pw-input").style.borderColor="#c62828"; setTimeout(()=>document.getElementById("pw-input").style.borderColor="#dde3ea",1000); }
+                if(val===correctPw){
+                  setPwModal(false); document.getElementById("pw-input").value="";
+                  if(pwPurpose==="unlock"){ setScheduleUnlocked(true); showToast("Schedule unlocked for editing","success"); }
+                  else { setApprovalModal(true); }
+                } else { document.getElementById("pw-input").style.borderColor="#c62828"; setTimeout(()=>document.getElementById("pw-input").style.borderColor="#dde3ea",1000); }
               }}>Confirm</Btn>
             </div>
           </div>
