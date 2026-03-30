@@ -5727,18 +5727,11 @@ const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=A
 const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
   // orgAuditAreas = name strings used for GENERATING new schedule slots
   const orgAuditAreas = areaNames(parseAreas(org?.audit_areas||null));
-  // displayAuditAreas: show configured areas + any legacy slots that have real activity.
-  // Pure Scheduled slots from old/default generates are excluded — they are artifacts, not records.
-  // Completed, In Progress, Overdue, or slots with findings/observations are always shown.
+  // displayAuditAreas = configured areas + ALL areas that have any slots in the DB
+  // No filtering — every area with a slot is shown, regardless of status
   const displayAuditAreas = (() => {
-    const ACTIVE_STATUSES = ["Completed","In Progress","Overdue"];
-    const activeAreas = [...new Set(
-      (data.auditSchedule||[])
-        .filter(s => ACTIVE_STATUSES.includes(s.status) || Number(s.findings)>0 || Number(s.observations)>0)
-        .map(s=>s.area).filter(Boolean)
-    )];
-    // Union: configured areas + areas with real activity
-    return [...new Set([...orgAuditAreas, ...activeAreas.filter(a=>!orgAuditAreas.includes(a))])];
+    const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
+    return [...new Set([...orgAuditAreas, ...scheduleAreas.filter(a=>!orgAuditAreas.includes(a))])];
   })();
   const isQM    = ["admin","quality_manager"].includes(profile?.role);
   const isAdmin = profile?.role==="admin";
