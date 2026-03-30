@@ -6143,7 +6143,7 @@ Planned: ${slot.planned_date||"Not set"}`}
             <div style={{ fontSize:13,color:"#5f7285",textAlign:"center",marginBottom:20 }}>
               {pwPurpose==="unlock"
                 ? "Enter the QM password to unlock the schedule for editing"
-                : }
+                : `Enter the QM password to generate or overwrite the ${year} audit schedule`}
             </div>
             <input
               id="pw-input"
