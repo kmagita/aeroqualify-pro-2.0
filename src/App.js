@@ -1478,6 +1478,37 @@ const Dashboard = ({ data }) => {
 };
 
 // ─── CAR Form Modal ───────────────────────────────────────────
+const ORG_DEFAULT_AREAS = [
+  {name:"Flight Operations",code:"001"},{name:"Maintenance",code:"002"},
+  {name:"Training",code:"003"},{name:"Safety",code:"004"},
+  {name:"Quality",code:"005"},{name:"Administration",code:"006"},
+  {name:"Engineering",code:"007"},{name:"Ground Operations",code:"008"},
+];
+// Parse audit_areas — supports both legacy string[] and new {name,code}[] formats
+const parseAreas = (audit_areas) => {
+  try{
+    const p = JSON.parse(audit_areas||"null");
+    if(!Array.isArray(p)||!p.length) return ORG_DEFAULT_AREAS;
+    // Migrate legacy string[] to object[]
+    if(typeof p[0]==="string") return p.map((name,i)=>({name, code:String(i+1).padStart(3,"0")}));
+    return p;
+  }
+  catch{ return ORG_DEFAULT_AREAS; }
+};
+// Get area name strings from parsed areas (for backward compat with string-only consumers)
+const areaNames = (areas) => areas.map(a=>typeof a==="string"?a:a.name);
+// Get the area code for a given area name — checks org custom areas first, then hardcoded fallback
+const getAreaCode = (areaName, org) => {
+  if(org?.audit_areas){
+    try{
+      const areas = parseAreas(org.audit_areas);
+      const match = areas.find(a=>(typeof a==="string"?a:a.name)===areaName);
+      if(match && typeof match==="object" && match.code) return match.code;
+    }catch{}
+  }
+  return AREA_CODES_CAR[areaName]||"000";
+};
+
 const AREA_CODES_CAR = {
   "Ground School Training":"007","Flight Training Records":"008",
   "Company Manuals & Documents":"009","Base Training Facilities":"010",
@@ -1485,23 +1516,23 @@ const AREA_CODES_CAR = {
   "Personnel Records & Qualifications":"014","Quality Management":"016",
   "Safety Management Systems":"017","Fuel Supplier":"022",
 };
-const getAuditRef = (slot, prefix="PGF") => {
-  const code = AREA_CODES_CAR[slot.area]||"000";
+const getAuditRef = (slot, prefix="PGF", org=null) => {
+  const code = getAreaCode(slot.area, org);
   const d = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
   const dd=String(d.getDate()).padStart(2,"0"), mm=String(d.getMonth()+1).padStart(2,"0"), yyyy=d.getFullYear();
   return `${prefix}-QMS-${code}-${dd}${mm}${yyyy}`;
 };
 
-const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, fromAudit=false }) => {
+const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, org=null, fromAudit=false }) => {
   // When editing an existing CAR, find the audit slot whose computed ref matches car.audit_ref
   const initialAuditId = (() => {
     if(!car?.audit_ref) return "";
-    const match = (auditSchedule||[]).find(s => getAuditRef(s, orgPrefix) === car.audit_ref);
+    const match = (auditSchedule||[]).find(s => getAuditRef(s, orgPrefix, org) === car.audit_ref);
     return match?.id || "";
   })();
   const [selectedAuditId, setSelectedAuditId] = useState(initialAuditId);
   const auditRef = selectedAuditId
-    ? getAuditRef((auditSchedule||[]).find(s=>s.id===selectedAuditId)||{}, orgPrefix)
+    ? getAuditRef((auditSchedule||[]).find(s=>s.id===selectedAuditId)||{}, orgPrefix, org)
     : car?.audit_ref || "";
 
   // Count existing CARs linked to this audit ref to get next CAPA number
@@ -1524,7 +1555,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
     if(!slotId){ set("audit_ref",""); set("id",`CAR-${String(Date.now()).slice(-6)}`); return; }
     const slot = (auditSchedule||[]).find(s=>s.id===slotId);
     if(!slot) return;
-    const ref = getAuditRef(slot, orgPrefix);
+    const ref = getAuditRef(slot, orgPrefix, org);
     const count = (allCars||[]).filter(c=>c.audit_ref===ref && (!car||c.id!==car.id)).length;
     const num = String(count+1).padStart(3,"0");
     set("audit_ref", ref);
@@ -1543,7 +1574,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
           <div style={{ gridColumn:"1/-1" }}>
             <Select label="Link to Audit (optional)" value={selectedAuditId} onChange={e=>handleAuditChange(e.target.value)}>
               <option value="">— Standalone CAR (not linked to audit) —</option>
-              {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix)} · {s.area} · {s.year}</option>)}
+              {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix,org)} · {s.area} · {s.year}</option>)}
             </Select>
           </div>
         )}
@@ -1565,7 +1596,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
         </Select>
         <Select label="Department" value={form.department||""} onChange={e=>set("department",e.target.value)}>
           <option value="">Select…</option>
-          {(auditAreas ? (typeof auditAreas==="string" ? JSON.parse(auditAreas) : auditAreas) : ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]).map(o=><option key={o}>{o}</option>)}
+          {areaNames(auditAreas ? parseAreas(typeof auditAreas==="string" ? auditAreas : JSON.stringify(auditAreas)) : ORG_DEFAULT_AREAS).map(o=><option key={o}>{o}</option>)}
         </Select>
         <Input label="Due Date" type="date" value={form.due_date||""} onChange={e=>set("due_date",e.target.value)} />
         <div style={{ gridColumn:"1/-1" }}>
@@ -3245,7 +3276,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         </table>
       </div>
 
-      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} />}
+      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} org={org} />}
       {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast} org={org}/>}
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
       {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} />}
@@ -4192,11 +4223,7 @@ const AUDIT_AREAS = [
 ];
 // Helper: get org-specific audit areas, falling back to defaults
 const getAuditAreas = (org) => {
-  if(!org?.audit_areas) return AUDIT_AREAS;
-  try {
-    const parsed = JSON.parse(org.audit_areas);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : AUDIT_AREAS;
-  } catch { return AUDIT_AREAS; }
+  return areaNames(parseAreas(org?.audit_areas||null));
 };
 // ─── Signature Pad Modal ──────────────────────────────────────
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -4259,19 +4286,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
   // ── CAR raising from findings ──────────────────────────────
   const [carModal, setCarModal] = useState(null); // { finding } | null
 
-  const auditRef = (() => {
-    const AREA_CODES_AM = {
-      "Ground School Training":"007","Flight Training Records":"008",
-      "Company Manuals & Documents":"009","Base Training Facilities":"010",
-      "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
-      "Ground & Flight Instructor Records":"014","Quality Management":"016",
-      "Safety Management Systems":"017","Fuel Supplier":"022",
-    };
-    const code = AREA_CODES_AM[slot.area]||"000";
-    const d = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
-    const dd=String(d.getDate()).padStart(2,"0"), mm=String(d.getMonth()+1).padStart(2,"0"), yyyy=d.getFullYear();
-    return `PGF-QMS-${code}-${dd}${mm}${yyyy}`;
-  })();
+  const auditRef = getAuditRef(slot, org?.car_prefix||"ORG", org);
 
   const saveCarFromFinding = async (carForm, findingId) => {
     const payload = {
@@ -4634,8 +4649,8 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
         {/* Footer */}
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments})}>🔔 Notification Form</Btn>
-          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",_managers:managers}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
+          <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments},org)}>🔔 Notification Form</Btn>
+          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",_managers:managers,_org:org}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
@@ -4662,6 +4677,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
           auditSchedule={data?.auditSchedule||[]}
           orgPrefix={org?.car_prefix||"ORG"}
           auditAreas={org?.audit_areas||null}
+          org={org}
           fromAudit={true}
           onSave={(carForm)=>saveCarFromFinding(carForm, f.id)}
           onClose={()=>setCarModal(null)}
@@ -4747,7 +4763,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
   let y = 34;
 
   // ── AUDIT IDENTITY BAR ───────────────────────────────────────
-  const auditRefNum = getAuditRef(slot, slot.org_prefix||"ORG");
+  const auditRefNum = getAuditRef(slot, slot.org_prefix||"ORG", slot._org||null);
   const statusColors = {
     Completed:[46,125,50], "In Progress":[1,87,155],
     Scheduled:[245,127,23], Overdue:[198,40,40], Cancelled:[117,117,117]
@@ -5153,7 +5169,7 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
 };
 
 // ── Audit Notification PDF ─────────────────────────────────────
-const generateNotificationPDF = async (slot) => {
+const generateNotificationPDF = async (slot, org=null) => {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210; const M=14; const col=W-M*2;
@@ -5171,21 +5187,8 @@ const generateNotificationPDF = async (slot) => {
 
   const FOOTER_Y = 276; const NEW_PAGE_Y = 20;
 
-  // Area code lookup — PGF-QMS-XXX
-  const AREA_CODES = {
-    "Ground School Training"       : "007",
-    "Flight Training Records"      : "008",
-    "Company Manuals & Documents"  : "009",
-    "Base Training Facilities"     : "010",
-    "Aircraft"                     : "011",
-    "AMO"                          : "012",
-    "Management Personnel Records" : "013",
-    "Ground & Flight Instructor Records": "014",
-    "Quality Management"           : "016",
-    "Safety Management Systems"    : "017",
-    "Fuel Supplier"                : "022",
-  };
-  const areaCode = AREA_CODES[slot.area] || "000";
+  const areaCode = getAreaCode(slot.area, org);
+  const prefix   = slot.org_prefix || org?.car_prefix || "ORG";
 
   // Date of scheduled audit — use planned_date if set, else derive from month/year
   const auditDateObj = slot.planned_date
@@ -5195,7 +5198,7 @@ const generateNotificationPDF = async (slot) => {
   const mm   = String(auditDateObj.getMonth()+1).padStart(2,"0");
   const yyyy = auditDateObj.getFullYear();
 
-  const notifRef = `PGF-QMS-${areaCode}-${dd}${mm}${yyyy}`;
+  const notifRef = `${prefix}-QMS-${areaCode}-${dd}${mm}${yyyy}`;
 
   const needPage = (cy, need=20) => { if(cy+need>FOOTER_Y){ doc.addPage(); return NEW_PAGE_Y; } return cy; };
 
@@ -5705,17 +5708,12 @@ const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=A
 
 
 const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
-  // Use org-specific audit areas if set, otherwise fall back to AUDIT_AREAS constant
-  const orgAuditAreas = (() => {
-    try {
-      const custom = JSON.parse(org?.audit_areas||"null");
-      const base = (custom && custom.length > 0) ? custom : AUDIT_AREAS;
-      // Also include any areas from existing schedule slots that aren't in the list
-      // This preserves integrity of old data when areas are renamed
-      const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
-      const combined = [...new Set([...base, ...scheduleAreas.filter(a=>!base.includes(a))])];
-      return combined;
-    } catch { return AUDIT_AREAS; }
+  // orgAuditAreas = name strings used for GENERATING new schedule slots
+  const orgAuditAreas = areaNames(parseAreas(org?.audit_areas||null));
+  // displayAuditAreas = orgAuditAreas + legacy area names still in existing slots (grid display only)
+  const displayAuditAreas = (() => {
+    const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
+    return [...new Set([...orgAuditAreas, ...scheduleAreas.filter(a=>!orgAuditAreas.includes(a))])];
   })();
   const isQM    = ["admin","quality_manager"].includes(profile?.role);
   const isAdmin = profile?.role==="admin";
@@ -5896,7 +5894,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
                 </tr>
               </thead>
               <tbody>
-                {orgAuditAreas.map((area,ai)=>{
+                {displayAuditAreas.map((area,ai)=>{
                   const slot1 = getSlot(area,1);
                   const slot2 = getSlot(area,2);
                   const bothDone = slot1?.status==="Completed" && slot2?.status==="Completed";
@@ -6026,7 +6024,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
                           {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
-                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",_managers:managers}, data.cars||[])}>📄 PDF</Btn>}
+                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",_managers:managers,_org:org}, data.cars||[])}>📄 PDF</Btn>}
                         </div>
                       </td>
                     </tr>
@@ -7134,12 +7132,6 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
 };
 
 // ─── Org Settings Page ────────────────────────────────────────
-const ORG_DEFAULT_AREAS = ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"];
-const parseAreas = (audit_areas) => {
-  try{ const p = JSON.parse(audit_areas||"null"); return (Array.isArray(p)&&p.length>0) ? p : ORG_DEFAULT_AREAS; }
-  catch{ return ORG_DEFAULT_AREAS; }
-};
-
 const OrgSettingsPage = ({ org, onSave }) => {
   const [prefix,   setPrefix]  = useState(org?.car_prefix||"ORG");
   const [qmPw,     setQmPw]    = useState(org?.qm_password||"");
@@ -7155,12 +7147,16 @@ const OrgSettingsPage = ({ org, onSave }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[org?.id, org?.car_prefix, org?.audit_areas, org?.qm_password]);
 
+  const [newCode, setNewCode] = useState("");
   const addArea = () => {
     const trimmed = newArea.trim();
-    if(!trimmed || areas.includes(trimmed)) return;
-    setAreas(prev=>[...prev, trimmed]); setNewArea("");
+    const code = newCode.trim().replace(/[^0-9]/g,"").slice(0,3).padStart(3,"0") || String(areas.length+1).padStart(3,"0");
+    if(!trimmed || areas.find(a=>a.name===trimmed)) return;
+    setAreas(prev=>[...prev, {name:trimmed, code}]); setNewArea(""); setNewCode("");
   };
-  const removeArea = (a) => setAreas(prev=>prev.filter(x=>x!==a));
+  const removeArea = (name) => setAreas(prev=>prev.filter(a=>a.name!==name));
+  const updateAreaCode = (idx, code) => setAreas(prev=>prev.map((a,i)=>i===idx?{...a,code:code.replace(/[^0-9]/g,"").slice(0,3)}:a));
+  const updateAreaName = (idx, name) => setAreas(prev=>prev.map((a,i)=>i===idx?{...a,name}:a));
   const moveArea = (idx, dir) => {
     const next = [...areas]; const swap = idx+dir;
     if(swap<0||swap>=next.length) return;
@@ -7202,24 +7198,40 @@ const OrgSettingsPage = ({ org, onSave }) => {
       </div>
       <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
         <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Audit Areas</div>
-        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Customise audit areas for your organisation.</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Customise audit areas and their reference codes. The code appears in all CAR and audit reference numbers.</div>
+        <div style={{ display:"grid",gridTemplateColumns:"auto 1fr 90px auto",gap:"6px 8px",alignItems:"center",marginBottom:6 }}>
+          <div/>
+          <div style={{ fontSize:10,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5,paddingLeft:4 }}>Area Name</div>
+          <div style={{ fontSize:10,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5 }}>Code</div>
+          <div/>
+        </div>
         <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
           {areas.map((a,i)=>(
-            <div key={a} style={{ display:"flex",alignItems:"center",gap:8,background:"#f5f8fc",borderRadius:8,padding:"8px 12px",border:"1px solid #dde3ea" }}>
+            <div key={i} style={{ display:"grid",gridTemplateColumns:"auto 1fr 90px auto",gap:8,alignItems:"center",background:"#f5f8fc",borderRadius:8,padding:"6px 10px",border:"1px solid #dde3ea" }}>
               <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
                 <button onClick={()=>moveArea(i,-1)} disabled={i===0} style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▲</button>
                 <button onClick={()=>moveArea(i,1)} disabled={i===areas.length-1} style={{ background:"none",border:"none",cursor:i===areas.length-1?"default":"pointer",color:i===areas.length-1?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▼</button>
               </div>
-              <span style={{ flex:1,fontSize:13,color:"#1a2332",fontWeight:500 }}>{a}</span>
-              <button onClick={()=>removeArea(a)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"3px 9px" }}>✕</button>
+              <input value={a.name} onChange={e=>updateAreaName(i,e.target.value)}
+                style={{ padding:"6px 10px",border:"1.5px solid #dde3ea",borderRadius:7,fontSize:13,fontWeight:500,background:"#fff" }}/>
+              <input value={a.code} onChange={e=>updateAreaCode(i,e.target.value)}
+                style={{ padding:"6px 10px",border:"1.5px solid #dde3ea",borderRadius:7,fontSize:13,fontFamily:"monospace",fontWeight:700,textAlign:"center",background:"#fff",letterSpacing:1 }}
+                placeholder="001" maxLength={3}/>
+              <button onClick={()=>removeArea(a.name)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"5px 10px" }}>✕</button>
             </div>
           ))}
         </div>
-        <div style={{ display:"flex",gap:8 }}>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 90px auto",gap:8,alignItems:"center" }}>
           <input value={newArea} onChange={e=>setNewArea(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addArea()}
-            style={{ flex:1,padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
-            placeholder="Add new area…"/>
-          <button onClick={addArea} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer" }}>+ Add</button>
+            style={{ padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
+            placeholder="New area name…"/>
+          <input value={newCode} onChange={e=>setNewCode(e.target.value.replace(/[^0-9]/g,"").slice(0,3))} onKeyDown={e=>e.key==="Enter"&&addArea()}
+            style={{ padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,fontFamily:"monospace",fontWeight:700,textAlign:"center",letterSpacing:1 }}
+            placeholder="Code" maxLength={3}/>
+          <button onClick={addArea} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap" }}>+ Add</button>
+        </div>
+        <div style={{ fontSize:11,color:"#8a9ab0",marginTop:10 }}>
+          Code is a 3-digit number used in reference IDs e.g. <span style={{ fontFamily:"monospace",fontWeight:700 }}>{prefix||"ORG"}-QMS-<span style={{ color:"#01579b" }}>004</span>-01012026</span>. Each code must be unique across areas.
         </div>
       </div>
       <div style={{ background:"#e3f2fd",borderRadius:10,padding:"14px 18px",border:"1px solid #90caf9",fontSize:12,color:"#01579b",lineHeight:1.6 }}>
@@ -7753,11 +7765,11 @@ export default function App() {
             const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
             if(error){showToast("Error saving settings: "+error.message,"error");return;}
             await logChange({user,action:"updated org settings",table:"organisations",recordId:org.id,recordTitle:org.name,newData:updates});
-            // Apply updates to local org state immediately so UI reflects changes
-            // without waiting for loadAll (which re-fetches from DB and could race)
+            // Merge updates into org state. Do NOT call loadAll() here — it races
+            // against this optimistic update and overwrites it with stale DB data.
+            // The updated org will be picked up correctly on next full page load.
             setOrg(prev=>({...prev,...updates}));
             showToast("Organisation settings saved","success");
-            loadAll(); // fire-and-forget refresh in background
           }} />}
           {activeTab==="changelog" && <ChangeLogView logs={data.changeLog}/>}
           {activeTab==="about"     && <AboutView />}
