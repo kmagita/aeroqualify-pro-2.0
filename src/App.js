@@ -5824,14 +5824,16 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
   };
 
   // Programme completion stats
-  const totalSlots  = orgAuditAreas.length * 2;
-  const yearSlots   = schedule.filter(s=>s.year===year);
-  const adHocSlots  = yearSlots.filter(s=>s.ad_hoc);
-  const completed   = yearSlots.filter(s=>s.status==="Completed").length;
-  const overdue     = yearSlots.filter(s=>s.status==="Overdue"||(!["Completed","Cancelled"].includes(s.status)&&s.planned_date&&new Date(s.planned_date)<new Date())).length;
-  const pct         = totalSlots>0 ? Math.round(completed/totalSlots*100) : 0;
-  const totalFindings = yearSlots.reduce((a,s)=>a+Number(s.findings||0),0);
-  const totalObs      = yearSlots.reduce((a,s)=>a+Number(s.observations||0),0);
+  const yearSlots      = schedule.filter(s=>s.year===year);
+  const adHocSlots     = yearSlots.filter(s=>s.ad_hoc);
+  const regularSlots   = yearSlots.filter(s=>!s.ad_hoc);
+  // totalSlots = actual regular slots in DB for this year (not derived from area list)
+  const totalSlots     = regularSlots.length;
+  const completed      = regularSlots.filter(s=>s.status==="Completed").length;
+  const overdue        = regularSlots.filter(s=>s.status==="Overdue"||(!["Completed","Cancelled"].includes(s.status)&&s.planned_date&&new Date(s.planned_date)<new Date())).length;
+  const pct            = totalSlots>0 ? Math.round(completed/totalSlots*100) : 0;
+  const totalFindings  = yearSlots.reduce((a,s)=>a+Number(s.findings||0),0);
+  const totalObs       = yearSlots.reduce((a,s)=>a+Number(s.observations||0),0);
 
   const hasSchedule = yearSlots.length > 0;
 
