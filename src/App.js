@@ -5750,6 +5750,15 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
   const generateSchedule = async () => {
     setGenerating(true);
     try {
+      // Delete ALL existing non-completed slots for this year+org before inserting fresh ones.
+      // This clears out stale areas from previous generates without touching completed audits.
+      const deleteQuery = supabase.from("audit_schedule")
+        .delete()
+        .eq("year", year)
+        .not("status", "in", "(Completed,In Progress)");
+      if(org?.id) deleteQuery.eq("org_id", org.id);
+      await deleteQuery;
+
       const rows = [];
       orgAuditAreas.forEach((area, idx) => {
         const month1 = 1 + (idx % 6);
@@ -5757,7 +5766,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
         rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-1`, year, area, slot:1, month:month1, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date, ...(org?.id?{org_id:org.id}:{}) });
         rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-2`, year, area, slot:2, month:month2, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date, ...(org?.id?{org_id:org.id}:{}) });
       });
-      const { error } = await supabase.from("audit_schedule").upsert(rows, { onConflict:"id" });
+      const { error } = await supabase.from("audit_schedule").insert(rows);
       if(error) { showToast(`Error: ${error.message}`,"error"); return; }
       await logChange({user,action:`generated ${year} audit schedule`,table:"audit_schedule",recordId:`schedule-${year}`,recordTitle:`${year} Audit Programme (${rows.length} slots)`,newData:{year,rows:rows.length}});
       showToast(`${year} audit schedule generated — ${rows.length} slots created`,"success");
