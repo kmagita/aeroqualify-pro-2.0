@@ -3,6 +3,10 @@ import { flushSync } from "react-dom";
 import { supabase, TABLES, logChange, sendNotification, SUPABASE_URL, SUPABASE_ANON } from "./supabase";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
+// ─── App Version ─────────────────────────────────────────────
+// Bump this with every successful deployment or new feature.
+const APP_VERSION = "4.0";
+
 // ─── Global Styles ──────────────────────────────────────────
 const GlobalStyle = () => (
   <>
@@ -3564,36 +3568,39 @@ const AboutView = () => {
 
   const COMPLIANCE_DATA = [
     { std:"AS9100D / ISO 9001:2015", color:"#01579b", bg:"#e3f2fd", items:[
-      { clause:"10.2.1", text:"Nonconformity & corrective action — full CAR/CAP workflow", ok:true },
-      { clause:"10.2.2", text:"Evidence of corrective action effectiveness", ok:true },
-      { clause:"10.2.3", text:"Review of corrective actions and trends", ok:true },
-      { clause:"7.5",    text:"Control of documented information", ok:true },
-      { clause:"7.5.3",  text:"Audit trail — full change log", ok:true },
-      { clause:"8.4",    text:"Control of externally provided processes — contractor register", ok:true },
-      { clause:"9.2",    text:"Internal audit programme", ok:true },
-      { clause:"6.1",    text:"Actions to address risks and opportunities — Risk Register", ok:true },
-      { clause:"9.3",    text:"Management review inputs (dashboard)", ok:"partial" },
-      { clause:"4.1",    text:"Context of the organisation", ok:"partial" },
+      { clause:"10.2.1", text:"Nonconformity & corrective action — full CAR/CAP workflow with resubmission cycle", ok:true },
+      { clause:"10.2.2", text:"Evidence of corrective action effectiveness — verification checklist with Effective/Returned outcomes", ok:true },
+      { clause:"10.2.3", text:"Review of corrective actions and trends — 6-month dashboard charts", ok:true },
+      { clause:"7.5",    text:"Control of documented information — QMS document register with revision tracking", ok:true },
+      { clause:"7.5.3",  text:"Audit trail — full change log across all modules", ok:true },
+      { clause:"8.4",    text:"Control of externally provided processes — approved contractor register with ratings", ok:true },
+      { clause:"9.2",    text:"Internal audit programme — biannual schedule builder with ad-hoc audit support", ok:true },
+      { clause:"9.2.2",  text:"Audit findings management — per-finding level classification, CAR linkage, PDF reports", ok:true },
+      { clause:"6.1",    text:"Actions to address risks and opportunities — ICAO 5×5 risk register with CAR linkage", ok:true },
+      { clause:"9.3",    text:"Management review inputs — QMS compliance score dashboard across 5 pillars", ok:"partial" },
+      { clause:"4.1",    text:"Context of the organisation — org settings, multi-org tenancy", ok:"partial" },
       { clause:"6.2",    text:"Quality objectives register", ok:false },
       { clause:"7.1.5",  text:"Calibration and measurement resources register", ok:false },
     ]},
-    { std:"Regulatory Document Compliance", color:"#2e7d32", bg:"#e8f5e9", items:[
-      { clause:"CAP Tracking",  text:"System for tracking internal and KCAA-issued CAPs", ok:true },
-      { clause:"Doc Control",   text:"Quality Manual and associated document control", ok:true },
-      { clause:"Cert Tracking", text:"Certificates, approvals and regulatory document expiry tracking", ok:true },
-      { clause:"Contractors",   text:"Approved maintenance and service provider register", ok:true },
-      { clause:"Audit Trail",   text:"Record of all quality-related actions and decisions", ok:true },
-      { clause:"QM Amendment",  text:"System referenced in Quality Manual — amendment pending", ok:"partial" },
-      { clause:"Training Rec.", text:"Instructor and student training records", ok:"planned" },
-      { clause:"Occurrence",    text:"Mandatory occurrence reporting system", ok:"planned" },
-      { clause:"Maintenance",   text:"Aircraft maintenance tracking and tech log", ok:"planned" },
+    { std:"Civil Aviation Regulatory Compliance", color:"#2e7d32", bg:"#e8f5e9", items:[
+      { clause:"CAP Tracking",     text:"Corrective Action Plans — full submit / review / verify / close cycle", ok:true },
+      { clause:"Doc Control",      text:"Quality Manual and company document control with expiry tracking", ok:true },
+      { clause:"Cert Tracking",    text:"AOC, certificates, approvals and regulatory document expiry alerting", ok:true },
+      { clause:"Contractors",      text:"Approved maintenance and service provider register with A+/A/B/C/F ratings", ok:true },
+      { clause:"Audit Trail",      text:"Immutable change log of all quality-related actions and decisions", ok:true },
+      { clause:"Multi-Org",        text:"Multi-tenant — supports ATO, AOC and AMO organisations independently", ok:true },
+      { clause:"Audit Refs",       text:"Organisation-specific CAR/audit reference numbering with custom area codes", ok:true },
+      { clause:"QM Amendment",     text:"System referenced in Quality Manual — formal amendment pending per org", ok:"partial" },
+      { clause:"Training Rec.",    text:"Instructor and student training records", ok:"planned" },
+      { clause:"Occurrence",       text:"Mandatory occurrence reporting system", ok:"planned" },
+      { clause:"Maintenance",      text:"Aircraft maintenance tracking and technical log", ok:"planned" },
     ]},
     { std:"ICAO Annex 19 — SMS Framework", color:"#e65100", bg:"#fff3e0", items:[
-      { clause:"2.1", text:"Hazard identification — 7-category risk register", ok:true },
-      { clause:"2.2", text:"Safety risk assessment — ICAO 5x5 matrix", ok:true },
-      { clause:"2.3", text:"Safety risk mitigation and treatment tracking", ok:true },
-      { clause:"3.1", text:"Safety performance monitoring -- QMS compliance score", ok:true },
-      { clause:"1.1", text:"Safety management commitment and responsibility", ok:"partial" },
+      { clause:"2.1", text:"Hazard identification — 10-category risk register with structured entry", ok:true },
+      { clause:"2.2", text:"Safety risk assessment — ICAO 5×5 severity × likelihood matrix", ok:true },
+      { clause:"2.3", text:"Safety risk mitigation — treatment tracking, residual scoring, CAR linkage", ok:true },
+      { clause:"3.1", text:"Safety performance monitoring — live QMS compliance score across 5 pillars", ok:true },
+      { clause:"1.1", text:"Safety management commitment — accountable manager approval on audit schedules", ok:"partial" },
       { clause:"1.4", text:"Safety Performance Indicators (SPIs) and targets", ok:false },
       { clause:"3.2", text:"Management of change workflow", ok:false },
       { clause:"4.1", text:"Training and education records", ok:"planned" },
@@ -3601,78 +3608,100 @@ const AboutView = () => {
     ]},
   ];
 
-  const si = (ok) => ok===true?{icon:"✓",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{icon:"~",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{icon:"~",bg:"#e8eaf6",color:"#3949ab"}:{icon:"x",bg:"#ffebee",color:"#c62828"};
+  const si = (ok) => ok===true?{icon:"✓",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{icon:"~",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{icon:"◦",bg:"#e8eaf6",color:"#3949ab"}:{icon:"✕",bg:"#ffebee",color:"#c62828"};
   const st = (ok) => ok===true?{label:"Compliant",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{label:"Partial",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{label:"Planned",bg:"#e8eaf6",color:"#3949ab"}:{label:"Gap",bg:"#ffebee",color:"#c62828"};
 
+  const totalItems = COMPLIANCE_DATA.flatMap(s=>s.items);
+  const counts = {
+    compliant: totalItems.filter(i=>i.ok===true).length,
+    partial:   totalItems.filter(i=>i.ok==="partial").length,
+    planned:   totalItems.filter(i=>i.ok==="planned").length,
+    gap:       totalItems.filter(i=>i.ok===false).length,
+  };
+  const pct = Math.round((counts.compliant + counts.partial*0.5) / totalItems.length * 100);
+
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:900 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:960 }}>
 
-      {/* Hero */}
-      <div className="card" style={{ background:`linear-gradient(135deg,${T.navy} 0%,#0d3060 100%)`, padding:"32px 36px", borderRadius:12, color:"#fff", position:"relative", overflow:"hidden" }}>
-        <div style={{ position:"absolute",top:-40,right:-40,width:220,height:220,borderRadius:"50%",background:"rgba(255,255,255,0.03)" }}/>
-        <div style={{ position:"absolute",bottom:-60,right:60,width:300,height:300,borderRadius:"50%",background:"rgba(255,255,255,0.02)" }}/>
-        <div style={{ position:"relative", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap" }}>
-          <div>
-            <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:32, fontWeight:800, letterSpacing:0.5, lineHeight:1 }}>
-              AeroQualify <span style={{ color:T.sky }}>Pro</span>
+      {/* ── Hero Header ── */}
+      <div style={{ background:"linear-gradient(135deg,#0a1628 0%,#0d2e5e 50%,#01579b 100%)", borderRadius:14, padding:"36px 40px", color:"#fff", position:"relative", overflow:"hidden", boxShadow:"0 8px 40px rgba(1,87,155,0.3)" }}>
+        {/* Background rings */}
+        <div style={{ position:"absolute",top:-60,right:-60,width:280,height:280,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.05)" }}/>
+        <div style={{ position:"absolute",top:-20,right:-20,width:180,height:180,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.07)" }}/>
+        <div style={{ position:"absolute",bottom:-80,left:"40%",width:320,height:320,borderRadius:"50%",background:"rgba(2,119,189,0.15)" }}/>
+
+        <div style={{ position:"relative" }}>
+          {/* Top row: logo + version */}
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap", marginBottom:24 }}>
+            <div>
+              <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:8 }}>
+                <div style={{ width:48,height:48,borderRadius:12,background:"linear-gradient(135deg,#0288d1,#01579b)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,boxShadow:"0 4px 16px rgba(0,0,0,0.3)" }}>✈</div>
+                <div>
+                  <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:30, fontWeight:800, letterSpacing:0.5, lineHeight:1 }}>
+                    AeroQualify <span style={{ color:"#40c4ff" }}>Pro</span>
+                  </div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:3, letterSpacing:1, textTransform:"uppercase", fontWeight:400 }}>Aviation Quality Management System</div>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
+                {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA","Multi-Tenant SaaS"].map(b=>(
+                  <span key={b} style={{ fontSize:10, fontWeight:700, background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, padding:"3px 10px", letterSpacing:0.5, color:"rgba(255,255,255,0.8)" }}>{b}</span>
+                ))}
+              </div>
             </div>
-            <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:6, fontWeight:300 }}>Aviation Quality Management System</div>
-            <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-              {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA"].map(b=>(
-                <span key={b} style={{ fontSize:10, fontWeight:700, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, padding:"3px 9px", letterSpacing:0.5 }}>{b}</span>
-              ))}
+            <div style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, padding:"16px 24px", textAlign:"center", flexShrink:0, backdropFilter:"blur(10px)" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"rgba(255,255,255,0.4)", letterSpacing:2, textTransform:"uppercase", marginBottom:6 }}>Version</div>
+              <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:36, fontWeight:800, color:"#40c4ff", lineHeight:1 }}>{APP_VERSION}</div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginTop:6 }}>{year} Release</div>
             </div>
           </div>
-          <div style={{ textAlign:"right", flexShrink:0 }}>
-            <div style={{ fontFamily:"'Source Code Pro',monospace", fontSize:11, color:"rgba(255,255,255,0.4)", marginBottom:4 }}>VERSION</div>
-            <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.sky }}>3.0</div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:2 }}>{year}</div>
+
+          {/* Stat bar */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+            {[
+              { label:"Compliant", value:counts.compliant, color:"#69f0ae", bg:"rgba(105,240,174,0.1)" },
+              { label:"Partial",   value:counts.partial,   color:"#ffd740", bg:"rgba(255,215,64,0.1)" },
+              { label:"Planned",   value:counts.planned,   color:"#82b1ff", bg:"rgba(130,177,255,0.1)" },
+              { label:"Gaps",      value:counts.gap,       color:"#ff5252", bg:"rgba(255,82,82,0.1)" },
+            ].map(s=>(
+              <div key={s.label} style={{ background:s.bg, border:`1px solid ${s.color}22`, borderRadius:10, padding:"12px 16px", textAlign:"center" }}>
+                <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:26, fontWeight:800, color:s.color, lineHeight:1 }}>{s.value}</div>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", marginTop:4, textTransform:"uppercase", letterSpacing:0.8, fontWeight:600 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Compliance progress bar */}
+          <div style={{ marginTop:16 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+              <span style={{ fontSize:11, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>Overall Standards Coverage</span>
+              <span style={{ fontSize:11, color:"#40c4ff", fontWeight:700 }}>{pct}%</span>
+            </div>
+            <div style={{ height:6, background:"rgba(255,255,255,0.1)", borderRadius:3, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:`${pct}%`, background:"linear-gradient(90deg,#0288d1,#40c4ff)", borderRadius:3, transition:"width 1s ease" }}/>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Legal Ownership */}
-      <div className="card" style={{ padding:"24px 28px", borderLeft:`4px solid ${T.primary}` }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16 }}>Legal Ownership &amp; Copyright</div>
-        <div style={{ background:T.primaryLt, borderRadius:8, padding:"16px 18px", marginBottom:16, border:`1px solid ${T.border}` }}>
-          <div style={{ fontSize:13, fontWeight:700, color:T.primaryDk, marginBottom:8 }}>Copyright Notice</div>
-          <div style={{ fontSize:13, color:T.text, lineHeight:1.8 }}>
-            Copyright &copy; {year} Kornelius Magita. All rights reserved.
-          </div>
-          <div style={{ fontSize:12, color:T.muted, marginTop:10, lineHeight:1.8 }}>
-            AeroQualify Pro and all associated software, source code, design, documentation, workflows, and data structures — including all current and future versions and editions — are the exclusive intellectual property of Kornelius Magita No part of this software may be reproduced, distributed, modified, sublicensed, sold, or transferred to any third party without the express written consent of Kornelius Magita.
-          </div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          {[
-            { label:"Software Owner",   value:"Kornelius Magita" },
-            { label:"Rights",           value:"All rights reserved — full copyright" },
-            { label:"Jurisdiction",     value:"Republic of Kenya" },
-            { label:"Licence Type",     value:"Proprietary -- not open source" },
-            { label:"Covers",           value:"This and all future editions" },
-            { label:"Unauthorised Use", value:"Strictly prohibited" },
-          ].map(r=>(
-            <div key={r.label} style={{ background:"#f8fafc", borderRadius:6, padding:"10px 14px", border:`1px solid ${T.border}` }}>
-              <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.8, marginBottom:3 }}>{r.label}</div>
-              <div style={{ fontSize:13, color:T.text, fontWeight:600 }}>{r.value}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* System Info */}
+      {/* ── System Information ── */}
       <div className="card" style={{ padding:"24px 28px" }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16 }}>System Information</div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:16 }}>⚙️</span> System Information
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
           {[
+            { label:"Version",    value:`v${APP_VERSION}` },
             { label:"Platform",   value:"Web / Cloud (Vercel)" },
             { label:"Database",   value:"Supabase (PostgreSQL)" },
-            { label:"Version",    value:"3.0.0" },
             { label:"Framework",  value:"React 18" },
             { label:"Auth",       value:"Supabase Auth (JWT)" },
-            { label:"Backup",     value:"Daily -- Google Drive" },
+            { label:"Email",      value:"Resend API" },
+            { label:"PDF Engine", value:"jsPDF + pdf-lib" },
+            { label:"Charts",     value:"Recharts" },
+            { label:"Backup",     value:"Supabase daily snapshots" },
           ].map(r=>(
-            <div key={r.label} style={{ background:"#f8fafc", borderRadius:6, padding:"10px 14px", border:`1px solid ${T.border}` }}>
+            <div key={r.label} style={{ background:"#f8fafc", borderRadius:8, padding:"10px 14px", border:"1px solid #eef2f7" }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.8, marginBottom:3 }}>{r.label}</div>
               <div style={{ fontFamily:"'Source Code Pro',monospace", fontSize:12, color:T.primary, fontWeight:600 }}>{r.value}</div>
             </div>
@@ -3680,42 +3709,43 @@ const AboutView = () => {
         </div>
       </div>
 
-      {/* Compliance Checklist */}
+      {/* ── Compliance Checklist ── */}
       <div className="card" style={{ padding:"24px 28px" }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:6 }}>Standards Compliance Checklist</div>
-        <div style={{ fontSize:12, color:T.muted, marginBottom:16 }}>
-          AeroQualify Pro is designed to support compliance with the standards below. This checklist reflects the current state of the system and is updated as new modules are developed.
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:16 }}>📋</span> Standards Compliance Checklist
         </div>
-        {/* Legend */}
-        <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:20, padding:"10px 14px", background:"#f8fafc", borderRadius:8, border:`1px solid ${T.border}` }}>
+        <div style={{ fontSize:12, color:T.muted, marginBottom:16 }}>
+          Current coverage of AeroQualify Pro against aviation quality and safety management standards. Updated with each version release.
+        </div>
+        <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:20, padding:"10px 14px", background:"#f8fafc", borderRadius:8, border:"1px solid #eef2f7" }}>
           {[{l:"Compliant",c:"#2e7d32"},{l:"Partial",c:"#f57f17"},{l:"Planned",c:"#3949ab"},{l:"Gap",c:"#c62828"}].map(x=>(
             <div key={x.l} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
               <div style={{ width:10,height:10,borderRadius:"50%",background:x.c }}/>
-              <span style={{ color:T.muted }}>{x.l}</span>
+              <span style={{ color:T.muted, fontWeight:600 }}>{x.l}</span>
             </div>
           ))}
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
           {COMPLIANCE_DATA.map(std=>(
-            <div key={std.std} style={{ border:`1px solid ${T.border}`, borderRadius:10, overflow:"hidden" }}>
-              <div style={{ background:std.bg, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${T.border}`, flexWrap:"wrap", gap:8 }}>
+            <div key={std.std} style={{ border:"1px solid #dde3ea", borderRadius:10, overflow:"hidden" }}>
+              <div style={{ background:std.bg, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #dde3ea", flexWrap:"wrap", gap:8 }}>
                 <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:13, fontWeight:700, color:std.color }}>{std.std}</div>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                   {[{ok:true,label:"compliant"},{ok:"partial",label:"partial"},{ok:false,label:"gaps"},{ok:"planned",label:"planned"}].map(b=>{
                     const cnt=std.items.filter(i=>i.ok===b.ok).length;
                     if(!cnt) return null;
                     const s=st(b.ok);
-                    return <span key={b.label} style={{ fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:s.bg,color:s.color }}>{cnt} {b.label}</span>;
+                    return <span key={b.label} style={{ fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:10,background:s.bg,color:s.color }}>{cnt} {b.label}</span>;
                   })}
                 </div>
               </div>
               {std.items.map((item,idx)=>{
                 const s=si(item.ok); const tag=st(item.ok);
                 return (
-                  <div key={item.clause} style={{ display:"grid", gridTemplateColumns:"28px 100px 1fr 90px", alignItems:"center", gap:12, padding:"10px 18px", borderBottom:idx<std.items.length-1?`1px solid #f0f3f7`:"none" }}>
-                    <div style={{ width:22,height:22,borderRadius:"50%",background:s.bg,color:s.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0 }}>{s.icon}</div>
-                    <span style={{ fontFamily:"'Source Code Pro',monospace",fontSize:10,fontWeight:600,color:T.primary,background:"#e3f2fd",padding:"3px 8px",borderRadius:4,whiteSpace:"nowrap" }}>{item.clause}</span>
-                    <span style={{ fontSize:12,color:T.text }}>{item.text}</span>
+                  <div key={item.clause} style={{ display:"grid", gridTemplateColumns:"28px 110px 1fr 90px", alignItems:"center", gap:12, padding:"10px 18px", background:idx%2===0?"#fff":"#fafbfc", borderBottom:idx<std.items.length-1?"1px solid #f0f3f7":"none" }}>
+                    <div style={{ width:22,height:22,borderRadius:"50%",background:s.bg,color:s.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0 }}>{s.icon}</div>
+                    <span style={{ fontFamily:"'Source Code Pro',monospace",fontSize:10,fontWeight:600,color:std.color,background:std.bg,padding:"3px 8px",borderRadius:4,whiteSpace:"nowrap" }}>{item.clause}</span>
+                    <span style={{ fontSize:12,color:T.text,lineHeight:1.5 }}>{item.text}</span>
                     <span style={{ fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:10,textAlign:"center",background:tag.bg,color:tag.color,whiteSpace:"nowrap" }}>{tag.label}</span>
                   </div>
                 );
@@ -3725,47 +3755,42 @@ const AboutView = () => {
         </div>
       </div>
 
-      {/* Legal Disclaimer Section */}
-      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28, marginBottom:16 }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:16, color:"#1a2332", marginBottom:4 }}>Legal Ownership & Disclaimer</div>
-        <div style={{ fontSize:11, color:T.muted, marginBottom:16 }}>Copyright © 2026 Kornelius M. Magita. All rights reserved.</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      {/* ── Legal Ownership ── */}
+      <div className="card" style={{ padding:"24px 28px", borderLeft:`4px solid ${T.primary}` }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:16 }}>⚖️</span> Legal Ownership &amp; Copyright
+        </div>
+        <div style={{ background:T.primaryLt, borderRadius:8, padding:"14px 18px", marginBottom:16, border:`1px solid ${T.border}` }}>
+          <div style={{ fontSize:12, color:T.text, lineHeight:1.8 }}>
+            Copyright &copy; {year} <strong>Kornelius Magita</strong>. All rights reserved. AeroQualify Pro and all associated software, source code, design, documentation, workflows, and data structures — including all current and future versions — are the exclusive intellectual property of Kornelius Magita. No part of this software may be reproduced, distributed, modified, sublicensed, sold, or transferred without express written consent.
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
           {[
-            ["Software Owner", "Kornelius M. Magita"],
-            ["Jurisdiction", "Republic of Kenya"],
-            ["Licence Type", "Proprietary — not open source"],
-          ].map(([k,v])=>(
-            <div key={k} style={{ display:"flex", gap:16 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:"#5f7285", minWidth:160 }}>{k}</div>
-              <div style={{ fontSize:12, color:"#1a2332" }}>{v}</div>
+            { label:"Software Owner",   value:"Kornelius Magita" },
+            { label:"Rights",           value:"All rights reserved — full copyright" },
+            { label:"Jurisdiction",     value:"Republic of Kenya" },
+            { label:"Licence Type",     value:"Proprietary — not open source" },
+            { label:"Covers",           value:"This and all future editions" },
+            { label:"Unauthorised Use", value:"Strictly prohibited" },
+          ].map(r=>(
+            <div key={r.label} style={{ background:"#f8fafc", borderRadius:6, padding:"10px 14px", border:"1px solid #eef2f7" }}>
+              <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.8, marginBottom:3 }}>{r.label}</div>
+              <div style={{ fontSize:13, color:T.text, fontWeight:600 }}>{r.value}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop:20, background:"#f8fafc", borderRadius:8, padding:"16px 18px", maxHeight:320, overflowY:"auto", border:"1px solid #eef2f7" }}>
-          {[
-            ["User Licence Terms", "Authorised Use: This software is licensed, not sold. Authorised users may access and use AeroQualify Pro solely for the purpose of managing quality, safety, and compliance records within their organisation, as agreed in writing with Kornelius M. Magita."],
-            ["Prohibited Activities", "Users may not copy, decompile, reverse engineer, disassemble, modify, or create derivative works based on this software. Sharing access credentials or granting unauthorised third-party access is strictly prohibited."],
-            ["Data Ownership", "All data entered into the system by the licensed organisation remains the property of that organisation. Kornelius M. Magita does not claim ownership of customer data."],
-            ["Confidentiality", "Users must treat all aspects of the software — including its workflows, design, and features — as confidential. This obligation survives termination of the licence agreement."],
-            ["Warranty Disclaimer", "The software is provided in good faith. Kornelius M. Magita makes no warranties as to fitness for any specific regulatory purpose. It is the operator's responsibility to ensure the system meets applicable regulatory requirements in their jurisdiction."],
-          ].map(([title, text])=>(
-            <div key={title} style={{ marginBottom:12 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:"#1a2332", marginBottom:3 }}>{title}</div>
-              <div style={{ fontSize:12, color:"#5f7285", lineHeight:1.6 }}>{text}</div>
-            </div>
-          ))}
-          <div style={{ marginTop:8, padding:"12px 14px", background:"#fff3e0", borderRadius:6, border:"1px solid #ffcc80" }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#e65100", marginBottom:4 }}>LIMITATION OF LIABILITY</div>
-            <div style={{ fontSize:11, color:"#795548", lineHeight:1.6 }}>
-              TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, KORNELIUS M. MAGITA SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR IN CONNECTION WITH THE USE OF THIS SOFTWARE, INCLUDING BUT NOT LIMITED TO: LOSS OF DATA; REGULATORY NON-COMPLIANCE; FAILURE TO DETECT SAFETY OCCURRENCES; BUSINESS INTERRUPTION; OR LOSS OF REVENUE. Compliance responsibility rests solely with the licensed operator and its designated accountable manager.
-            </div>
+        <div style={{ marginTop:16, padding:"14px 16px", background:"#fff3e0", borderRadius:8, border:"1px solid #ffcc80" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#e65100", marginBottom:4 }}>LIMITATION OF LIABILITY</div>
+          <div style={{ fontSize:11, color:"#795548", lineHeight:1.7 }}>
+            To the fullest extent permitted by applicable law, Kornelius Magita shall not be liable for any direct, indirect, incidental, or consequential damages arising from the use of this software, including loss of data, regulatory non-compliance, or business interruption. Compliance responsibility rests solely with the licensed operator and its designated accountable manager.
           </div>
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ── */}
       <div style={{ textAlign:"center", fontSize:11, color:T.muted, paddingBottom:8 }}>
-        AeroQualify Pro &nbsp;&middot;&nbsp; Copyright &copy; {year} Kornelius Magita. All rights reserved. &nbsp;&middot;&nbsp; v3.0.0
+        AeroQualify Pro &nbsp;&middot;&nbsp; Copyright &copy; {year} Kornelius Magita &nbsp;&middot;&nbsp; v{APP_VERSION}
       </div>
     </div>
   );
