@@ -4249,7 +4249,7 @@ const AUDIT_TYPES = ["Internal","Supplier","External","Regulatory","Surveillance
 const FINDING_LEVELS = ["Level 1 - Critical NC","Level 2 - Major NC","Level 3 - Minor NC","Observation","Repeat Finding","Regulatory"];
 
 
-const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profile, showToast, onRefresh, org }) => {
+const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profile, showToast, onRefresh, org, readOnly=false }) => {
   const [tab, setTab] = useState("details");
   const [form, setForm] = useState({
     lead_auditor:     slot.lead_auditor||"",
@@ -4542,14 +4542,14 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
             <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                 <div style={{ fontSize:13,color:T.muted }}>Record each individual finding. Findings will auto-populate the report summary.</div>
-                <Btn size="sm" onClick={addFinding}>+ Add Finding</Btn>
+                {!readOnly&&<Btn size="sm" onClick={addFinding}>+ Add Finding</Btn>}
               </div>
               {findingItems.length===0 && (
                 <div style={{ padding:40,textAlign:"center",background:"#f5f8fc",borderRadius:10,border:"2px dashed #dde3ea" }}>
                   <div style={{ fontSize:32,marginBottom:8 }}>🔍</div>
                   <div style={{ fontSize:14,fontWeight:600,color:T.muted,marginBottom:4 }}>No findings recorded</div>
                   <div style={{ fontSize:12,color:T.muted,marginBottom:16 }}>Add findings, observations and non-conformances from this audit</div>
-                  <Btn size="sm" onClick={addFinding}>+ Add First Finding</Btn>
+                  {!readOnly&&<Btn size="sm" onClick={addFinding}>+ Add First Finding</Btn>}
                 </div>
               )}
               {findingItems.map((f,i)=>{
@@ -4575,7 +4575,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
                           ? <span style={{ fontSize:10,fontWeight:700,background:"#e3f2fd",color:"#0288d1",border:"1px solid #90caf9",borderRadius:5,padding:"2px 8px" }}>ℹ N/A — Observation</span>
                           : (f.car_raised || f.car_id)
                             ? <span style={{ fontFamily:"monospace",fontSize:10,fontWeight:700,background:"#e8f5e9",color:"#2e7d32",border:"1px solid #a5d6a7",borderRadius:5,padding:"2px 7px" }}>✓ {f.car_id||"CAR Raised"}</span>
-                            : <button onClick={()=>setCarModal({finding:f})} style={{ fontSize:11,fontWeight:700,color:"#01579b",background:"#e3f2fd",border:"1px solid #90caf9",borderRadius:6,padding:"3px 10px",cursor:"pointer" }}>+ Raise CAR</button>
+                            : (!readOnly&&<button onClick={()=>setCarModal({finding:f})} style={{ fontSize:11,fontWeight:700,color:"#01579b",background:"#e3f2fd",border:"1px solid #90caf9",borderRadius:6,padding:"3px 10px",cursor:"pointer" }}>+ Raise CAR</button>)
                         }
                         <button onClick={()=>removeFinding(f.id)} style={{ background:"none",border:"none",color:lc.text,cursor:"pointer",fontSize:16,fontWeight:700 }}>✕</button>
                       </div>
@@ -4665,10 +4665,11 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
 
         {/* Footer */}
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
-          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments},org)}>🔔 Notification Form</Btn>
-          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",_managers:managers,_org:org}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
-          <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
+          <Btn variant="ghost" onClick={onClose}>{readOnly?"Close":"Cancel"}</Btn>
+          {!readOnly&&<Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments},org)}>🔔 Notification Form</Btn>}
+          {!readOnly&&slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",_managers:managers,_org:org}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
+          {!readOnly&&<Btn onClick={handleSave}>💾 Save Audit Record</Btn>}
+          {readOnly&&<div style={{ fontSize:11,color:"#8a9ab0",alignSelf:"center" }}>👁 Read-only — QM or Admin can edit</div>}
         </div>
       </div>
     </div>
@@ -5733,8 +5734,9 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
     const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
     return [...new Set([...orgAuditAreas, ...scheduleAreas.filter(a=>!orgAuditAreas.includes(a))])];
   })();
-  const isQM    = ["admin","quality_manager"].includes(profile?.role);
-  const isAdmin = profile?.role==="admin";
+  const isQM         = ["admin","quality_manager"].includes(profile?.role);
+  const isAdmin      = profile?.role==="admin";
+  const canViewAudits= ["admin","quality_manager","quality_auditor","manager"].includes(profile?.role);
   const [view,      setView]      = useState("schedule");
   const [year,      setYear]      = useState(new Date().getFullYear());
   const [modal,     setModal]     = useState(null);
@@ -5976,12 +5978,12 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
                         return (
                           <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                             <div
-                              onClick={()=>isQM&&scheduleUnlocked&&setModal(slot)}
+                              onClick={()=>canViewAudits&&(isQM&&scheduleUnlocked||!isQM)&&setModal(slot)}
                               title={`${area} — Slot ${slot.slot}
 Status: ${slot.status||"Scheduled"}
 Lead: ${slot.lead_auditor||"Not assigned"}
 Planned: ${slot.planned_date||"Not set"}`}
-                              style={{ width:28,height:28,borderRadius:6,background:c.bg,border:`2px solid ${c.border}`,margin:"0 auto",cursor:isQM?(scheduleUnlocked?"pointer":"not-allowed"):"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:isQM&&!scheduleUnlocked?0.75:1 }}
+                              style={{ width:28,height:28,borderRadius:6,background:c.bg,border:`2px solid ${c.border}`,margin:"0 auto",cursor:canViewAudits?(isQM?(scheduleUnlocked?"pointer":"not-allowed"):"pointer"):"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:isQM&&!scheduleUnlocked?0.75:1 }}
                               onMouseEnter={e=>{if(isQM)e.target.style.transform="scale(1.2)";}}
                               onMouseLeave={e=>{e.target.style.transform="scale(1)";}}
                             >
@@ -6027,9 +6029,9 @@ Planned: ${slot.planned_date||"Not set"}`}
                             return (
                               <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                                 <div
-                                  onClick={()=>isQM&&scheduleUnlocked&&setModal(s)}
+                                  onClick={()=>canViewAudits&&(isQM&&scheduleUnlocked||!isQM)&&setModal(s)}
                                   title={s.area+" (Ad-Hoc)\nTrigger: "+(s.trigger||"—")+"\nStatus: "+(s.status||"Scheduled")+"\nLead: "+(s.lead_auditor||"Not assigned")+"\nPlanned: "+(s.planned_date||"Not set")}
-                                  style={{ width:28,height:28,borderRadius:6,background:c.bg,border:"2px dashed "+c.border,margin:"0 auto",cursor:isQM?(scheduleUnlocked?"pointer":"not-allowed"):"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:isQM&&!scheduleUnlocked?0.75:1 }}
+                                  style={{ width:28,height:28,borderRadius:6,background:c.bg,border:"2px dashed "+c.border,margin:"0 auto",cursor:canViewAudits?(isQM?(scheduleUnlocked?"pointer":"not-allowed"):"pointer"):"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:isQM&&!scheduleUnlocked?0.75:1 }}
                                   onMouseEnter={e=>{if(isQM)e.currentTarget.style.transform="scale(1.2)";}}
                                   onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
                                 >
@@ -6127,7 +6129,7 @@ Planned: ${slot.planned_date||"Not set"}`}
           onClose={()=>setAdHocModal(false)}
         />
       )}
-      {modal&&<AuditScheduleModal slot={modal} onSave={saveSlot} onClose={()=>setModal(null)} managers={managers} data={data} user={user} profile={profile} showToast={showToast} onRefresh={onRefresh} org={org}/>}
+      {modal&&<AuditScheduleModal slot={modal} onSave={saveSlot} onClose={()=>setModal(null)} managers={managers} data={data} user={user} profile={profile} showToast={showToast} onRefresh={onRefresh} org={org} readOnly={!isQM}/>}
 
       {/* Password Gate Modal */}
       {pwModal&&(
