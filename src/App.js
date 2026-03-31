@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 // ─── App Version ─────────────────────────────────────────────
 // Bump this with every successful deployment or new feature.
-const APP_VERSION = "4.0";
+const APP_VERSION = "4.0-beta";
 
 // ─── Global Styles ──────────────────────────────────────────
 const GlobalStyle = () => (
@@ -3579,10 +3579,10 @@ const AboutView = () => {
       { clause:"9.2",    text:"Internal audit programme — biannual schedule builder with ad-hoc audit support", ok:true },
       { clause:"9.2.2",  text:"Audit findings management — per-finding level classification, CAR linkage, PDF reports", ok:true },
       { clause:"6.1",    text:"Actions to address risks and opportunities — ICAO 5×5 risk register with CAR linkage", ok:true },
-      { clause:"9.3",    text:"Management review inputs — QMS compliance score dashboard across 5 pillars", ok:"partial" },
-      { clause:"4.1",    text:"Context of the organisation — org settings, multi-org tenancy", ok:"partial" },
-      { clause:"6.2",    text:"Quality objectives register", ok:false },
-      { clause:"7.1.5",  text:"Calibration and measurement resources register", ok:false },
+      { clause:"9.3",    text:"Management review — compliance score provides inputs but the review itself is a management process outside software scope", ok:"n/a" },
+      { clause:"4.1",    text:"Context of the organisation — a formal documented analysis of internal/external issues; a management document, not a software function", ok:"n/a" },
+      { clause:"6.2",    text:"Quality objectives — set and owned by management, outside software scope", ok:"n/a" },
+      { clause:"7.1.5",  text:"Calibration register — applicable to AMOs/test equipment only, not in current scope", ok:"n/a" },
     ]},
     { std:"Civil Aviation Regulatory Compliance", color:"#2e7d32", bg:"#e8f5e9", items:[
       { clause:"CAP Tracking",     text:"Corrective Action Plans — full submit / review / verify / close cycle", ok:true },
@@ -3592,7 +3592,7 @@ const AboutView = () => {
       { clause:"Audit Trail",      text:"Immutable change log of all quality-related actions and decisions", ok:true },
       { clause:"Multi-Org",        text:"Multi-tenant — supports ATO, AOC and AMO organisations independently", ok:true },
       { clause:"Audit Refs",       text:"Organisation-specific CAR/audit reference numbering with custom area codes", ok:true },
-      { clause:"QM Amendment",     text:"System referenced in Quality Manual — formal amendment pending per org", ok:"partial" },
+      { clause:"QM Amendment",     text:"Referencing the system in the Quality Manual is an operator action, not a software function", ok:"n/a" },
       { clause:"Training Rec.",    text:"Instructor and student training records", ok:"planned" },
       { clause:"Occurrence",       text:"Mandatory occurrence reporting system", ok:"planned" },
       { clause:"Maintenance",      text:"Aircraft maintenance tracking and technical log", ok:"planned" },
@@ -3602,16 +3602,16 @@ const AboutView = () => {
       { clause:"2.2", text:"Safety risk assessment — ICAO 5×5 severity × likelihood matrix", ok:true },
       { clause:"2.3", text:"Safety risk mitigation — treatment tracking, residual scoring, CAR linkage", ok:true },
       { clause:"3.1", text:"Safety performance monitoring — live QMS compliance score across 5 pillars", ok:true },
-      { clause:"1.1", text:"Safety management commitment — accountable manager approval on audit schedules", ok:"partial" },
-      { clause:"1.4", text:"Safety Performance Indicators (SPIs) and targets", ok:false },
-      { clause:"3.2", text:"Management of change workflow", ok:false },
+      { clause:"1.1", text:"Safety management commitment — AM approval documented on audit schedule; safety policy, accountabilities and resource allocation remain organisational responsibilities", ok:"partial" },
+      { clause:"1.4", text:"Safety Performance Indicators — defined and monitored by management, outside software scope", ok:"n/a" },
+      { clause:"3.2", text:"Management of change — a management process, not a software function in current scope", ok:"n/a" },
       { clause:"4.1", text:"Training and education records", ok:"planned" },
-      { clause:"4.2", text:"Safety communication and promotion log", ok:false },
+      { clause:"4.2", text:"Safety communication and promotion log — management process, outside current scope", ok:"n/a" },
     ]},
   ];
 
-  const si = (ok) => ok===true?{icon:"✓",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{icon:"~",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{icon:"◦",bg:"#e8eaf6",color:"#3949ab"}:{icon:"✕",bg:"#ffebee",color:"#c62828"};
-  const st = (ok) => ok===true?{label:"Compliant",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{label:"Partial",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{label:"Planned",bg:"#e8eaf6",color:"#3949ab"}:{label:"Gap",bg:"#ffebee",color:"#c62828"};
+  const si = (ok) => ok===true?{icon:"✓",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{icon:"~",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{icon:"◦",bg:"#e8eaf6",color:"#3949ab"}:ok==="n/a"?{icon:"—",bg:"#f5f5f5",color:"#9e9e9e"}:{icon:"✕",bg:"#ffebee",color:"#c62828"};
+  const st = (ok) => ok===true?{label:"Compliant",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{label:"Partial",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{label:"Planned",bg:"#e8eaf6",color:"#3949ab"}:ok==="n/a"?{label:"N/A",bg:"#f5f5f5",color:"#9e9e9e"}:{label:"Gap",bg:"#ffebee",color:"#c62828"};
 
   const totalItems = COMPLIANCE_DATA.flatMap(s=>s.items);
   const counts = {
@@ -3619,8 +3619,11 @@ const AboutView = () => {
     partial:   totalItems.filter(i=>i.ok==="partial").length,
     planned:   totalItems.filter(i=>i.ok==="planned").length,
     gap:       totalItems.filter(i=>i.ok===false).length,
+    na:        totalItems.filter(i=>i.ok==="n/a").length,
   };
-  const pct = Math.round((counts.compliant + counts.partial*0.5) / totalItems.length * 100);
+  // Exclude N/A items from the score — they are out of scope, not gaps
+  const scorableItems = totalItems.filter(i=>i.ok!=="n/a");
+  const pct = scorableItems.length>0 ? Math.round((counts.compliant + counts.partial*0.5) / scorableItems.length * 100) : 0;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:960 }}>
@@ -3664,7 +3667,7 @@ const AboutView = () => {
               { label:"Compliant", value:counts.compliant, color:"#69f0ae", bg:"rgba(105,240,174,0.1)" },
               { label:"Partial",   value:counts.partial,   color:"#ffd740", bg:"rgba(255,215,64,0.1)" },
               { label:"Planned",   value:counts.planned,   color:"#82b1ff", bg:"rgba(130,177,255,0.1)" },
-              { label:"Gaps",      value:counts.gap,       color:"#ff5252", bg:"rgba(255,82,82,0.1)" },
+              { label:"N/A",       value:counts.na,        color:"#bdbdbd", bg:"rgba(189,189,189,0.1)" },
             ].map(s=>(
               <div key={s.label} style={{ background:s.bg, border:`1px solid ${s.color}22`, borderRadius:10, padding:"12px 16px", textAlign:"center" }}>
                 <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:26, fontWeight:800, color:s.color, lineHeight:1 }}>{s.value}</div>
@@ -3720,7 +3723,7 @@ const AboutView = () => {
           Current coverage of AeroQualify Pro against aviation quality and safety management standards. Updated with each version release.
         </div>
         <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:20, padding:"10px 14px", background:"#f8fafc", borderRadius:8, border:"1px solid #eef2f7" }}>
-          {[{l:"Compliant",c:"#2e7d32"},{l:"Partial",c:"#f57f17"},{l:"Planned",c:"#3949ab"},{l:"Gap",c:"#c62828"}].map(x=>(
+          {[{l:"Compliant",c:"#2e7d32"},{l:"Partial",c:"#f57f17"},{l:"Planned",c:"#3949ab"},{l:"N/A",c:"#9e9e9e"}].map(x=>(
             <div key={x.l} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
               <div style={{ width:10,height:10,borderRadius:"50%",background:x.c }}/>
               <span style={{ color:T.muted, fontWeight:600 }}>{x.l}</span>
@@ -3733,7 +3736,7 @@ const AboutView = () => {
               <div style={{ background:std.bg, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #dde3ea", flexWrap:"wrap", gap:8 }}>
                 <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:13, fontWeight:700, color:std.color }}>{std.std}</div>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {[{ok:true,label:"compliant"},{ok:"partial",label:"partial"},{ok:false,label:"gaps"},{ok:"planned",label:"planned"}].map(b=>{
+                  {[{ok:true,label:"compliant"},{ok:"partial",label:"partial"},{ok:"planned",label:"planned"},{ok:"n/a",label:"n/a"},{ok:false,label:"gaps"}].map(b=>{
                     const cnt=std.items.filter(i=>i.ok===b.ok).length;
                     if(!cnt) return null;
                     const s=st(b.ok);
