@@ -7501,6 +7501,11 @@ export default function App() {
 
   useEffect(()=>{ loadAll(); },[loadAll]);
 
+  // Clear stale data immediately when org context changes — prevents cross-org bleed-through
+  useEffect(()=>{
+    setData({cars:[],caps:[],verifications:[],documents:[],flightDocs:[],audits:[],contractors:[],changeLog:[],risks:[],auditSchedule:[]});
+  },[loginOrgOverride]);
+
   useEffect(()=>{
     if(!user||loading)return;
     // Debounce: rapid successive changes fire only one reload
@@ -7826,7 +7831,7 @@ export default function App() {
           {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
+          {activeTab==="audits" && org && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="contractors" && <GenericPage title="Contractors" subtitle="Approved contractor register" table="contractors" columns={CONTRACTOR_COLS} modalFields={CONTRACTOR_FIELDS} modalTitle="Contractor" modalDefaults={{status:"Approved",rating:"A"}} data={data} canEdit={isAdmin} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="rca"      && <RCAView data={data} user={user} profile={profile}/>}
