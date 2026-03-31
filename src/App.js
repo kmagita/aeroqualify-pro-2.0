@@ -5978,7 +5978,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
                         return (
                           <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                             <div
-                              onClick={()=>canViewAudits&&(isQM&&scheduleUnlocked||!isQM)&&setModal(slot)}
+                              onClick={()=>canViewAudits&&((isQM&&scheduleUnlocked)||!isQM)&&setModal(slot)}
                               title={`${area} — Slot ${slot.slot}
 Status: ${slot.status||"Scheduled"}
 Lead: ${slot.lead_auditor||"Not assigned"}
@@ -6029,7 +6029,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                             return (
                               <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                                 <div
-                                  onClick={()=>canViewAudits&&(isQM&&scheduleUnlocked||!isQM)&&setModal(s)}
+                                  onClick={()=>canViewAudits&&((isQM&&scheduleUnlocked)||!isQM)&&setModal(s)}
                                   title={s.area+" (Ad-Hoc)\nTrigger: "+(s.trigger||"—")+"\nStatus: "+(s.status||"Scheduled")+"\nLead: "+(s.lead_auditor||"Not assigned")+"\nPlanned: "+(s.planned_date||"Not set")}
                                   style={{ width:28,height:28,borderRadius:6,background:c.bg,border:"2px dashed "+c.border,margin:"0 auto",cursor:canViewAudits?(isQM?(scheduleUnlocked?"pointer":"not-allowed"):"pointer"):"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:isQM&&!scheduleUnlocked?0.75:1 }}
                                   onMouseEnter={e=>{if(isQM)e.currentTarget.style.transform="scale(1.2)";}}
