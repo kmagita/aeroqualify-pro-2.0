@@ -5110,7 +5110,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
 const SCHEDULE_PASSWORD_DEFAULT = "QM2024!";
 
 // ── Schedule PDF export ────────────────────────────────────────
-const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUDIT_AREAS) => {
+const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUDIT_AREAS, org=null) => {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
   const W=297; const H=210; const M=12; const col=W-M*2;
@@ -5898,7 +5898,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
             ))}
           </div>
           {isQM && hasSchedule && (
-            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, yearSlots[0]||{}, orgAuditAreas)}>
+            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, yearSlots[0]||{}, orgAuditAreas, org)}>
               📥 Export Schedule PDF
             </Btn>
           )}
