@@ -7,6 +7,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 // Bump this with every successful deployment or new feature.
 const APP_VERSION = "4.0-beta";
 
+// ─── Org Profile Helpers ─────────────────────────────────────
+// Extract display strings from org for use in PDF headers
+const orgDisplayName    = (org) => org?.company_name    || org?.name    || "Organisation";
+const orgDisplayAddress = (org) => org?.company_address || "";
+const orgDisplayPhone   = (org) => org?.company_phone   || "";
+const orgDisplayEmail   = (org) => org?.company_email   || "";
+const orgFormPrefix     = (org) => org?.form_prefix     || "QMS";
+const orgHeaderLine     = (org) => [orgDisplayName(org), orgDisplayAddress(org), orgDisplayPhone(org)].filter(Boolean).join("  |  ");
+
 // ─── Global Styles ──────────────────────────────────────────
 const GlobalStyle = () => (
   <>
@@ -257,7 +266,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
   const [scrolled,    setScrolled]    = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const [demoModal,   setDemoModal]   = useState(false);
-  const [demoForm,    setDemoForm]    = useState({ name:"", company:"", email:"", phone:"", role:"", message:"" });
+  const [demoForm,    setDemoForm]    = useState({ name:"", company:"", email:"", phone:"", address:"", org_type:"", form_prefix:"QMS", message:"" });
   const [demoSent,    setDemoSent]    = useState(false);
   const [sending,     setSending]     = useState(false);
   const heroRef = useRef(null);
@@ -295,6 +304,9 @@ function LandingPage({ onShowLogin, onShowSignup }) {
         company: demoForm.company,
         email: demoForm.email,
         phone: demoForm.phone || null,
+        address: demoForm.address || null,
+        org_type: demoForm.org_type || null,
+        form_prefix: demoForm.form_prefix || "QMS",
         message: demoForm.message || null,
         submitted_at: new Date().toISOString(),
         status: "new",
@@ -307,6 +319,8 @@ function LandingPage({ onShowLogin, onShowSignup }) {
           company: demoForm.company,
           email: demoForm.email,
           phone: demoForm.phone || "",
+          address: demoForm.address || "",
+          org_type: demoForm.org_type || "",
           message: demoForm.message || "",
         },
         recipients: ["kmagita.pegasus@gmail.com", "aeroqualify@gmail.com"],
@@ -738,28 +752,50 @@ function LandingPage({ onShowLogin, onShowSignup }) {
                   <p style={{ fontSize: "0.9rem", color: C.slate }}>Tell us about your organisation and we'll be in touch.</p>
                 </div>
                 <form onSubmit={handleDemoSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <div>
-                    <label className="lp-label">Your Name</label>
-                    <input className="lp-input" required placeholder="e.g. John Kamau" value={demoForm.name} onChange={e => setDemoForm(p => ({ ...p, name: e.target.value }))} />
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                    <div>
+                      <label className="lp-label">Your Name *</label>
+                      <input className="lp-input" required placeholder="e.g. John Kamau" value={demoForm.name} onChange={e => setDemoForm(p => ({ ...p, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="lp-label">Your Role</label>
+                      <select className="lp-input" value={demoForm.role} onChange={e => setDemoForm(p => ({ ...p, role: e.target.value }))}>
+                        <option value="">Select your role…</option>
+                        {["Quality Manager","Accountable Manager","Safety Manager","Quality Auditor","Operations Director","Other"].map(r => <option key={r}>{r}</option>)}
+                      </select>
+                    </div>
                   </div>
                   <div>
-                    <label className="lp-label">Organisation Name</label>
-                    <input className="lp-input" required placeholder="Your organisation name" value={demoForm.company} onChange={e => setDemoForm(p => ({ ...p, company: e.target.value }))} />
+                    <label className="lp-label">Organisation Name *</label>
+                    <input className="lp-input" required placeholder="Full legal name e.g. Pegasus Flyers (E.A.) Ltd." value={demoForm.company} onChange={e => setDemoForm(p => ({ ...p, company: e.target.value }))} />
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                    <div>
+                      <label className="lp-label">Organisation Type *</label>
+                      <select className="lp-input" required value={demoForm.org_type} onChange={e => setDemoForm(p => ({ ...p, org_type: e.target.value }))}>
+                        <option value="">Select type…</option>
+                        {["ATO — Approved Training Organisation","AOC — Air Operator Certificate","AMO — Approved Maintenance Organisation","Airport Operator","Other"].map(r => <option key={r}>{r}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="lp-label">QMS Form Prefix</label>
+                      <input className="lp-input" placeholder="QMS" maxLength={6} value={demoForm.form_prefix} onChange={e => setDemoForm(p => ({ ...p, form_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6) }))} style={{ fontFamily:"monospace", fontWeight:700, letterSpacing:1 }}/>
+                      <div style={{ fontSize:11, color:"#8a9ab0", marginTop:4 }}>Forms will be numbered e.g. QMS 002, AMO 004</div>
+                    </div>
                   </div>
                   <div>
-                    <label className="lp-label">Work Email</label>
-                    <input className="lp-input" type="email" required placeholder="you@company.com" value={demoForm.email} onChange={e => setDemoForm(p => ({ ...p, email: e.target.value }))} />
+                    <label className="lp-label">Physical Address</label>
+                    <input className="lp-input" placeholder="e.g. P.O Box 3341, Wilson Airport, Nairobi" value={demoForm.address} onChange={e => setDemoForm(p => ({ ...p, address: e.target.value }))} />
                   </div>
-                  <div>
-                    <label className="lp-label">Phone Number</label>
-                    <input className="lp-input" type="tel" placeholder="e.g. +254 700 000 000" value={demoForm.phone} onChange={e => setDemoForm(p => ({ ...p, phone: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="lp-label">Your Role</label>
-                    <select className="lp-input" value={demoForm.role} onChange={e => setDemoForm(p => ({ ...p, role: e.target.value }))}>
-                      <option value="">Select your role…</option>
-                      {["Quality Manager","Accountable Manager","Safety Manager","Quality Auditor","Operations Director","Other"].map(r => <option key={r}>{r}</option>)}
-                    </select>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                    <div>
+                      <label className="lp-label">Work Email *</label>
+                      <input className="lp-input" type="email" required placeholder="you@company.com" value={demoForm.email} onChange={e => setDemoForm(p => ({ ...p, email: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="lp-label">Phone Number</label>
+                      <input className="lp-input" type="tel" placeholder="e.g. +254 700 000 000" value={demoForm.phone} onChange={e => setDemoForm(p => ({ ...p, phone: e.target.value }))} />
+                    </div>
                   </div>
                   <div>
                     <label className="lp-label">Anything else? (optional)</label>
@@ -4716,6 +4752,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
   const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210; const M=14; const col=W-M*2;
   const LINE_H=4.5; const LABEL_SZ=6.5; const BODY_SZ=9;
+  const _org = slot._org||null; // org passed from call site
 
   let findingItems = [];
   try { findingItems = JSON.parse(slot.finding_items||"[]"); } catch {}
@@ -4767,7 +4804,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
       doc.setPage(i);
       doc.setDrawColor(221,227,234); doc.setLineWidth(0.3); doc.line(M,286,W-M,286);
       doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(140,160,180);
-      doc.text("AeroQualify Pro · Quality Management System · Audit Report  |  QMS 004  |  CONTROLLED DOCUMENT", M, 290);
+      doc.text(`${orgDisplayName(_org)} · Quality Management System · Audit Report  |  ${orgFormPrefix(_org)} 004  |  CONTROLLED DOCUMENT`, M, 290);
       doc.text(`Page ${i} of ${pages}`, W-M, 290, {align:"right"});
     }
   };
@@ -4777,7 +4814,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(255,255,255);
   doc.text("AeroQualify Pro", M, 11);
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
-  doc.text("AUDIT REPORT — QMS 004", M, 17);
+  doc.text(`AUDIT REPORT — ${orgFormPrefix(_org)} 004`, M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
   doc.text(`Issued: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
@@ -5032,7 +5069,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
     doc.setLineWidth(0.3); doc.line(0,287,W,287);
     doc.setFont("helvetica","normal"); doc.setFontSize(7);
     doc.setTextColor(isEvPage?200:95, isEvPage?210:114, isEvPage?220:133);
-    doc.text("AeroQualify Pro · Quality Management System · Audit Report  |  QMS 004  |  CONTROLLED DOCUMENT", M, 293);
+    doc.text(`${orgDisplayName(slot._org||null)} · Quality Management System · Audit Report  |  ${orgFormPrefix(slot._org||null)} 004  |  CONTROLLED DOCUMENT`, M, 293);
     doc.text(`Page ${i} of ${totalPages}`, W-M, 293, {align:"right"});
   }
 
@@ -5095,7 +5132,7 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
   doc.text(`ANNUAL AUDIT PROGRAMME — ${year}`, M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text("Pegasus Flyers (E.A.) Ltd.  |  Wilson Airport, Nairobi", W-M, 10, {align:"right"});
+  doc.text(orgHeaderLine(org), W-M, 10, {align:"right"});
   doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 28;
@@ -5201,7 +5238,7 @@ const generateNotificationPDF = async (slot, org=null) => {
       doc.setPage(i);
       doc.setDrawColor(221,227,234); doc.setLineWidth(0.3); doc.line(M,285,W-M,285);
       doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(140,160,180);
-      doc.text(`Pegasus Flyers (E.A.) Ltd. · QMS 002 · Audit Notification · Ref: ${notifRef}`, M, 289);
+      doc.text(`${orgDisplayName(org)} · ${orgFormPrefix(org)} 002 · Audit Notification · Ref: ${notifRef}`, M, 289);
       doc.text(`CONTROLLED DOCUMENT  ·  Page ${i} of ${pages}`, W-M, 289, {align:"right"});
     }
   };
@@ -5228,9 +5265,9 @@ const generateNotificationPDF = async (slot, org=null) => {
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(255,255,255);
   doc.text("AeroQualify Pro", M, 11);
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
-  doc.text("AUDIT NOTIFICATION FORM — QMS 002", M, 17);
+  doc.text(`AUDIT NOTIFICATION FORM — ${orgFormPrefix(org)} 002`, M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text("Pegasus Flyers (E.A.) Ltd.  |  Wilson Airport, Nairobi  |  +254206001467/8", W-M, 11, {align:"right"});
+  doc.text(orgHeaderLine(org), W-M, 11, {align:"right"});
   doc.text(`Issued: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 34;
@@ -6359,7 +6396,7 @@ const SuperAdminUsersTab = ({ orgUsers, orgs, pendingUsers, assignUser, sendRese
 
 const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
   const [tab, setTab]           = useState("dashboard");
-  const [newOrg, setNewOrg]     = useState({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
+  const [newOrg, setNewOrg]     = useState({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"", company_address:"", company_phone:"", company_email:"", form_prefix:"QMS", org_type:"" });
   const [newOrgDemo, setNewOrgDemo] = useState(false);
   const [demoDays,   setDemoDays]   = useState(14);
   const [creating, setCreating] = useState(false);
@@ -6386,6 +6423,11 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     const { data: orgRow, error } = await supabase.from("organisations").insert({
       ...newOrg, slug,
       demo_expires_at: demoExpiry,
+      company_name:    newOrg.name,
+      company_address: newOrg.company_address||null,
+      company_phone:   newOrg.company_phone||null,
+      company_email:   newOrg.company_email||null,
+      form_prefix:     newOrg.form_prefix||"QMS",
     }).select().single();
 
     if(error){ showToast("Error: "+error.message,"error"); setCreating(false); return; }
@@ -6411,7 +6453,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
       ? `Demo organisation created — expires in ${demoDays} days. Welcome email sent.`
       : "Organisation created. Welcome email sent.",
       "success");
-    setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
+    setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"", company_address:"", company_phone:"", company_email:"", form_prefix:"QMS", org_type:"" });
     setNewOrgDemo(false); setDemoDays(14);
     onRefresh(); setTab("orgs");
     setCreating(false);
@@ -6772,7 +6814,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <table style={{ width:"100%",borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f8fafc" }}>
-                  {["Name","Organisation","Email","Phone","Message","Submitted","Action"].map(h=>(
+                  {["Name","Organisation","Type","Email","Phone","Address","Submitted","Action"].map(h=>(
                     <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
                   ))}
                 </tr>
@@ -6782,9 +6824,10 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                   <tr key={r.id} className="row-hover">
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:600,color:"#1a2332" }}>{r.name}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:700,color:"#01579b" }}>{r.company}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#5f7285",whiteSpace:"nowrap" }}>{r.org_type?.split("—")[0]?.trim()||"—"}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{r.email}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{r.phone||"—"}</td>
-                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.message||"—"}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.address||"—"}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0",whiteSpace:"nowrap" }}>{fmt(r.submitted_at)}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
                       <div style={{ display:"flex",gap:6 }}>
@@ -6795,6 +6838,11 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                             country: "Kenya",
                             contact_name: r.name,
                             contact_email: r.email,
+                            company_address: r.address||"",
+                            company_phone: r.phone||"",
+                            company_email: r.email||"",
+                            form_prefix: r.form_prefix||"QMS",
+                            org_type: r.org_type||"",
                           });
                           setTab("new");
                         }} style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
@@ -6842,6 +6890,25 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <Input label="Country" value={newOrg.country} onChange={e=>setNewOrg(p=>({...p,country:e.target.value}))} placeholder="Kenya"/>
             <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name"/>
             <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com"/>
+            <Input label="Phone" value={newOrg.company_phone||""} onChange={e=>setNewOrg(p=>({...p,company_phone:e.target.value}))} placeholder="+254 700 000 000"/>
+            <div style={{ gridColumn:"1/-1" }}>
+              <Input label="Physical Address" value={newOrg.company_address||""} onChange={e=>setNewOrg(p=>({...p,company_address:e.target.value}))} placeholder="e.g. P.O Box 3341, Wilson Airport, Nairobi"/>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",letterSpacing:0.8,textTransform:"uppercase",display:"block",marginBottom:6 }}>QMS Form Prefix</label>
+              <input value={newOrg.form_prefix||"QMS"} onChange={e=>setNewOrg(p=>({...p,form_prefix:e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6)}))}
+                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1,boxSizing:"border-box" }}
+                maxLength={6} placeholder="QMS"/>
+              <div style={{ fontSize:11,color:"#8a9ab0",marginTop:4 }}>Forms: <span style={{ fontFamily:"monospace" }}>{newOrg.form_prefix||"QMS"} 002</span> / <span style={{ fontFamily:"monospace" }}>{newOrg.form_prefix||"QMS"} 004</span></div>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",letterSpacing:0.8,textTransform:"uppercase",display:"block",marginBottom:6 }}>Organisation Type</label>
+              <select value={newOrg.org_type||""} onChange={e=>setNewOrg(p=>({...p,org_type:e.target.value}))}
+                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box" }}>
+                <option value="">Select type…</option>
+                {["ATO — Approved Training Organisation","AOC — Air Operator Certificate","AMO — Approved Maintenance Organisation","Airport Operator","Other"].map(r=><option key={r}>{r}</option>)}
+              </select>
+            </div>
           </div>
           {/* Demo / Full Access toggle */}
           <div style={{ marginTop:20,background:"#f8fafc",borderRadius:10,padding:"14px 16px",border:"1px solid #dde3ea" }}>
@@ -7185,19 +7252,29 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
 
 // ─── Org Settings Page ────────────────────────────────────────
 const OrgSettingsPage = ({ org, onSave }) => {
-  const [prefix,   setPrefix]  = useState(org?.car_prefix||"ORG");
-  const [qmPw,     setQmPw]    = useState(org?.qm_password||"");
-  const [areas,    setAreas]   = useState(()=>parseAreas(org?.audit_areas));
+  const [prefix,      setPrefix]     = useState(org?.car_prefix||"ORG");
+  const [qmPw,        setQmPw]       = useState(org?.qm_password||"");
+  const [areas,       setAreas]      = useState(()=>parseAreas(org?.audit_areas));
+  const [companyName, setCompanyName]= useState(org?.company_name||"");
+  const [address,     setAddress]    = useState(org?.company_address||"");
+  const [phone,       setPhone]      = useState(org?.company_phone||"");
+  const [email,       setEmail]      = useState(org?.company_email||"");
+  const [formPrefix,  setFormPrefix] = useState(org?.form_prefix||"QMS");
   const [newArea, setNewArea] = useState("");
   const [saving,  setSaving]  = useState(false);
 
-  // Re-sync whenever any org field we care about changes (covers race between mount and loadAll)
+  // Re-sync whenever any org field we care about changes
   useEffect(()=>{
     setPrefix(org?.car_prefix||"ORG");
     setQmPw(org?.qm_password||"");
     setAreas(parseAreas(org?.audit_areas));
+    setCompanyName(org?.company_name||"");
+    setAddress(org?.company_address||"");
+    setPhone(org?.company_phone||"");
+    setEmail(org?.company_email||"");
+    setFormPrefix(org?.form_prefix||"QMS");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[org?.id, org?.car_prefix, org?.audit_areas, org?.qm_password]);
+  },[org?.id, org?.car_prefix, org?.audit_areas, org?.qm_password, org?.company_name, org?.company_address, org?.company_phone, org?.company_email, org?.form_prefix]);
 
   const [newCode, setNewCode] = useState("");
   const addArea = () => {
@@ -7217,14 +7294,56 @@ const OrgSettingsPage = ({ org, onSave }) => {
   const save = async() => {
     if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
     setSaving(true);
-    const updates = { car_prefix: prefix.trim().toUpperCase(), audit_areas: JSON.stringify(areas) };
+    const updates = {
+      car_prefix: prefix.trim().toUpperCase(),
+      audit_areas: JSON.stringify(areas),
+      company_name: companyName.trim(),
+      company_address: address.trim(),
+      company_phone: phone.trim(),
+      company_email: email.trim(),
+      form_prefix: formPrefix.trim().toUpperCase()||"QMS",
+    };
     if(qmPw.trim()) updates.qm_password = qmPw.trim();
     await onSave(updates);
     setSaving(false);
   };
 
+  const iStyle = { width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box" };
+
   return (
     <div style={{ maxWidth:700,display:"flex",flexDirection:"column",gap:28 }}>
+      {/* ── Organisation Profile ── */}
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Organisation Profile</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>This information appears on all generated PDF forms — audit notifications, audit reports and CAR reports.</div>
+        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+          <div>
+            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Company Name</label>
+            <input value={companyName} onChange={e=>setCompanyName(e.target.value)} style={iStyle} placeholder="e.g. Pegasus Flyers (E.A.) Ltd."/>
+          </div>
+          <div>
+            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Address</label>
+            <input value={address} onChange={e=>setAddress(e.target.value)} style={iStyle} placeholder="e.g. P.O Box 3341-00100, Wilson Airport, Nairobi"/>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Phone</label>
+              <input value={phone} onChange={e=>setPhone(e.target.value)} style={iStyle} placeholder="e.g. +254206001467"/>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Email</label>
+              <input value={email} onChange={e=>setEmail(e.target.value)} style={iStyle} placeholder="e.g. quality@company.com"/>
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Form Number Prefix</label>
+            <input value={formPrefix} onChange={e=>setFormPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))} style={{...iStyle,fontFamily:"monospace",fontWeight:700,letterSpacing:1}} maxLength={6} placeholder="QMS"/>
+            <div style={{ fontSize:11,color:"#8a9ab0",marginTop:6 }}>
+              Forms will be numbered <span style={{ fontFamily:"monospace",fontWeight:700,color:"#01579b" }}>{formPrefix||"QMS"} 002</span> (Notification), <span style={{ fontFamily:"monospace",fontWeight:700,color:"#01579b" }}>{formPrefix||"QMS"} 004</span> (Audit Report)
+            </div>
+          </div>
+        </div>
+      </div>
       <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
         <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>CAR Naming Convention</div>
         <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Set the prefix used to generate CAR and CAPA reference numbers.</div>
