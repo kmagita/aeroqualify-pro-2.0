@@ -6419,9 +6419,13 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
       ? new Date(Date.now() + demoDays * 86400000).toISOString()
       : null;
 
-    // 1. Create the organisation
+    // 1. Create the organisation — explicitly list columns to avoid spreading unknown fields
     const { data: orgRow, error } = await supabase.from("organisations").insert({
-      ...newOrg, slug,
+      name:            newOrg.name,
+      slug,
+      country:         newOrg.country||"Kenya",
+      contact_name:    newOrg.contact_name||null,
+      contact_email:   newOrg.contact_email||null,
       demo_expires_at: demoExpiry,
       company_name:    newOrg.name,
       company_address: newOrg.company_address||null,
