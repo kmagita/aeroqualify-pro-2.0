@@ -1127,8 +1127,11 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           ]);
 
           const adminEmails = (adminProfiles||[]).map(a=>a.email).filter(Boolean);
-          // Always notify — org admins if found, otherwise fall through to super admin recipients
-          // (edge function handles fallback to super admin if recipients list is empty)
+          // Notify org admins if they exist, always also notify super admin so no signup is missed
+          const notifyRecipients = [...new Set([
+            ...adminEmails,
+            "kmagita.pegasus@gmail.com", // super admin always notified
+          ])];
           await sendNotification({
             type: "user_signup_request",
             record: {
@@ -1137,10 +1140,9 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
               org_name: orgInfo?.name || "",
               org_id: orgInfo?.slug || "",
               registered_at: new Date().toLocaleString("en-GB", {timeZone:"Africa/Nairobi"}),
+              no_org_admin: adminEmails.length === 0 ? "true" : "false",
             },
-            recipients: adminEmails.length > 0
-              ? adminEmails
-              : ["kmagita.pegasus@gmail.com"], // super admin fallback only if org has no admin yet
+            recipients: notifyRecipients,
           });
         }
         await supabase.auth.signOut();
@@ -1334,7 +1336,7 @@ const Dashboard = ({ data }) => {
     {label:"CAPA Closure",    score:p1, max:25, desc:`${closedCARs}/${totalCARs} CARs closed`},
     {label:"CAP Compliance",  score:p2, max:20, desc:`${data.caps.filter(c=>c.status==="Complete").length}/${totalCARs} CAPs complete`},
     {label:"No Overdue/Critical",score:Math.min(p3,25),max:25,desc:`${overdueCARs} overdue · ${criticalOpen} critical open`},
-    {label:"Document Currency",score:p4,max:20, desc:`${totalFlDocs-expiredDocs}/${totalFlDocs} docs current`},
+    {label:"Certificates & Approvals",score:p4,max:20, desc:`${totalFlDocs-expiredDocs}/${totalFlDocs} docs current`},
     {label:"Audit & Contractors",score:p5,max:10,desc:`${auditsDone} audits done · ${contractorOk} approved contractors`},
   ];
 
@@ -6243,8 +6245,8 @@ Planned: ${slot.planned_date||"Not set"}`}
 const TABS = [
   {id:"dashboard",    label:"Dashboard",       icon:"▦",  group:"main"},
   {id:"cars",         label:"CARs",            icon:"📋", group:"main"},
-  {id:"documents",    label:"Documents",       icon:"📄", group:"main"},
-  {id:"flightdocs",   label:"Company Documents",icon:"📂",group:"main"},
+  {id:"documents",    label:"Document Register", icon:"📄", group:"main"},
+  {id:"flightdocs",   label:"Certificates & Approvals",icon:"📂",group:"main"},
   {id:"audits",       label:"Audits",          icon:"🔍", group:"main"},
   {id:"contractors",  label:"Contractors",     icon:"🔧", group:"main"},
   {id:"risks",        label:"Risk Register",   icon:"⚠️", group:"main"},
@@ -7283,12 +7285,12 @@ const OrgSettingsPage = ({ org, onSave }) => {
   const [newCode, setNewCode] = useState("");
   const addArea = () => {
     const trimmed = newArea.trim();
-    const code = newCode.trim().replace(/[^0-9]/g,"").slice(0,3).padStart(3,"0") || String(areas.length+1).padStart(3,"0");
+    const code = newCode.trim().replace(/[^A-Z0-9a-z]/g,"").slice(0,6).toUpperCase() || String(areas.length+1).padStart(3,"0");
     if(!trimmed || areas.find(a=>a.name===trimmed)) return;
     setAreas(prev=>[...prev, {name:trimmed, code}]); setNewArea(""); setNewCode("");
   };
   const removeArea = (name) => setAreas(prev=>prev.filter(a=>a.name!==name));
-  const updateAreaCode = (idx, code) => setAreas(prev=>prev.map((a,i)=>i===idx?{...a,code:code.replace(/[^0-9]/g,"").slice(0,3)}:a));
+  const updateAreaCode = (idx, code) => setAreas(prev=>prev.map((a,i)=>i===idx?{...a,code:code.replace(/[^A-Z0-9a-z]/g,"").slice(0,6).toUpperCase()}:a));
   const updateAreaName = (idx, name) => setAreas(prev=>prev.map((a,i)=>i===idx?{...a,name}:a));
   const moveArea = (idx, dir) => {
     const next = [...areas]; const swap = idx+dir;
@@ -7391,7 +7393,7 @@ const OrgSettingsPage = ({ org, onSave }) => {
                 style={{ padding:"6px 10px",border:"1.5px solid #dde3ea",borderRadius:7,fontSize:13,fontWeight:500,background:"#fff" }}/>
               <input value={a.code} onChange={e=>updateAreaCode(i,e.target.value)}
                 style={{ padding:"6px 10px",border:"1.5px solid #dde3ea",borderRadius:7,fontSize:13,fontFamily:"monospace",fontWeight:700,textAlign:"center",background:"#fff",letterSpacing:1 }}
-                placeholder="001" maxLength={3}/>
+                placeholder="001" maxLength={6}/>
               <button onClick={()=>removeArea(a.name)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"5px 10px" }}>✕</button>
             </div>
           ))}
@@ -7400,9 +7402,9 @@ const OrgSettingsPage = ({ org, onSave }) => {
           <input value={newArea} onChange={e=>setNewArea(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addArea()}
             style={{ padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
             placeholder="New area name…"/>
-          <input value={newCode} onChange={e=>setNewCode(e.target.value.replace(/[^0-9]/g,"").slice(0,3))} onKeyDown={e=>e.key==="Enter"&&addArea()}
+          <input value={newCode} onChange={e=>setNewCode(e.target.value.replace(/[^A-Z0-9a-z]/g,"").slice(0,6).toUpperCase())} onKeyDown={e=>e.key==="Enter"&&addArea()}
             style={{ padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,fontFamily:"monospace",fontWeight:700,textAlign:"center",letterSpacing:1 }}
-            placeholder="Code" maxLength={3}/>
+            placeholder="Code" maxLength={6}/>
           <button onClick={addArea} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap" }}>+ Add</button>
         </div>
         <div style={{ fontSize:11,color:"#8a9ab0",marginTop:10 }}>
@@ -7932,8 +7934,8 @@ export default function App() {
 
           {activeTab==="dashboard" && <Dashboard data={data}/>}
           {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
-          {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="documents" && <GenericPage title="Document Register" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="flightdocs" && <GenericPage title="Certificates & Approvals" subtitle="Certificates and Approvals" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Certificate / Approval" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="audits" && org && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="contractors" && <GenericPage title="Contractors" subtitle="Approved contractor register" table="contractors" columns={CONTRACTOR_COLS} modalFields={CONTRACTOR_FIELDS} modalTitle="Contractor" modalDefaults={{status:"Approved",rating:"A"}} data={data} canEdit={isAdmin} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
