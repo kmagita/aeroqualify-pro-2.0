@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { flushSync } from "react-dom";
+// react-dom flushSync removed — React 18 auto-batches state updates
 import { supabase, TABLES, logChange, sendNotification, SUPABASE_URL, SUPABASE_ANON } from "./supabase";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
@@ -1008,9 +1008,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
   const resolveSlug = async (slug) => {
     if(!slug.trim()){ setOrgHint(null); return; }
     // Try uppercase first (new format), then exact, then lowercase
-    let result = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toUpperCase()).single();
-    if(!result.data) result = await supabase.from("organisations").select("id,name").eq("slug", slug.trim()).single();
-    if(!result.data) result = await supabase.from("organisations").select("id,name").eq("slug", slug.trim().toLowerCase()).single();
+    let result = await supabase.from("organisations").select("id,name").ilike("slug", slug.trim()).single();
     setOrgHint(result.data || false);
   };
 
@@ -1114,9 +1112,8 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
 
         // Resolve org slug if provided
         if(orgSlug.trim()){
-          let { data: orgData } = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim().toUpperCase()).single();
-          if(!orgData){ const r2 = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim()).single(); orgData=r2.data; }
-          if(!orgData){ const r3 = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim().toLowerCase()).single(); orgData=r3.data; }
+          let { data: orgData } = await supabase.from("organisations").select("id,name,status,demo_expires_at").ilike("slug", orgSlug.trim()).single();
+          if(!orgData){ showToast("Organisation not found. Check your organisation code.","error"); setLoading(false); return; }
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
           if(orgData.status !== "active"){
             // Check if it's a demo expiry
@@ -2616,83 +2613,91 @@ const ExternalResponseModal = ({ car, onSave, onClose, profile, user }) => {
           </div>
 
           {/* ── Visual cycle progress tracker ── */}
-          <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"12px 16px" }}>
-            <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.6,marginBottom:10 }}>
-              Submission Progress
+          <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"14px 16px" }}>
+            <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.6,marginBottom:12 }}>
+              Submission Cycle Progress
             </div>
-            <div style={{ display:"flex",alignItems:"center",flexWrap:"wrap",gap:4 }}>
-              {cycles.map((c,i)=>{
-                const submitted = !!c.dateSubmitted;
-                const returned  = !!c.dateReturned;
+            <div style={{ display:"flex",alignItems:"flex-start",gap:0,overflowX:"auto",paddingBottom:4 }}>
+              {cycles.map((cyc,i)=>{
+                const submitted = !!cyc.dateSubmitted;
+                const returned  = !!cyc.dateReturned;
                 const isFirst   = i===0;
                 return (
-                  <div key={i} style={{ display:"flex",alignItems:"center",gap:4 }}>
-                    {/* Cycle node */}
-                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
-                      <div style={{
-                        width:32,height:32,borderRadius:"50%",
-                        background: submitted?(returned?"#fee2e2":"#dbeafe"):"#f1f5f9",
-                        border:`2px solid ${submitted?(returned?"#fca5a5":"#93c5fd"):"#cbd5e0"}`,
-                        display:"flex",alignItems:"center",justifyContent:"center",
-                        fontSize:11,fontWeight:700,
-                        color: submitted?(returned?"#991b1b":"#1d4ed8"):"#94a3b8",
-                      }}>
-                        {submitted?(returned?"↩":"✓"):(i+1)}
+                  <React.Fragment key={i}>
+                    {/* Connector from previous */}
+                    {i>0&&(
+                      <div style={{ display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,flex:"0 0 32px" }}>
+                        <div style={{ width:32,height:2,background:cycles[i-1].dateReturned?"#fca5a5":"#cbd5e0" }}/>
                       </div>
-                      <div style={{ fontSize:9,color:"#64748b",fontWeight:600,textAlign:"center",whiteSpace:"nowrap" }}>
-                        {isFirst?"Initial":"Resub "+(i)}<br/>
-                        {submitted?(returned?"Returned":"Submitted"):"Pending"}
+                    )}
+                    {/* Cycle node */}
+                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:"0 0 auto",minWidth:60 }}>
+                      <div style={{
+                        width:36,height:36,borderRadius:"50%",flexShrink:0,
+                        background: returned?"#fee2e2": submitted?"#dbeafe":"#f1f5f9",
+                        border:`2px solid ${returned?"#fca5a5":submitted?"#93c5fd":"#cbd5e0"}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:14,fontWeight:700,
+                        color: returned?"#991b1b":submitted?"#1d4ed8":"#94a3b8",
+                      }}>
+                        {returned?"↩":submitted?"✓":(i+1)}
+                      </div>
+                      <div style={{ fontSize:9,fontWeight:600,color:"#475569",textAlign:"center",lineHeight:1.3 }}>
+                        {isFirst?"Initial":"Resub "+(i)}
+                      </div>
+                      <div style={{ fontSize:9,color:returned?"#991b1b":submitted?"#1d4ed8":"#94a3b8",fontWeight:600,textAlign:"center" }}>
+                        {returned?"Returned":submitted?"Submitted":"Pending"}
                       </div>
                     </div>
-                    {/* Connector */}
-                    {returned&&(
-                      <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:1,margin:"0 2px" }}>
-                        <div style={{ width:32,height:2,background:"#fca5a5",borderRadius:1 }}/>
-                        <div style={{ fontSize:8,color:"#991b1b",fontWeight:600 }}>RETURNED</div>
-                      </div>
-                    )}
-                    {!returned&&i<cycles.length-1&&(
-                      <div style={{ width:32,height:2,background:"#cbd5e0",borderRadius:1,margin:"0 2px",marginBottom:18 }}/>
-                    )}
-                  </div>
+                  </React.Fragment>
                 );
               })}
-              {/* → Accepted node */}
-              <div style={{ display:"flex",alignItems:"center",gap:4 }}>
-                {cycles.length>0&&(
-                  <div style={{ width:32,height:2,background:capAcceptedDate?"#86efac":"#cbd5e0",borderRadius:1,margin:"0 2px",marginBottom:18 }}/>
-                )}
-                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
-                  <div style={{
-                    width:32,height:32,borderRadius:"50%",
-                    background:capAcceptedDate?"#dcfce7":"#f1f5f9",
-                    border:`2px solid ${capAcceptedDate?"#86efac":"#cbd5e0"}`,
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,
-                    color:capAcceptedDate?"#15803d":"#94a3b8",
-                  }}>
-                    {capAcceptedDate?"✓":"◎"}
-                  </div>
-                  <div style={{ fontSize:9,color:"#64748b",fontWeight:600,textAlign:"center" }}>
-                    Accepted<br/>
-                    {capAcceptedDate?<span style={{color:"#15803d"}}>{fmt(capAcceptedDate)}</span>:"Pending"}
-                  </div>
+              {/* Connector to Accepted */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,flex:"0 0 32px" }}>
+                <div style={{ width:32,height:2,background:capAcceptedDate?"#86efac":"#cbd5e0" }}/>
+              </div>
+              {/* Accepted node */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:"0 0 auto",minWidth:60 }}>
+                <div style={{
+                  width:36,height:36,borderRadius:"50%",
+                  background:capAcceptedDate?"#dcfce7":"#f1f5f9",
+                  border:`2px solid ${capAcceptedDate?"#86efac":"#cbd5e0"}`,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,
+                  color:capAcceptedDate?"#15803d":"#94a3b8",
+                }}>
+                  {capAcceptedDate?"✓":"◎"}
                 </div>
-                {/* → Closed node */}
-                <div style={{ width:32,height:2,background:liveStatus==="Closed"?"#86efac":"#cbd5e0",borderRadius:1,margin:"0 2px",marginBottom:18 }}/>
-                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
-                  <div style={{
-                    width:32,height:32,borderRadius:"50%",
-                    background:liveStatus==="Closed"?"#f0fdf4":"#f1f5f9",
-                    border:`2px solid ${liveStatus==="Closed"?"#bbf7d0":"#cbd5e0"}`,
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,
-                    color:liveStatus==="Closed"?"#166534":"#94a3b8",
-                  }}>
-                    {liveStatus==="Closed"?"✓":"⊙"}
-                  </div>
-                  <div style={{ fontSize:9,color:"#64748b",fontWeight:600,textAlign:"center" }}>Closed</div>
+                <div style={{ fontSize:9,fontWeight:600,color:"#475569",textAlign:"center",lineHeight:1.3 }}>Accepted</div>
+                <div style={{ fontSize:9,color:capAcceptedDate?"#15803d":"#94a3b8",fontWeight:600 }}>
+                  {capAcceptedDate?fmt(capAcceptedDate):"Pending"}
+                </div>
+              </div>
+              {/* Connector to Closed */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,flex:"0 0 32px" }}>
+                <div style={{ width:32,height:2,background:liveStatus==="Closed"?"#86efac":"#cbd5e0" }}/>
+              </div>
+              {/* Closed node */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:"0 0 auto",minWidth:60 }}>
+                <div style={{
+                  width:36,height:36,borderRadius:"50%",
+                  background:liveStatus==="Closed"?"#f0fdf4":"#f1f5f9",
+                  border:`2px solid ${liveStatus==="Closed"?"#bbf7d0":"#cbd5e0"}`,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,
+                  color:liveStatus==="Closed"?"#166534":"#94a3b8",
+                }}>
+                  {liveStatus==="Closed"?"✓":"⊙"}
+                </div>
+                <div style={{ fontSize:9,fontWeight:600,color:"#475569",textAlign:"center",lineHeight:1.3 }}>Closed</div>
+                <div style={{ fontSize:9,color:liveStatus==="Closed"?"#166534":"#94a3b8",fontWeight:600 }}>
+                  {liveStatus==="Closed"?"Complete":"Pending"}
                 </div>
               </div>
             </div>
+            {cycles.length===1 && !cycles[0].dateSubmitted && (
+              <div style={{ marginTop:10,fontSize:11,color:"#94a3b8",fontStyle:"italic",textAlign:"center" }}>
+                Fill in the submission date below to start tracking this CAR's progress
+              </div>
+            )}
           </div>
 
           {/* ── Submission cycles ── */}
@@ -2803,9 +2808,103 @@ const ExternalResponseModal = ({ car, onSave, onClose, profile, user }) => {
   );
 };
 
+// ─── Clickable status badge for CARsView table ───────────────
+const INTERNAL_STATUS_COLORS = {
+  "Open":                      {bg:"#ffebee",color:"#c62828",border:"#ffcdd2"},
+  "In Progress":               {bg:"#fff3e0",color:"#e65100",border:"#ffe0b2"},
+  "Pending Verification":      {bg:"#f3e5f5",color:"#6a1b9a",border:"#e1bee7"},
+  "Returned for Resubmission": {bg:"#ffebee",color:"#b71c1c",border:"#ffcdd2"},
+  "Closed":                    {bg:"#e8f5e9",color:"#2e7d32",border:"#c8e6c9"},
+  "Overdue":                   {bg:"#ffebee",color:"#b71c1c",border:"#ffcdd2"},
+};
+const StatusBadgeBtn = ({ car, extCar, onClick }) => {
+  const label = extCar ? deriveExternalStatus(car) : car.status;
+  const meta  = extCar
+    ? (EXT_STATUS_META[label]    || EXT_STATUS_META["Open"])
+    : (INTERNAL_STATUS_COLORS[label] || {bg:"#f5f5f5",color:"#5f7285",border:"#e0e0e0"});
+  return (
+    <button onClick={onClick} title="Click to update status"
+      style={{ background:meta.bg, color:meta.color, border:`1px solid ${meta.border}`,
+        borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:600,
+        whiteSpace:"nowrap", cursor:"pointer" }}>
+      {label} ✎
+    </button>
+  );
+};
+
+// ─── Quick Status Update Modal ────────────────────────────────
+const INTERNAL_STATUSES = [
+  { value:"Open",                      color:"#c62828", bg:"#ffebee" },
+  { value:"In Progress",               color:"#e65100", bg:"#fff3e0" },
+  { value:"Pending Verification",      color:"#6a1b9a", bg:"#f3e5f5" },
+  { value:"Returned for Resubmission", color:"#b71c1c", bg:"#ffebee" },
+  { value:"Closed",                    color:"#2e7d32", bg:"#e8f5e9" },
+  { value:"Overdue",                   color:"#b71c1c", bg:"#ffebee" },
+];
+const EXTERNAL_STATUSES_LIST = [
+  { value:"Open",             color:"#5f7285", bg:"#f5f5f5" },
+  { value:"Submitted",        color:"#1d4ed8", bg:"#dbeafe" },
+  { value:"Returned",         color:"#991b1b", bg:"#fee2e2" },
+  { value:"Resubmitted",      color:"#c2410c", bg:"#fff7ed" },
+  { value:"Accepted",         color:"#15803d", bg:"#dcfce7" },
+  { value:"Follow-up Pending",color:"#3730a3", bg:"#e0e7ff" },
+  { value:"Closed",           color:"#166534", bg:"#f0fdf4" },
+];
+
+const QuickStatusModal = ({ car, isExt, onSave, onClose }) => {
+  const statuses = isExt ? EXTERNAL_STATUSES_LIST : INTERNAL_STATUSES;
+  const [selected, setSelected] = useState(car.status||"Open");
+  const [saving, setSaving] = useState(false);
+  const current = statuses.find(s=>s.value===selected) || statuses[0];
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:12,width:360,boxShadow:"0 12px 40px rgba(0,0,0,0.25)",
+        border:"1px solid #dde3ea" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"14px 18px",borderBottom:"1px solid #eef2f7" }}>
+          <div style={{ fontSize:11,color:"#8a9ab0",marginBottom:2 }}>Update Status</div>
+          <div style={{ fontWeight:700,fontSize:14,color:"#1a2332",fontFamily:"monospace" }}>{car.id}</div>
+        </div>
+        <div style={{ padding:"14px 18px",display:"flex",flexDirection:"column",gap:7 }}>
+          {statuses.map(s=>(
+            <button key={s.value} onClick={()=>setSelected(s.value)}
+              style={{ padding:"9px 14px",borderRadius:8,textAlign:"left",cursor:"pointer",
+                border:`2px solid ${selected===s.value?s.color:"#eef2f7"}`,
+                background:selected===s.value?s.bg:"#fafbfc",
+                display:"flex",alignItems:"center",gap:10,transition:"all 0.12s" }}>
+              <span style={{ width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0 }}/>
+              <span style={{ fontSize:13,fontWeight:selected===s.value?700:400,
+                color:selected===s.value?s.color:"#475569" }}>{s.value}</span>
+              {car.status===s.value&&<span style={{ marginLeft:"auto",fontSize:10,color:"#94a3b8" }}>current</span>}
+            </button>
+          ))}
+        </div>
+        <div style={{ padding:"12px 18px",borderTop:"1px solid #eef2f7",display:"flex",
+          justifyContent:"flex-end",gap:8,background:"#fafbfc",borderRadius:"0 0 12px 12px" }}>
+          <button onClick={onClose}
+            style={{ background:"#fff",color:"#475569",border:"1px solid #dde3ea",borderRadius:7,
+              padding:"7px 16px",fontWeight:500,fontSize:12,cursor:"pointer" }}>Cancel</button>
+          <button onClick={async()=>{
+            setSaving(true);
+            await onSave(car.id, selected);
+            setSaving(false);
+          }} disabled={saving||selected===car.status}
+            style={{ background:current.color,color:"#fff",border:"none",borderRadius:7,
+              padding:"7px 18px",fontWeight:700,fontSize:12,
+              cursor:(saving||selected===car.status)?"not-allowed":"pointer",
+              opacity:(saving||selected===car.status)?0.5:1 }}>
+            {saving?"Saving…":"Update Status"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── CARs Table View ──────────────────────────────────────────
 const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
-  const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify' | 'external'
+  const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify' | 'external' | 'status'
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -2864,6 +2963,18 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     if(error){showToast(`Error: ${error.message}`,"error");return;}
     await logChange({user,action:"updated external CAR response",table:"cars",recordId:selected.id,recordTitle:selected.finding_description?.slice(0,60),newData:{status:payload.status}});
     showToast(`External CAR saved — status: ${responseForm.status}`,"success");
+    setModal(null); onRefresh();
+  };
+
+  // Direct status update — bypasses workflow, used for manual corrections
+  const saveQuickStatus = async(carId, newStatus) => {
+    const{error}=await supabase.from(TABLES.cars)
+      .update({status:newStatus,updated_at:new Date().toISOString()}).eq("id",carId);
+    if(error){showToast(`Error: ${error.message}`,"error");return;}
+    const car = data.cars.find(c=>c.id===carId);
+    await logChange({user,action:`status → ${newStatus}`,table:"cars",recordId:carId,
+      recordTitle:car?.finding_description?.slice(0,60)||carId,newData:{status:newStatus}});
+    showToast(`Status updated to "${newStatus}"`,"success");
     setModal(null); onRefresh();
   };
 
@@ -2958,10 +3069,27 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
   const getAllVerifs = (carId) => (data.verifications?.filter(v=>v.car_id===carId)||[]).sort((a,b)=>new Date(a.verified_at||a.created_at)-new Date(b.verified_at||b.created_at));
 
   const generateReport = async(car) => {
+    // Always reset the merge queue at the start — stale entries from a previous
+    // run cause evidence pages to be duplicated on every subsequent PDF generation.
+    window._pdfMergeQueue = [];
+
     const{jsPDF}=await import("jspdf");
     const{default:autoTable}=await import("jspdf-autotable");
     const cap=getCAP(car.id); const verif=getVerif(car.id);
-    const allCapsForCar=getAllCAPs(car.id);
+    let allCapsForCar=getAllCAPs(car.id);
+
+    // evidence_files is excluded from the bulk caps load (large base64 content).
+    // Fetch it now on-demand for the PDF only.
+    if(allCapsForCar.length > 0){
+      const capIds = allCapsForCar.map(c=>c.id);
+      const { data: capsWithEvidence } = await supabase
+        .from(TABLES.caps).select("id,evidence_files,evidence_filename,evidence_url").in("id",capIds);
+      if(capsWithEvidence){
+        const evMap = Object.fromEntries(capsWithEvidence.map(c=>[c.id,c]));
+        allCapsForCar = allCapsForCar.map(c=>({...c,...(evMap[c.id]||{})}));
+      }
+    }
+
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const W=210; const margin=14; const col=W-margin*2;
 
@@ -3308,8 +3436,8 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       }
     }
     console.log("[PDF EVIDENCE] Total evidence files to attach:",pdfEvidenceFiles.length, pdfEvidenceFiles.map(f=>({name:f.name,hasUrl:!!f.url})));
-    // fallback: if no allCaps data, try single cap
-    if(pdfEvidenceFiles.length===0){
+    // Fallback only when no caps at all were found (e.g. legacy single-file record)
+    if(pdfEvidenceFiles.length===0 && allCapsForCar.length===0){
       try{pdfEvidenceFiles=JSON.parse(cap?.evidence_files||"[]");}catch{}
       if(!cap?.evidence_files&&cap?.evidence_filename) pdfEvidenceFiles=[{name:cap.evidence_filename,url:cap.evidence_url}];
     }
@@ -3363,7 +3491,6 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         } else if(isPDF){
           // ── PDF files: merge using pdf-lib (works for both inline and remote) ──
           try{
-            if(!window._pdfMergeQueue) window._pdfMergeQueue=[];
             let bytes;
             if(isInline){
               // Convert base64 data URL to ArrayBuffer
@@ -3623,7 +3750,12 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
               : filtered.map(c=>{
                 const od=isOverdue(c.due_date)&&!["Closed","Completed"].includes(c.status);
                 const cap=getCAP(c.id); const verif=getVerif(c.id);
-                const extCar = isExternalSource(c.source);
+                // Detect external: source field (preferred), fallback to ref/cycles columns,
+                // final fallback: ID pattern (catches pre-migration KCAA CARs like KCAA/FOPS/SURV/...)
+                const extCar = isExternalSource(c.source)
+                  || !!c.external_ref
+                  || !!c.external_cycles
+                  || (typeof c.id==="string" && /^KCAA[/\-]|[/\-]KCAA[/\-]|-KCAA-|-EXT-/i.test(c.id));
                 return (
                   <tr key={c.id} className="row-hover" style={{ borderBottom:`1px solid ${T.border}`, background:od&&c.status!=="Closed"?"#fff8f8":"" }}>
                     <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
@@ -3644,11 +3776,9 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
                     </td>
                     <td style={{ padding:"10px 14px" }}><Badge label={c.severity}/></td>
                     <td style={{ padding:"10px 14px" }}>
-                      {extCar ? (()=>{
-                        const es = deriveExternalStatus(c);
-                        const em = EXT_STATUS_META[es]||EXT_STATUS_META["Open"];
-                        return <span style={{ background:em.bg,color:em.color,border:`1px solid ${em.border}`,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:600,whiteSpace:"nowrap",fontFamily:"'Source Code Pro',monospace" }}>{es}</span>;
-                      })() : <Badge label={c.status}/>}
+                      {/* Clickable status badge — opens quick status updater */}
+                      <StatusBadgeBtn car={c} extCar={extCar}
+                        onClick={()=>{setSelected(c);setModal("status");}} />
                     </td>
                     <td style={{ padding:"10px 14px", color:T.muted, fontSize:12 }}>{c.department||"--"}</td>
                     <td style={{ padding:"10px 14px", color:od?T.red:T.text, fontSize:12, fontWeight:od?600:400 }}>{fmt(c.due_date)}{od?" ⚠":""}</td>
@@ -3657,12 +3787,18 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
                       <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
                         {canRaiseCAR&&<Btn size="sm" variant="ghost" onClick={()=>{setSelected(c);setModal("car")}}>Edit</Btn>}
                         {extCar ? (<>
-                          {/* External CAR: cycle-based response flow */}
-                          {c.status!=="Closed"&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("external")}}
+                          {/* External CAR: cycle-based response flow — always accessible */}
+                          <Btn size="sm" variant="outline"
+                            onClick={()=>{setSelected(c);setModal("external")}}
                             style={{color:"#0a1628",borderColor:"#c9973a",background:"#fffdf5"}}>
-                            {c.external_cycles?"Update Response":"Log Response"}
-                          </Btn>}
-                          {(c.external_cycles||c.external_response)&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
+                            {(()=>{
+                              const es = deriveExternalStatus(c);
+                              if(es==="Closed") return "View Response";
+                              if(c.external_cycles) return "Update Response";
+                              return "Log Response";
+                            })()}
+                          </Btn>
+                          {c.external_cycles&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
                         </>) : (<>
                           {/* Internal CAR: full CAP/Verification flow */}
                           <Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("detail")}} style={{color:T.teal,borderColor:T.teal}}>View</Btn>
@@ -3685,6 +3821,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
       {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} org={org}/>}
       {modal==="external"&&selected&&<ExternalResponseModal car={selected} onSave={saveExternalResponse} onClose={()=>setModal(null)} profile={profile} user={user}/>}
+      {modal==="status"&&selected&&<QuickStatusModal car={selected} isExt={isExternalSource(selected.source)||!!selected.external_ref||!!selected.external_cycles||(typeof selected.id==="string"&&/^KCAA[/\-]|[/\-]KCAA[/\-]|-KCAA-|-EXT-/i.test(selected.id))} onSave={saveQuickStatus} onClose={()=>setModal(null)}/>}
     </div>
   );
 };
@@ -8071,61 +8208,84 @@ export default function App() {
     return()=>subscription.unsubscribe();
   },[]);
 
+  // Ref so realtime callbacks can skip phase-1 profile fetch once org_id is known
+  const loadedOrgIdRef = useRef(null);
+
   const loadAll = useCallback(async()=>{
-    if(!user)return;
-    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,prof,risks,auditSchedule]=await Promise.all([
-      supabase.from(TABLES.cars).select("*").order("created_at",{ascending:false}),
-      supabase.from(TABLES.caps).select("*"),
-      supabase.from(TABLES.verifications).select("*"),
-      supabase.from(TABLES.documents).select("*").order("created_at",{ascending:false}),
-      supabase.from(TABLES.flightDocs).select("*").order("expiry_date",{ascending:true}),
-      supabase.from(TABLES.audits).select("*").order("date",{ascending:true}),
-      supabase.from(TABLES.contractors).select("*").order("name",{ascending:true}),
-      supabase.from(TABLES.changeLog).select("*").order("created_at",{ascending:false}).limit(200),
-      supabase.from(TABLES.managers).select("*").order("id"),
-      supabase.from(TABLES.profiles).select("*").eq("id",user.id).single(),
-      supabase.from(TABLES.risks).select("*").order("created_at",{ascending:false}),
-      supabase.from("audit_schedule").select("*").order("year",{ascending:false}),
+    if(!user) return;
+
+    // ── Phase 1: profile (single keyed row — fast) ────────────────
+    const { data: profData } = await supabase
+      .from(TABLES.profiles).select("*").eq("id",user.id).single();
+
+    const isSuperAdminUser  = !!profData?.is_super_admin;
+    const isSuperAdminMode  = isSuperAdminUser && !loginOrgOverride;
+    const orgId = loginOrgOverride || (isSuperAdminMode ? null : profData?.org_id) || null;
+    loadedOrgIdRef.current  = orgId;
+
+    setProfile(profData);
+    setIsSuperAdmin(isSuperAdminUser);
+
+    if(!orgId){
+      // Super admin in platform mode — no per-org data needed
+      setLoading(false);
+      if(isSuperAdminUser){
+        supabase.from("organisations").select("*").order("name")
+          .then(({data})=>{ if(data) setOrgs(data); });
+        supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false})
+          .then(({data})=>{ if(data) setOrgUsers(data); });
+      }
+      return;
+    }
+
+    // ── Phase 2: all org data in parallel, filtered by org_id ─────
+    // NOTE: evidence_files is excluded from caps bulk-load — it stores base64
+    // content that can be many MB per record. It is fetched on-demand in generateReport.
+    const q = (tbl) => supabase.from(tbl).select("*").eq("org_id",orgId);
+    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,risks,auditSchedule,orgResult] = await Promise.all([
+      q(TABLES.cars).order("created_at",{ascending:false}),
+      supabase.from(TABLES.caps)
+        .select("id,car_id,org_id,status,immediate_action,root_cause_analysis,corrective_action,preventive_action,target_date,submitted_at,submitted_by,submitted_by_name,evidence_filename,evidence_url,updated_at,risk_score,risk_label,linked_risk_id")
+        .eq("org_id",orgId),
+      q(TABLES.verifications),
+      q(TABLES.documents).order("created_at",{ascending:false}),
+      q(TABLES.flightDocs).order("expiry_date",{ascending:true}),
+      q(TABLES.audits).order("date",{ascending:true}),
+      q(TABLES.contractors).order("name",{ascending:true}),
+      q(TABLES.changeLog).order("created_at",{ascending:false}).limit(200),
+      q(TABLES.managers).order("id"),
+      q(TABLES.risks).order("created_at",{ascending:false}),
+      supabase.from("audit_schedule").select("*").eq("org_id",orgId).order("year",{ascending:false}),
+      supabase.from("organisations").select("*").eq("id",orgId).single(),
     ]);
-    // Auto-mark overdue CARs — any non-closed CAR past due date becomes Overdue
-    const OVERDUE_ELIGIBLE = ["Open","In Progress"];
+
+    // Auto-mark overdue CARs (fire-and-forget, no await)
     const today = new Date(); today.setHours(0,0,0,0);
+    const OVERDUE_ELIGIBLE = ["Open","In Progress"];
     const processedCars = (cars.data||[]).map(c => {
-      if(!OVERDUE_ELIGIBLE.includes(c.status)) return c; // only Open/In Progress can become Overdue
-      if(!c.due_date) return c;
+      if(!OVERDUE_ELIGIBLE.includes(c.status)||!c.due_date) return c;
       const due = new Date(c.due_date); due.setHours(0,0,0,0);
-      if(due < today) {
+      if(due < today){
         supabase.from(TABLES.cars).update({status:"Overdue",updated_at:new Date().toISOString()}).eq("id",c.id).then(()=>{});
-        return {...c, status:"Overdue"};
+        return {...c,status:"Overdue"};
       }
       return c;
     });
 
-    // Batch all state updates together to prevent intermediate empty renders
-    flushSync(()=>{
-      setData({
-        cars:processedCars,caps:caps.data||[],verifications:verifs.data||[],auditSchedule:auditSchedule.data||[],
-        documents:docs.data||[],flightDocs:fdocs.data||[],audits:audits.data||[],
-        contractors:contractors.data||[],changeLog:logs.data||[],
-        risks:risks.data||[],
-      });
-      setManagers(mgrs.data||[]);
-      setProfile(prof.data);
-      setIsSuperAdmin(prof.data?.is_super_admin||false);
-      setLoading(false);
+    // Batch state — React 18 auto-batches so flushSync is not needed
+    setData({
+      cars:processedCars, caps:caps.data||[], verifications:verifs.data||[],
+      auditSchedule:auditSchedule.data||[], documents:docs.data||[],
+      flightDocs:fdocs.data||[], audits:audits.data||[],
+      contractors:contractors.data||[], changeLog:logs.data||[],
+      risks:risks.data||[],
     });
-    // Load org details — use login override if provided, otherwise use profile org_id
-    // If super admin logged in without an org override, don't load an org (stay in platform mode)
-    const isSuperAdminMode = prof.data?.is_super_admin && !loginOrgOverride;
-    const orgIdToLoad = loginOrgOverride || (!isSuperAdminMode ? prof.data?.org_id : null);
-    if(orgIdToLoad){
-      supabase.from("organisations").select("*").eq("id",orgIdToLoad).single()
-        .then(({data})=>{ if(data) setOrg(data); });
-    } else if(isSuperAdminMode){
-      setOrg(null); // clear org so sidebar shows platform mode
-    }
-    // Super admin: load all orgs and all users
-    if(prof.data?.is_super_admin){
+    setManagers(mgrs.data||[]);
+    if(orgResult.data) setOrg(orgResult.data);
+    setLoading(false);
+
+    // Super admin: also load platform-wide data
+    if(isSuperAdminUser){
       supabase.from("organisations").select("*").order("name")
         .then(({data})=>{ if(data) setOrgs(data); });
       supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false})
@@ -8137,11 +8297,17 @@ export default function App() {
 
   useEffect(()=>{
     if(!user||loading)return;
+    // Debounce: multiple realtime events firing within 500ms collapse into one loadAll
+    let debounceTimer = null;
+    const debouncedLoad = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(()=>loadAll(), 500);
+    };
     const tables=["cars","caps","capa_verifications","documents","flight_school_docs","audits","contractors","change_log","risk_register","audit_schedule"];
     subs.current=tables.map(t=>
-      supabase.channel(`rt-${t}`).on("postgres_changes",{event:"*",schema:"public",table:t},()=>loadAll()).subscribe()
+      supabase.channel(`rt-${t}`).on("postgres_changes",{event:"*",schema:"public",table:t},debouncedLoad).subscribe()
     );
-    return()=>{subs.current.forEach(s=>s.unsubscribe());};
+    return()=>{ clearTimeout(debounceTimer); subs.current.forEach(s=>s.unsubscribe()); };
   },[user,loading,loadAll]);
 
   const isAdmin  = profile?.role==="admin" || isSuperAdmin;
