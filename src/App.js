@@ -5461,7 +5461,7 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
   doc.text(`ANNUAL AUDIT PROGRAMME — ${year}`, M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text(`${slot.org_name||"Organisation"}${slot.org_address?`  |  ${slot.org_address}`:""}${slot.org_phone?`  |  ${slot.org_phone}`:""}`, W-M, 10, {align:"right"});
+  doc.text(`${approval?.org_name||"Organisation"}${approval?.org_address?`  |  ${approval.org_address}`:""}${approval?.org_phone?`  |  ${approval.org_phone}`:""}`, W-M, 10, {align:"right"});
   doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 28;
@@ -5609,7 +5609,7 @@ const generateNotificationPDF = async (slot) => {
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
   doc.text("AUDIT NOTIFICATION FORM — QMS 002", M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text(`${approval?.org_name||"Organisation"}${approval?.org_address?`  |  ${approval.org_address}`:""}${approval?.org_phone?`  |  ${approval.org_phone}`:""}`, W-M, 11, {align:"right"});
+  doc.text(`${slot.org_name||"Organisation"}${slot.org_address?`  |  ${slot.org_address}`:""}${slot.org_phone?`  |  ${slot.org_phone}`:""}`, W-M, 11, {align:"right"});
   doc.text(`Issued: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 34;
