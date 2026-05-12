@@ -11,6 +11,39 @@ const GlobalStyle = () => (
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { height: 100%; }
       body { background: #eef2f7; overflow: hidden; font-family: 'Source Sans 3', sans-serif; }
+      body.scrollable { overflow: auto; }
+      @media (max-width: 768px) {
+        body { overflow: auto; }
+        .desktop-sidebar { display: none !important; }
+        .mobile-nav { display: flex !important; }
+        .main-content { margin-bottom: 64px !important; }
+        .app-header { padding: 10px 14px !important; }
+        .hamburger-btn { display: block !important; }
+        .main-scroll-area { padding-bottom: 72px !important; }
+      }
+      @media (min-width: 769px) and (max-width: 1024px) {
+        .desktop-sidebar { width: 60px !important; }
+        .desktop-sidebar .sidebar-label { display: none !important; }
+        .desktop-sidebar .sidebar-logo-text { display: none !important; }
+        .desktop-sidebar .sidebar-user-info { display: none !important; }
+        .desktop-sidebar .sidebar-section-label { display: none !important; }
+      }
+      .mobile-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+        background: #fff; border-top: 1px solid #dde3ea; height: 60px;
+        align-items: stretch; box-shadow: 0 -2px 12px rgba(0,0,0,0.08); }
+      .mobile-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 2px; border: none; background: none; cursor: pointer;
+        font-family: 'Source Sans 3', sans-serif; padding: 6px 2px; color: #8fa0b0;
+        font-size: 10px; font-weight: 500; transition: color 0.15s; min-width: 0; }
+      .mobile-nav-item.active { color: #01579b; }
+      .mobile-nav-item span:first-child { font-size: 20px; }
+      .mobile-drawer { display: none; position: fixed; inset: 0; z-index: 500; }
+      .mobile-drawer.open { display: block; }
+      .mobile-drawer-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
+      .mobile-drawer-panel { position: absolute; left: 0; top: 0; bottom: 0; width: 260px;
+        background: #fff; overflow-y: auto; box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+        display: flex; flex-direction: column; }
+      @media (min-width: 769px) { .mobile-drawer { display: none !important; } }
       ::-webkit-scrollbar { width: 5px; height: 5px; }
       ::-webkit-scrollbar-track { background: #e8edf3; }
       ::-webkit-scrollbar-thumb { background: #b0bec5; border-radius: 3px; }
@@ -1029,6 +1062,31 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         // If org slug provided, store the intended org on the profile
         if(resolvedOrgId){
           await supabase.from("profiles").update({ org_id: resolvedOrgId }).eq("id", signUpData.user.id);
+          // Notify the org admin that a new user is waiting for approval
+          const { data: adminProfiles } = await supabase
+            .from("profiles")
+            .select("email,full_name")
+            .eq("org_id", resolvedOrgId)
+            .eq("role", "admin")
+            .eq("status", "approved");
+          const { data: orgInfo } = await supabase
+            .from("organisations")
+            .select("name")
+            .eq("id", resolvedOrgId)
+            .single();
+          const adminEmails = (adminProfiles||[]).map(a=>a.email).filter(Boolean);
+          if(adminEmails.length > 0){
+            await sendNotification({
+              type: "user_signup_request",
+              record: {
+                full_name: fullName || email.split("@")[0],
+                email: email,
+                org_name: orgInfo?.name || "",
+                registered_at: new Date().toLocaleString("en-GB", {timeZone:"Africa/Nairobi"}),
+              },
+              recipients: adminEmails,
+            });
+          }
         }
         await supabase.auth.signOut();
         setMode("login");
@@ -1412,28 +1470,49 @@ const getAuditRef = (slot, prefix="PGF") => {
   return `${prefix}-QMS-${code}-${dd}${mm}${yyyy}`;
 };
 
-const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, fromAudit=false }) => {
+const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, fromAudit=false, orgDepartments }) => {
   const [selectedAuditId, setSelectedAuditId] = useState(car?.audit_ref||"");
   const auditRef = selectedAuditId || car?.audit_ref || "";
 
-  // Count existing CARs linked to this audit ref to get next CAPA number
-  const existingCount = (allCars||[]).filter(c=>c.audit_ref===auditRef && (!car || c.id!==car.id)).length;
-  const nextNum = existingCount + 1;
-  const autoId = auditRef
-    ? `${auditRef}-CAPA-${String(nextNum).padStart(3,"0")}`
-    : `CAR-${String(Date.now()).slice(-6)}`;
+  // ── Helpers for auto-generating CAR IDs ──────────────────────
+  const buildAutoId = (src, aRef, prefix) => {
+    const d = new Date();
+    const datePart = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
+    if(aRef) {
+      const count = (allCars||[]).filter(c=>c.audit_ref===aRef && (!car || c.id!==car.id)).length;
+      return `${aRef}-CAPA-${String(count+1).padStart(3,"0")}`;
+    }
+    const isExt = isExternalSource(src);
+    const isKCAA = ["KCAA Surveillance Audit","KCAA Ramp Inspection","KCAA Documentation Review"].includes(src);
+    const typeCode = isKCAA ? "KCAA" : isExt ? "EXT" : "INT";
+    const existing = (allCars||[]).filter(c => {
+      if(!c.id) return false;
+      return c.id.startsWith(`${prefix}-${typeCode}-`);
+    });
+    return `${prefix}-${typeCode}-${datePart}-${String(existing.length+1).padStart(3,"0")}`;
+  };
 
   const [form, setForm] = useState(car || {
-    id: autoId, status:"Open",
-    severity:"Minor", date_raised:today(),
-    audit_ref: auditRef,
+    id: buildAutoId("Internal Scheduled Audit", auditRef, orgPrefix),
+    status:"Open", severity:"Minor", date_raised:today(),
+    audit_ref: auditRef, source: "Internal Scheduled Audit",
   });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  const extSrc = isExternalSource(form.source);
+
+  // When source changes, rebuild ID (only for new CARs)
+  const handleSourceChange = (src) => {
+    set("source", src);
+    if(!car) {
+      const newId = buildAutoId(src, auditRef, orgPrefix);
+      set("id", newId);
+    }
+  };
 
   // When audit selection changes, update both audit_ref and id
   const handleAuditChange = (slotId) => {
     setSelectedAuditId(slotId);
-    if(!slotId){ set("audit_ref",""); set("id",`CAR-${String(Date.now()).slice(-6)}`); return; }
+    if(!slotId){ set("audit_ref",""); set("id", buildAutoId(form.source, "", orgPrefix)); return; }
     const slot = (auditSchedule||[]).find(s=>s.id===slotId);
     if(!slot) return;
     const ref = getAuditRef(slot, orgPrefix);
@@ -1443,15 +1522,56 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
     set("id", `${ref}-CAPA-${num}`);
   };
 
-  // Sorted audit schedule for dropdown — most recent first
-  // Only show completed audits for linking — incomplete audits cannot have CARs raised against them
+  // Departments: use org custom list, fallback to DEFAULT_DEPARTMENTS
+  const deptList = (() => {
+    if(orgDepartments) {
+      try { const p = typeof orgDepartments==="string" ? JSON.parse(orgDepartments) : orgDepartments; if(Array.isArray(p)&&p.length) return p; } catch{}
+    }
+    if(auditAreas) {
+      try { const p = typeof auditAreas==="string" ? JSON.parse(auditAreas) : auditAreas; if(Array.isArray(p)&&p.length) return p; } catch{}
+    }
+    return DEFAULT_DEPARTMENTS;
+  })();
+
+  // Sorted audit schedule for dropdown — most recent first; only completed audits
   const auditOptions = [...(auditSchedule||[])]
     .filter(s=>s.status==="Completed")
     .sort((a,b)=>b.year-a.year||b.month-a.month);
+
   return (
     <ModalShell title={car?"Edit CAR":"Raise New CAR"} onClose={onClose} wide>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 20px" }}>
-        {!fromAudit&&(
+
+        {/* Source of CAR */}
+        <div style={{ gridColumn:"1/-1" }}>
+          <label style={{ display:"block",fontSize:11,fontWeight:600,color:T.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4 }}>Source of CAR</label>
+          <select value={form.source||""} onChange={e=>handleSourceChange(e.target.value)}
+            style={{ width:"100%",background:"#f8fafc",border:`1px solid ${extSrc?"#e65100":T.border}`,borderRadius:6,padding:"9px 12px",color:T.text,fontSize:13,marginBottom:14 }}>
+            <option value="">— Select source —</option>
+            <optgroup label="Internal">
+              {CAR_SOURCES_INTERNAL.map(s=><option key={s}>{s}</option>)}
+            </optgroup>
+            <optgroup label="External / Regulatory">
+              {CAR_SOURCES_EXTERNAL.map(s=><option key={s}>{s}</option>)}
+            </optgroup>
+          </select>
+        </div>
+
+        {/* External source info banner */}
+        {extSrc && (
+          <div style={{ gridColumn:"1/-1", background:"#fff8e1", border:"1px solid #ffe082", borderRadius:8, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#e65100" }}>
+            <strong>External / Regulatory CAR</strong> — This CAR will follow a simplified feedback workflow. No internal CAP process will be required; the Quality Manager logs the response and tracks acceptance by the external body.
+          </div>
+        )}
+
+        {/* External ref + auditor (when external) */}
+        {extSrc && (<>
+          <Input label="External Body Reference No." value={form.external_ref||""} onChange={e=>set("external_ref",e.target.value)} placeholder="e.g. KCAA/AW/2026/034" />
+          <Input label="External Auditor / Inspector (optional)" value={form.external_auditor||""} onChange={e=>set("external_auditor",e.target.value)} placeholder="Name or team" />
+        </>)}
+
+        {/* Audit link (internal only) */}
+        {!fromAudit && !extSrc && (
           <div style={{ gridColumn:"1/-1" }}>
             <Select label="Link to Audit (optional)" value={selectedAuditId} onChange={e=>handleAuditChange(e.target.value)}>
               <option value="">— Standalone CAR (not linked to audit) —</option>
@@ -1459,6 +1579,7 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
             </Select>
           </div>
         )}
+
         <Input label="CAR Number" value={form.id||""} onChange={e=>set("id",e.target.value)} />
         <Input label="Date Raised" type="date" value={form.date_raised||""} onChange={e=>set("date_raised",e.target.value)} />
         {form.audit_ref&&<div style={{ gridColumn:"1/-1" }}><Input label="Audit Reference" value={form.audit_ref} readOnly style={{ background:"#f5f8fc",color:"#5f7285",fontFamily:"monospace" }} /></div>}
@@ -1477,12 +1598,14 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
         </Select>
         <Select label="Department" value={form.department||""} onChange={e=>set("department",e.target.value)}>
           <option value="">Select…</option>
-          {(auditAreas ? (typeof auditAreas==="string" ? JSON.parse(auditAreas) : auditAreas) : ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]).map(o=><option key={o}>{o}</option>)}
+          {deptList.map(o=><option key={o}>{o}</option>)}
         </Select>
         <Input label="Due Date" type="date" value={form.due_date||""} onChange={e=>set("due_date",e.target.value)} />
-        <div style={{ gridColumn:"1/-1" }}>
-          <Input label="Additional Notification Recipients (comma separated emails)" value={form.additional_notify_text||""} onChange={e=>set("additional_notify_text",e.target.value)} placeholder="person@company.com, other@company.com" />
-        </div>
+        {!extSrc && (
+          <div style={{ gridColumn:"1/-1" }}>
+            <Input label="Additional Notification Recipients (comma separated emails)" value={form.additional_notify_text||""} onChange={e=>set("additional_notify_text",e.target.value)} placeholder="person@company.com, other@company.com" />
+          </div>
+        )}
       </div>
       <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
@@ -2063,20 +2186,25 @@ const ModalShell = ({ title, children, onClose, wide }) => (
 );
 
 
-// ─── Pegasus Letterhead ───────────────────────────────────────
-const PegasusLetterhead = () => (
-  <div style={{ borderBottom:`2px solid #01579b`, paddingBottom:14, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-    <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:"#01579b", letterSpacing:1 }}>✈ Pegasus Flyers (E.A.) Ltd.</div>
-    <div style={{ textAlign:"right" }}>
-      <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:13, color:"#01579b" }}>CORRECTIVE ACTION REQUEST</div>
-      <div style={{ fontSize:10, color:"#5f7285", marginTop:2 }}>P.O Box 3341-00100 Wilson Airport, Nairobi Kenya</div>
-      <div style={{ fontSize:10, color:"#5f7285" }}>Tel: +254206001467/8 · Email: pegasus@africaonline.co.ke</div>
+// ─── Org Letterhead (replaces hardcoded Pegasus branding) ─────
+const OrgLetterhead = ({ org }) => {
+  const name    = org?.report_org_name || org?.name || "Organisation";
+  const address = org?.report_address  || "";
+  const phone   = org?.report_phone    || "";
+  return (
+    <div style={{ borderBottom:`2px solid #01579b`, paddingBottom:14, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:"#01579b", letterSpacing:1 }}>✈ {name}</div>
+      <div style={{ textAlign:"right" }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:13, color:"#01579b" }}>CORRECTIVE ACTION REQUEST</div>
+        {address && <div style={{ fontSize:10, color:"#5f7285", marginTop:2 }}>{address}</div>}
+        {phone   && <div style={{ fontSize:10, color:"#5f7285" }}>Tel: {phone}</div>}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── CAPA Detail / Progress Modal ────────────────────────────
-const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }) => {
+const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose, org }) => {
   const steps = [
     { label:"CAR Raised",           done:true,                                  active:car.status==="Open" },
     { label:"In Progress",          done:["In Progress","Pending Verification","Closed","Overdue"].includes(car.status), active:car.status==="In Progress" },
@@ -2109,7 +2237,7 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 
         <div style={{ padding:24 }}>
           {/* Letterhead */}
-          <PegasusLetterhead />
+          <OrgLetterhead org={org} />
 
           {/* Progress tracker */}
           {(()=>{
@@ -2319,7 +2447,7 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 
           {/* Footer */}
           <div style={{ marginTop:20,paddingTop:14,borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-            <div style={{ fontSize:11,color:T.muted }}>Pegasus Flyers (E.A.) Ltd. · QMS Document · {new Date().toLocaleDateString("en-GB")}</div>
+            <div style={{ fontSize:11,color:T.muted }}>{org?.report_org_name||org?.name||"Organisation"} · QMS Document · {new Date().toLocaleDateString("en-GB")}</div>
             <Btn size="sm" onClick={onPDF}>📄 Export PDF Report</Btn>
           </div>
         </div>
@@ -2329,9 +2457,363 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 };
 
 
+// ─── External CAR status derivation (shared) ─────────────────
+// Status is auto-derived from data — never manually set.
+const deriveExternalStatus = (car) => {
+  const cycles = (() => {
+    try { const p = JSON.parse(car.external_cycles||"[]"); if(Array.isArray(p)&&p.length) return p; } catch {}
+    return [];
+  })();
+  if(!cycles.length || !cycles[0]?.dateSubmitted) return "Open";
+  if(car.external_cap_accepted_date) {
+    if(car.external_followup_date) {
+      return new Date(car.external_followup_date) <= new Date() ? "Closed" : "Follow-up Pending";
+    }
+    return "Accepted";
+  }
+  const last = cycles[cycles.length-1];
+  if(last.dateReturned) return "Returned";
+  if(cycles.length > 1 && cycles[cycles.length-1].dateSubmitted) return "Resubmitted";
+  return "Submitted";
+};
+
+const EXT_STATUS_META = {
+  "Open":             { color:"#5f7285", bg:"#f5f5f5",  border:"#b0bec5" },
+  "Submitted":        { color:"#1d4ed8", bg:"#dbeafe",  border:"#93c5fd" },
+  "Returned":         { color:"#991b1b", bg:"#fee2e2",  border:"#fca5a5" },
+  "Resubmitted":      { color:"#c2410c", bg:"#fff7ed",  border:"#fed7aa" },
+  "Accepted":         { color:"#15803d", bg:"#dcfce7",  border:"#86efac" },
+  "Follow-up Pending":{ color:"#3730a3", bg:"#e0e7ff",  border:"#a5b4fc" },
+  "Closed":           { color:"#166534", bg:"#f0fdf4",  border:"#bbf7d0" },
+};
+
+// ─── External Response Modal ──────────────────────────────────
+// Cycle-based tracker mirroring the EAAC KCAA CAR Tracker HTML app.
+// Status is derived automatically from submission/return/acceptance data.
+const ExternalResponseModal = ({ car, onSave, onClose, profile, user }) => {
+
+  // Parse existing cycles or seed with empty first cycle
+  const parseCycles = () => {
+    try {
+      const p = JSON.parse(car.external_cycles||"[]");
+      if(Array.isArray(p) && p.length) return p;
+    } catch {}
+    return [{ dateSubmitted:"", kcaaRef:"", dateReturned:"", returnRemarks:"" }];
+  };
+
+  const [cycles,         setCycles]         = useState(parseCycles);
+  const [capAcceptedDate,setCapAcceptedDate] = useState(car.external_cap_accepted_date||"");
+  const [followupDate,   setFollowupDate]    = useState(car.external_followup_date||"");
+  const [remarks,        setRemarks]         = useState(car.external_response||"");
+  const [loggedBy,       setLoggedBy]        = useState(car.external_response_by||profile?.full_name||user?.email||"");
+  const [saving,         setSaving]          = useState(false);
+
+  const updateCycle = (i,k,v) => setCycles(prev=>prev.map((c,idx)=>idx===i?{...c,[k]:v}:c));
+  const addCycle    = ()  => setCycles(prev=>[...prev,{dateSubmitted:"",kcaaRef:"",dateReturned:"",returnRemarks:""}]);
+  const removeCycle = (i) => { if(cycles.length<=1) return; setCycles(prev=>prev.filter((_,idx)=>idx!==i)); };
+
+  // Derive status live from current form state
+  const liveStatus = (() => {
+    if(!cycles[0]?.dateSubmitted) return "Open";
+    if(capAcceptedDate) {
+      if(followupDate) return new Date(followupDate) <= new Date() ? "Closed" : "Follow-up Pending";
+      return "Accepted";
+    }
+    const last = cycles[cycles.length-1];
+    if(last.dateReturned) return "Returned";
+    if(cycles.length > 1 && cycles[cycles.length-1].dateSubmitted) return "Resubmitted";
+    return "Submitted";
+  })();
+
+  const sc = EXT_STATUS_META[liveStatus] || EXT_STATUS_META["Open"];
+  const returnCount = cycles.filter(c=>c.dateReturned).length;
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      external_cycles:           JSON.stringify(cycles),
+      external_cap_accepted_date: capAcceptedDate||null,
+      external_followup_date:    followupDate||null,
+      external_response:         remarks,
+      external_response_by:      loggedBy,
+      external_response_date:    today(),
+      status:                    liveStatus,
+    });
+    setSaving(false);
+  };
+
+  // ── Styles ──────────────────────────────────────────────────
+  const N = "#0a1628"; // navy
+  const G = "#c9973a"; // gold
+  const inp = { width:"100%",padding:"7px 9px",border:"1px solid #cbd5e0",borderRadius:5,fontSize:12,background:"#fff",color:"#1a2332",boxSizing:"border-box" };
+  const lbl = { fontSize:10,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:3 };
+  const secLabel = (icon,text) => (
+    <div style={{ fontSize:10,fontWeight:700,color:N,textTransform:"uppercase",letterSpacing:0.6,
+      paddingBottom:6,borderBottom:`2px solid ${N}`,marginBottom:10,display:"flex",alignItems:"center",gap:6 }}>
+      <span>{icon}</span>{text}
+    </div>
+  );
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(10,22,40,0.65)",zIndex:2000,
+      display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"24px 16px" }}
+      onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:10,width:"100%",maxWidth:680,margin:"auto",
+        boxShadow:"0 20px 60px rgba(0,0,0,0.35)",borderTop:`4px solid ${G}` }}
+        onClick={e=>e.stopPropagation()}>
+
+        {/* ── Header ── */}
+        <div style={{ background:N,padding:"14px 18px",borderRadius:"6px 6px 0 0",
+          display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:10,color:"#8baac4",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2 }}>
+              KCAA / External CAR Response Tracker
+            </div>
+            <div style={{ fontWeight:700,fontSize:15,color:"#fff",fontFamily:"'Oxanium',sans-serif" }}>
+              {car.id}
+            </div>
+          </div>
+          <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+            <span style={{ background:sc.bg,color:sc.color,border:`1px solid ${sc.border}`,
+              borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700 }}>
+              {liveStatus}
+              {returnCount>0&&<span style={{ marginLeft:6,opacity:0.75 }}>· {returnCount}× returned</span>}
+            </span>
+            <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.6)",fontSize:20,cursor:"pointer",lineHeight:1 }}>✕</button>
+          </div>
+        </div>
+
+        <div style={{ padding:18,display:"flex",flexDirection:"column",gap:16,maxHeight:"74vh",overflowY:"auto" }}>
+
+          {/* ── CAR summary banner ── */}
+          <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"11px 14px" }}>
+            <div style={{ display:"flex",gap:20,flexWrap:"wrap" }}>
+              <div>
+                <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Source</div>
+                <div style={{ fontSize:12,fontWeight:700,color:"#e65100",marginTop:1 }}>{car.source||"External"}</div>
+              </div>
+              {car.external_ref&&(
+                <div>
+                  <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>External Ref</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:N,fontFamily:"'Courier New',monospace",marginTop:1 }}>{car.external_ref}</div>
+                </div>
+              )}
+              {car.external_auditor&&(
+                <div>
+                  <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Auditor / Inspector</div>
+                  <div style={{ fontSize:12,color:"#1a2332",marginTop:1 }}>{car.external_auditor}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Severity</div>
+                <div style={{ marginTop:1 }}><Badge label={car.severity}/></div>
+              </div>
+              <div style={{ flex:1,minWidth:200 }}>
+                <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Finding</div>
+                <div style={{ fontSize:11,color:"#475569",lineHeight:1.5,marginTop:1 }}>{car.finding_description}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Visual cycle progress tracker ── */}
+          <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"14px 16px" }}>
+            <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.6,marginBottom:12 }}>
+              Submission Cycle Progress
+            </div>
+            <div style={{ display:"flex",alignItems:"flex-start",gap:0,overflowX:"auto",paddingBottom:4 }}>
+              {cycles.map((cyc,i)=>{
+                const submitted = !!cyc.dateSubmitted;
+                const returned  = !!cyc.dateReturned;
+                const isFirst   = i===0;
+                return (
+                  <React.Fragment key={i}>
+                    {/* Connector from previous */}
+                    {i>0&&(
+                      <div style={{ display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,flex:"0 0 32px" }}>
+                        <div style={{ width:32,height:2,background:cycles[i-1].dateReturned?"#fca5a5":"#cbd5e0" }}/>
+                      </div>
+                    )}
+                    {/* Cycle node */}
+                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:"0 0 auto",minWidth:60 }}>
+                      <div style={{
+                        width:36,height:36,borderRadius:"50%",flexShrink:0,
+                        background: returned?"#fee2e2": submitted?"#dbeafe":"#f1f5f9",
+                        border:`2px solid ${returned?"#fca5a5":submitted?"#93c5fd":"#cbd5e0"}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:14,fontWeight:700,
+                        color: returned?"#991b1b":submitted?"#1d4ed8":"#94a3b8",
+                      }}>
+                        {returned?"↩":submitted?"✓":(i+1)}
+                      </div>
+                      <div style={{ fontSize:9,fontWeight:600,color:"#475569",textAlign:"center",lineHeight:1.3 }}>
+                        {isFirst?"Initial":"Resub "+(i)}
+                      </div>
+                      <div style={{ fontSize:9,color:returned?"#991b1b":submitted?"#1d4ed8":"#94a3b8",fontWeight:600,textAlign:"center" }}>
+                        {returned?"Returned":submitted?"Submitted":"Pending"}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+              {/* Connector to Accepted */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,flex:"0 0 32px" }}>
+                <div style={{ width:32,height:2,background:capAcceptedDate?"#86efac":"#cbd5e0" }}/>
+              </div>
+              {/* Accepted node */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:"0 0 auto",minWidth:60 }}>
+                <div style={{
+                  width:36,height:36,borderRadius:"50%",
+                  background:capAcceptedDate?"#dcfce7":"#f1f5f9",
+                  border:`2px solid ${capAcceptedDate?"#86efac":"#cbd5e0"}`,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,
+                  color:capAcceptedDate?"#15803d":"#94a3b8",
+                }}>
+                  {capAcceptedDate?"✓":"◎"}
+                </div>
+                <div style={{ fontSize:9,fontWeight:600,color:"#475569",textAlign:"center",lineHeight:1.3 }}>Accepted</div>
+                <div style={{ fontSize:9,color:capAcceptedDate?"#15803d":"#94a3b8",fontWeight:600 }}>
+                  {capAcceptedDate?fmt(capAcceptedDate):"Pending"}
+                </div>
+              </div>
+              {/* Connector to Closed */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,flex:"0 0 32px" }}>
+                <div style={{ width:32,height:2,background:liveStatus==="Closed"?"#86efac":"#cbd5e0" }}/>
+              </div>
+              {/* Closed node */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:"0 0 auto",minWidth:60 }}>
+                <div style={{
+                  width:36,height:36,borderRadius:"50%",
+                  background:liveStatus==="Closed"?"#f0fdf4":"#f1f5f9",
+                  border:`2px solid ${liveStatus==="Closed"?"#bbf7d0":"#cbd5e0"}`,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,
+                  color:liveStatus==="Closed"?"#166534":"#94a3b8",
+                }}>
+                  {liveStatus==="Closed"?"✓":"⊙"}
+                </div>
+                <div style={{ fontSize:9,fontWeight:600,color:"#475569",textAlign:"center",lineHeight:1.3 }}>Closed</div>
+                <div style={{ fontSize:9,color:liveStatus==="Closed"?"#166534":"#94a3b8",fontWeight:600 }}>
+                  {liveStatus==="Closed"?"Complete":"Pending"}
+                </div>
+              </div>
+            </div>
+            {cycles.length===1 && !cycles[0].dateSubmitted && (
+              <div style={{ marginTop:10,fontSize:11,color:"#94a3b8",fontStyle:"italic",textAlign:"center" }}>
+                Fill in the submission date below to start tracking this CAR's progress
+              </div>
+            )}
+          </div>
+
+          {/* ── Submission cycles ── */}
+          <div>
+            {secLabel("◾","Submission & Response Cycles")}
+            <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+              {cycles.map((c,i)=>(
+                <div key={i} style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,
+                  padding:13,borderLeft:`3px solid ${i===0?N:G}`,position:"relative" }}>
+                  <div style={{ fontSize:10,fontWeight:700,color:i===0?N:G,textTransform:"uppercase",
+                    letterSpacing:0.5,marginBottom:10,display:"flex",alignItems:"center",gap:6 }}>
+                    <span style={{ background:i===0?N:G,color:"#fff",padding:"1px 7px",borderRadius:10,fontSize:9 }}>{i+1}</span>
+                    {i===0?"Initial Submission":`Resubmission — Cycle ${i+1}`}
+                  </div>
+                  {cycles.length>1&&(
+                    <button onClick={()=>removeCycle(i)}
+                      style={{ position:"absolute",top:10,right:10,background:"#fee2e2",border:"none",
+                        borderRadius:4,color:"#991b1b",fontWeight:700,fontSize:11,cursor:"pointer",padding:"2px 7px" }}>✕</button>
+                  )}
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10 }}>
+                    <div>
+                      <label style={lbl}>Date Submitted</label>
+                      <input type="date" value={c.dateSubmitted||""} onChange={e=>updateCycle(i,"dateSubmitted",e.target.value)} style={inp}/>
+                    </div>
+                    <div>
+                      <label style={lbl}>KCAA Reference Number</label>
+                      <input type="text" value={c.kcaaRef||""} onChange={e=>updateCycle(i,"kcaaRef",e.target.value)}
+                        placeholder="e.g. KCAA/AI/2026/0042" style={inp}/>
+                    </div>
+                  </div>
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+                    <div>
+                      <label style={lbl}>Date Returned by Regulator</label>
+                      <input type="date" value={c.dateReturned||""} onChange={e=>updateCycle(i,"dateReturned",e.target.value)} style={inp}/>
+                    </div>
+                    <div>
+                      <label style={lbl}>Reason for Return</label>
+                      <input type="text" value={c.returnRemarks||""} onChange={e=>updateCycle(i,"returnRemarks",e.target.value)}
+                        placeholder="KCAA remarks on return…" style={inp}/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={addCycle}
+              style={{ width:"100%",padding:9,background:"#fff",border:"1px dashed #93c5fd",borderRadius:6,
+                color:"#1d4ed8",fontSize:12,cursor:"pointer",fontWeight:600,marginTop:8,transition:"background 0.15s" }}
+              onMouseEnter={e=>e.target.style.background="#eff6ff"}
+              onMouseLeave={e=>e.target.style.background="#fff"}>
+              ＋ Add resubmission cycle
+            </button>
+          </div>
+
+          {/* ── Resolution ── */}
+          <div>
+            {secLabel("◾","Resolution")}
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10 }}>
+              <div>
+                <label style={lbl}>Date CAP Accepted by Regulator</label>
+                <input type="date" value={capAcceptedDate} onChange={e=>setCapAcceptedDate(e.target.value)} style={inp}/>
+              </div>
+              <div>
+                <label style={lbl}>Follow-up Audit Date (if required)</label>
+                <input type="date" value={followupDate} onChange={e=>setFollowupDate(e.target.value)} style={inp}/>
+                {followupDate&&<div style={{ fontSize:10,color:"#64748b",marginTop:3 }}>Status moves to Closed once this date passes</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Remarks ── */}
+          <div>
+            {secLabel("◾","Internal Notes")}
+            <textarea value={remarks} onChange={e=>setRemarks(e.target.value)} rows={3}
+              placeholder="Internal notes, actions taken, evidence gathered, QMS document references…"
+              style={{...inp,resize:"vertical",lineHeight:1.5}}/>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10,marginTop:10 }}>
+              <div>
+                <label style={lbl}>Logged By</label>
+                <input value={loggedBy} onChange={e=>setLoggedBy(e.target.value)} style={inp}/>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── Footer ── */}
+        <div style={{ padding:"12px 18px",borderTop:"1px solid #e2e8f0",
+          display:"flex",justifyContent:"space-between",alignItems:"center",
+          background:"#f8fafc",borderRadius:"0 0 10px 10px" }}>
+          <div style={{ fontSize:11,color:"#64748b" }}>
+            Status auto-derived:&nbsp;
+            <span style={{ fontWeight:700,color:sc.color }}>{liveStatus}</span>
+          </div>
+          <div style={{ display:"flex",gap:8 }}>
+            <button onClick={onClose}
+              style={{ background:"#fff",color:"#475569",border:"1px solid #cbd5e0",borderRadius:5,padding:"7px 16px",fontWeight:500,fontSize:12,cursor:"pointer" }}>
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              style={{ background:N,color:"#fff",border:"none",borderRadius:5,padding:"7px 20px",fontWeight:700,fontSize:12,cursor:saving?"wait":"pointer",opacity:saving?0.7:1 }}>
+              {saving?"Saving…":"Save CAR Response"}
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
 // ─── CARs Table View ──────────────────────────────────────────
 const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
-  const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify'
+  const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify' | 'external'
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -2342,6 +2824,11 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
 
   const canRaiseCAR = ["admin","quality_manager","quality_auditor"].includes(profile?.role);
 
+  // Org helper values
+  const orgName    = org?.report_org_name || org?.name || "Organisation";
+  const orgAddress = org?.report_address  || "";
+  const orgPhone   = org?.report_phone    || "";
+
   const saveCar = async(form) => {
     const isNew = !data.cars.find(c=>c.id===form.id);
     const payload = {...form, title: form.finding_description?.slice(0,80)||form.id, updated_at:new Date().toISOString()};
@@ -2351,14 +2838,40 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       const{error}=await supabase.from(TABLES.cars).insert(payload);
       if(error){showToast(`Error: ${error.message}`,"error");return;}
       await logChange({user,action:"created",table:"cars",recordId:form.id,recordTitle:form.title||form.id,newData:form});
-      const carRm=managers.find(m=>m.role_title===form.responsible_manager); const extraEmails=(form.additional_notify_text||"").split(",").map(s=>s.trim()).filter(Boolean); await sendNotification({type:"car_raised",record:{...form,raised_by_name:profile?.full_name||user.email},recipients:[carRm?.email,...extraEmails].filter(Boolean)});
-      showToast("CAR raised -- responsible manager notified","success");
+      // Only send email for internal sources
+      if(!isExternalSource(form.source)){
+        const carRm=managers.find(m=>m.role_title===form.responsible_manager);
+        const extraEmails=(form.additional_notify_text||"").split(",").map(s=>s.trim()).filter(Boolean);
+        await sendNotification({type:"car_raised",record:{...form,raised_by_name:profile?.full_name||user.email},recipients:[carRm?.email,...extraEmails].filter(Boolean)});
+        showToast("CAR raised — responsible manager notified","success");
+      } else {
+        showToast("External CAR recorded","success");
+      }
     } else {
       const{error}=await supabase.from(TABLES.cars).update(payload).eq("id",form.id);
       if(error){showToast(`Error: ${error.message}`,"error");return;}
       await logChange({user,action:"updated",table:"cars",recordId:form.id,recordTitle:form.title||form.id,newData:form});
       showToast("CAR updated","success");
     }
+    setModal(null); onRefresh();
+  };
+
+  // Save external response directly on the CAR record
+  const saveExternalResponse = async(responseForm) => {
+    const payload = {
+      external_cycles:            responseForm.external_cycles,
+      external_cap_accepted_date: responseForm.external_cap_accepted_date,
+      external_followup_date:     responseForm.external_followup_date,
+      external_response:          responseForm.external_response,
+      external_response_by:       responseForm.external_response_by,
+      external_response_date:     responseForm.external_response_date,
+      status:                     responseForm.status,
+      updated_at:                 new Date().toISOString(),
+    };
+    const{error}=await supabase.from(TABLES.cars).update(payload).eq("id",selected.id);
+    if(error){showToast(`Error: ${error.message}`,"error");return;}
+    await logChange({user,action:"updated external CAR response",table:"cars",recordId:selected.id,recordTitle:selected.finding_description?.slice(0,60),newData:{status:payload.status}});
+    showToast(`External CAR saved — status: ${responseForm.status}`,"success");
     setModal(null); onRefresh();
   };
 
@@ -2453,6 +2966,10 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
   const getAllVerifs = (carId) => (data.verifications?.filter(v=>v.car_id===carId)||[]).sort((a,b)=>new Date(a.verified_at||a.created_at)-new Date(b.verified_at||b.created_at));
 
   const generateReport = async(car) => {
+    // Always reset the merge queue at the start — stale entries from a previous
+    // run cause evidence pages to be duplicated on every subsequent PDF generation.
+    window._pdfMergeQueue = [];
+
     const{jsPDF}=await import("jspdf");
     const{default:autoTable}=await import("jspdf-autotable");
     const cap=getCAP(car.id); const verif=getVerif(car.id);
@@ -2540,7 +3057,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     doc.text("AeroQualify Pro",margin,12);
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(200,220,255);
     doc.text("CAPA PROGRESS REPORT",margin+52,12);
-    doc.text("Pegasus Flyers (E.A.) Ltd.  |  Wilson Airport, Nairobi  |  +254206001467/8",W-margin,9,{align:"right"});
+    doc.text(`${orgName}${orgAddress?`  |  ${orgAddress}`:""}${orgPhone?`  |  ${orgPhone}`:""}`,W-margin,9,{align:"right"});
     doc.text("Generated: "+new Date().toLocaleDateString("en-GB"),W-margin,14,{align:"right"});
     y=24;
 
@@ -2803,8 +3320,8 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       }
     }
     console.log("[PDF EVIDENCE] Total evidence files to attach:",pdfEvidenceFiles.length, pdfEvidenceFiles.map(f=>({name:f.name,hasUrl:!!f.url})));
-    // fallback: if no allCaps data, try single cap
-    if(pdfEvidenceFiles.length===0){
+    // Fallback only when no caps at all were found (e.g. legacy single-file record)
+    if(pdfEvidenceFiles.length===0 && allCapsForCar.length===0){
       try{pdfEvidenceFiles=JSON.parse(cap?.evidence_files||"[]");}catch{}
       if(!cap?.evidence_files&&cap?.evidence_filename) pdfEvidenceFiles=[{name:cap.evidence_filename,url:cap.evidence_url}];
     }
@@ -2858,7 +3375,6 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         } else if(isPDF){
           // ── PDF files: merge using pdf-lib (works for both inline and remote) ──
           try{
-            if(!window._pdfMergeQueue) window._pdfMergeQueue=[];
             let bytes;
             if(isInline){
               // Convert base64 data URL to ArrayBuffer
@@ -2957,7 +3473,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         doc.text(`EVIDENCE OF CLOSURE  |  File ${evInfo.fileIndex} of ${evInfo.fileTotal}  |  ${evInfo.fileName}`,margin,293);
         doc.setFont("helvetica","normal");
       } else {
-        doc.text("Pegasus Flyers (E.A.) Ltd.  |  Confidential QMS Document  |  AS9100D / ISO 9001:2015",margin,293);
+        doc.text(`${orgName}  |  Confidential QMS Document  |  AS9100D / ISO 9001:2015`,margin,293);
       }
       doc.text("Page "+p+" of "+totalPagesBeforeMerge,W-margin,293,{align:"right"});
     }
@@ -3067,7 +3583,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(1,87,155);
     doc.text("CAPA STATUS REPORT",14,38);
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(100,100,100);
-    doc.text("Pegasus Flyers (E.A.) Ltd. · "+`Generated: ${new Date().toLocaleDateString("en-GB")}  |  Total CARs: ${data.cars.length}`,14,44);
+    doc.text(`${org?.report_org_name||org?.name||"Organisation"} · `+`Generated: ${new Date().toLocaleDateString("en-GB")}  |  Total CARs: ${data.cars.length}`,14,44);
     doc.setTextColor(0,0,0);
     autoTable(doc,{startY:50,head:[["CAR #","Severity","Status","Department","Raised","Due","Resp. Manager"]],
       body:data.cars.map(c=>[c.id,c.severity,c.status,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"]),
@@ -3092,7 +3608,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       />
       {/* Filters */}
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
-        {["all","Open","In Progress","Pending Verification","Returned for Resubmission","Closed","Overdue"].map(f=>(
+        {["all","Open","In Progress","Pending Verification","Returned for Resubmission","Pending Acceptance","Closed","Overdue"].map(f=>(
           <button key={f} onClick={()=>setFilter(f)}
             style={{ padding:"5px 14px", borderRadius:20, border:`1px solid ${filter===f?T.primary:T.border}`, background:filter===f?T.primary:"#fff", color:filter===f?"#fff":T.muted, fontSize:12, fontWeight:filter===f?600:400, cursor:"pointer" }}>
             {f==="all"?"All":f}
@@ -3107,7 +3623,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead>
             <tr style={{ background:"#f5f8fc" }}>
-              {["CAR #","Finding","Clause","Severity","Status","Dept","Due Date","Resp. Manager","Actions"].map(h=>(
+              {["CAR #","Source","Finding","Severity","Status","Dept","Due Date","Resp. Manager","Actions"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:T.muted, fontSize:10, fontWeight:700, letterSpacing:0.8, textTransform:"uppercase", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr>
@@ -3116,35 +3632,63 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
             {filtered.length===0
               ? <tr><td colSpan={9} style={{ padding:32, textAlign:"center", color:T.muted }}>No CARs found</td></tr>
               : filtered.map(c=>{
-                const od=isOverdue(c.due_date)&&!["Closed","Completed"].includes(c.status); const cap=getCAP(c.id); const verif=getVerif(c.id);
+                const od=isOverdue(c.due_date)&&!["Closed","Completed"].includes(c.status);
+                const cap=getCAP(c.id); const verif=getVerif(c.id);
+                // Detect external: primary = source field, fallback = external_ref or external_cycles present
+                const extCar = isExternalSource(c.source) || !!c.external_ref || !!c.external_cycles;
                 return (
                   <tr key={c.id} className="row-hover" style={{ borderBottom:`1px solid ${T.border}`, background:od&&c.status!=="Closed"?"#fff8f8":"" }}>
-                    <td style={{ padding:"10px 14px", fontFamily:"'Source Code Pro',monospace", color:T.primary, fontSize:11, fontWeight:600 }}>{c.id}</td>
-                    <td style={{ padding:"10px 14px", maxWidth:220 }}>
+                    <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
+                      <div style={{ fontFamily:"'Source Code Pro',monospace", color:T.primary, fontSize:11, fontWeight:600 }}>{c.id}</div>
+                      {c.external_ref && <div style={{ fontSize:10,color:"#8a9ab0",marginTop:2,fontFamily:"monospace" }}>Ext: {c.external_ref}</div>}
+                    </td>
+                    <td style={{ padding:"10px 14px", maxWidth:140 }}>
+                      {extCar
+                        ? <span style={{ fontSize:10,fontWeight:700,background:"#fff3e0",color:"#e65100",padding:"2px 7px",borderRadius:10,border:"1px solid #ffcc80",whiteSpace:"nowrap" }}>🌐 {c.source?.replace("KCAA ","").replace("External ","").replace(" Audit","")}</span>
+                        : <span style={{ fontSize:10,color:T.muted }}>{c.source?.replace("Internal ","") || "Internal"}</span>
+                      }
+                    </td>
+                    <td style={{ padding:"10px 14px", maxWidth:200 }}>
                       <div className="tooltip-wrap">
-                        <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:T.text, maxWidth:210 }}>{c.finding_description}</div>
+                        <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:T.text, maxWidth:190 }}>{c.finding_description}</div>
                         <div className="tooltip-box"><strong style={{color:"#90caf9"}}>Finding:</strong><br/>{c.finding_description}</div>
                       </div>
                     </td>
-                    <td style={{ padding:"10px 14px", maxWidth:160 }}>
-                      <div className="tooltip-wrap">
-                        <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"'Source Code Pro',monospace", fontSize:11, color:T.muted, maxWidth:150 }}>{c.qms_clause||"—"}</div>
-                        {c.qms_clause&&<div className="tooltip-box"><strong style={{color:"#90caf9"}}>QMS Clause:</strong><br/>{c.qms_clause}</div>}
-                      </div>
-                    </td>
                     <td style={{ padding:"10px 14px" }}><Badge label={c.severity}/></td>
-                    <td style={{ padding:"10px 14px" }}><Badge label={c.status}/></td>
+                    <td style={{ padding:"10px 14px" }}>
+                      {extCar ? (()=>{
+                        const es = deriveExternalStatus(c);
+                        const em = EXT_STATUS_META[es]||EXT_STATUS_META["Open"];
+                        return <span style={{ background:em.bg,color:em.color,border:`1px solid ${em.border}`,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:600,whiteSpace:"nowrap",fontFamily:"'Source Code Pro',monospace" }}>{es}</span>;
+                      })() : <Badge label={c.status}/>}
+                    </td>
                     <td style={{ padding:"10px 14px", color:T.muted, fontSize:12 }}>{c.department||"--"}</td>
-                    <td style={{ padding:"10px 14px", color:od?T.red:T.text, fontSize:12, fontWeight:od?600:400 }}>{fmt(c.due_date)}{od?` ⚠`:""}</td>
+                    <td style={{ padding:"10px 14px", color:od?T.red:T.text, fontSize:12, fontWeight:od?600:400 }}>{fmt(c.due_date)}{od?" ⚠":""}</td>
                     <td style={{ padding:"10px 14px", color:T.muted, fontSize:12 }}>{c.responsible_manager||"--"}</td>
                     <td style={{ padding:"10px 14px" }}>
                       <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
                         {canRaiseCAR&&<Btn size="sm" variant="ghost" onClick={()=>{setSelected(c);setModal("car")}}>Edit</Btn>}
-                        <Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("detail")}} style={{color:T.teal,borderColor:T.teal}}>View</Btn>
-                        {c.status!=="Closed"&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("cap")}}>CAP</Btn>}
-                        {c.status==="Pending Verification"&&["admin","quality_manager"].includes(profile?.role)&&
-                          <Btn size="sm" variant="success" onClick={()=>{setSelected(c);setModal("verify")}}>Verify</Btn>}
-                        {(cap||verif)&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
+                        {extCar ? (<>
+                          {/* External CAR: cycle-based response flow — always accessible */}
+                          <Btn size="sm" variant="outline"
+                            onClick={()=>{setSelected(c);setModal("external")}}
+                            style={{color:"#0a1628",borderColor:"#c9973a",background:"#fffdf5"}}>
+                            {(()=>{
+                              const es = deriveExternalStatus(c);
+                              if(es==="Closed") return "View Response";
+                              if(c.external_cycles) return "Update Response";
+                              return "Log Response";
+                            })()}
+                          </Btn>
+                          {c.external_cycles&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
+                        </>) : (<>
+                          {/* Internal CAR: full CAP/Verification flow */}
+                          <Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("detail")}} style={{color:T.teal,borderColor:T.teal}}>View</Btn>
+                          {c.status!=="Closed"&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("cap")}}>CAP</Btn>}
+                          {c.status==="Pending Verification"&&["admin","quality_manager"].includes(profile?.role)&&
+                            <Btn size="sm" variant="success" onClick={()=>{setSelected(c);setModal("verify")}}>Verify</Btn>}
+                          {(cap||verif)&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
+                        </>)}
                       </div>
                     </td>
                   </tr>
@@ -3154,10 +3698,11 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         </table>
       </div>
 
-      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} />}
+      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} orgDepartments={org?.departments||null} />}
       {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast}/>}
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
-      {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} />}
+      {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} org={org}/>}
+      {modal==="external"&&selected&&<ExternalResponseModal car={selected} onSave={saveExternalResponse} onClose={()=>setModal(null)} profile={profile} user={user}/>}
     </div>
   );
 };
@@ -3303,7 +3848,29 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
   const approveUser = async(userId, role="viewer") => {
     const{error}=await supabase.from("profiles").update({status:"approved",role}).eq("id",userId);
     if(error){showToast("Error: "+error.message,"error");return;}
-    showToast("User approved","success");
+    // Send approval email to the user
+    const approvedU = [...pendingUsers,...allUsers].find(u=>u.id===userId);
+    if(approvedU?.email){
+      // Fetch org details using the user's org_id
+      const { data: orgInfo } = await supabase
+        .from("organisations")
+        .select("name,slug")
+        .eq("id", approvedU.org_id)
+        .single();
+      await sendNotification({
+        type: "user_approved",
+        record: {
+          full_name: approvedU.full_name || approvedU.email.split("@")[0],
+          email: approvedU.email,
+          org_name: orgInfo?.name || "",
+          org_id: orgInfo?.slug || "",
+          role: role.replace(/_/g," "),
+          app_url: "https://aeroqualify.co.ke",
+        },
+        recipients: [approvedU.email],
+      });
+    }
+    showToast("User approved — confirmation email sent","success");
     setPendingUsers(p=>p.filter(u=>u.id!==userId));
     setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"approved",role}:u));
   };
@@ -4511,7 +5078,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
           <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments})}>🔔 Notification Form</Btn>
-          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG"})}>📄 Audit Report PDF</Btn>}
+          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""})}>📄 Audit Report PDF</Btn>}
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
@@ -4912,7 +5479,7 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
   doc.text(`ANNUAL AUDIT PROGRAMME — ${year}`, M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text("Pegasus Flyers (E.A.) Ltd.  |  Wilson Airport, Nairobi", W-M, 10, {align:"right"});
+  doc.text(`${approval?.org_name||"Organisation"}${approval?.org_address?`  |  ${approval.org_address}`:""}${approval?.org_phone?`  |  ${approval.org_phone}`:""}`, W-M, 10, {align:"right"});
   doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 28;
@@ -5018,7 +5585,7 @@ const generateNotificationPDF = async (slot) => {
       doc.setPage(i);
       doc.setDrawColor(221,227,234); doc.setLineWidth(0.3); doc.line(M,285,W-M,285);
       doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(140,160,180);
-      doc.text(`Pegasus Flyers (E.A.) Ltd. · QMS 002 · Audit Notification · Ref: ${notifRef}`, M, 289);
+      doc.text(`${slot.org_name||"Organisation"} · QMS 002 · Audit Notification · Ref: ${notifRef}`, M, 289);
       doc.text(`CONTROLLED DOCUMENT  ·  Page ${i} of ${pages}`, W-M, 289, {align:"right"});
     }
   };
@@ -5060,7 +5627,7 @@ const generateNotificationPDF = async (slot) => {
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
   doc.text("AUDIT NOTIFICATION FORM — QMS 002", M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text("Pegasus Flyers (E.A.) Ltd.  |  Wilson Airport, Nairobi  |  +254206001467/8", W-M, 11, {align:"right"});
+  doc.text(`${slot.org_name||"Organisation"}${slot.org_address?`  |  ${slot.org_address}`:""}${slot.org_phone?`  |  ${slot.org_phone}`:""}`, W-M, 11, {align:"right"});
   doc.text(`Issued: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 34;
@@ -5396,11 +5963,255 @@ const ADHOC_TRIGGERS = [
   "Other",
 ];
 
-const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=AUDIT_AREAS }) => {
+// ─── CAR Source constants ─────────────────────────────────────
+const CAR_SOURCES_INTERNAL = [
+  "Internal Scheduled Audit",
+  "Internal Ad-hoc / Triggered Audit",
+  "Management Review Finding",
+  "Supplier / Contractor Audit",
+  "Incident / Occurrence Report",
+  "Customer Feedback",
+  "Staff Observation / Near Miss",
+  "Other Internal",
+];
+const CAR_SOURCES_EXTERNAL = [
+  "KCAA Surveillance Audit",
+  "KCAA Ramp Inspection",
+  "KCAA Documentation Review",
+  "External Regulatory Audit",
+  "Third-Party Audit",
+  "Other External",
+];
+const isExternalSource = (src) => CAR_SOURCES_EXTERNAL.includes(src);
+
+// ─── Default department list ──────────────────────────────────
+const DEFAULT_DEPARTMENTS = [
+  "Flight Operations","Maintenance","Training","Safety",
+  "Quality","Administration","Engineering","Ground Operations",
+  "Fuel Management","Cabin Crew","Dispatch","Security",
+];
+
+// ─── Add Scheduled Slot Modal ─────────────────────────────────
+const AddScheduledSlotModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=AUDIT_AREAS }) => {
   const [form, setForm] = useState({
     area: (orgAuditAreas||AUDIT_AREAS)[0],
-    custom_area: "",
-    use_custom: false,
+    month: new Date().getMonth()+1,
+    audit_type: "Internal",
+    lead_auditor: "",
+    planned_date: "",
+    audit_criteria: "AS9100D / KCAA ANO / Quality Manual",
+    notes: "",
+  });
+  const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if(!form.area){ alert("Please select an audit area."); return; }
+    setSaving(true);
+    // Assign next slot number for this area+year
+    const existingForArea = (existingSlots||[]).filter(s=>s.area===form.area && s.year===year && !s.ad_hoc);
+    const nextSlot = existingForArea.length > 0 ? Math.max(...existingForArea.map(s=>s.slot||0)) + 1 : 1;
+    const id = `AS-${year}-${form.area.replace(/\s+/g,"-").substring(0,20)}-${nextSlot}-${Date.now()}`;
+    await onSave({
+      id, year: Number(year), area: form.area, slot: nextSlot,
+      month: Number(form.month), status:"Scheduled", findings:0, observations:0,
+      ad_hoc: false,
+      audit_type: form.audit_type,
+      lead_auditor: form.lead_auditor,
+      planned_date: form.planned_date||null,
+      audit_criteria: form.audit_criteria,
+      notes: form.notes,
+      finding_items: "[]", attachments: "[]",
+    });
+    setSaving(false);
+  };
+
+  const inputStyle = { width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box",background:"#fff" };
+  const labelStyle = { fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:480,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 8px 50px rgba(0,0,0,0.25)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:"linear-gradient(135deg,#01579b,#0277bd)",padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div>
+            <div style={{ color:"rgba(255,255,255,0.75)",fontSize:11,textTransform:"uppercase",letterSpacing:1 }}>Annual Programme</div>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:17 }}>Add Planned Audit Slot — {year}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.75)",fontSize:22,cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ padding:24,display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <div style={{ gridColumn:"1/-1" }}>
+              <label style={labelStyle}>Audit Area</label>
+              <select value={form.area} onChange={e=>set("area",e.target.value)} style={inputStyle}>
+                {(orgAuditAreas||AUDIT_AREAS).map(a=><option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Month</label>
+              <select value={form.month} onChange={e=>set("month",Number(e.target.value))} style={inputStyle}>
+                {MONTHS.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Audit Type</label>
+              <select value={form.audit_type} onChange={e=>set("audit_type",e.target.value)} style={inputStyle}>
+                {AUDIT_TYPES.map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Lead Auditor (optional)</label>
+              <input value={form.lead_auditor} onChange={e=>set("lead_auditor",e.target.value)} style={inputStyle} placeholder="Name"/>
+            </div>
+            <div>
+              <label style={labelStyle}>Planned Date (optional)</label>
+              <input type="date" value={form.planned_date} onChange={e=>set("planned_date",e.target.value)} style={inputStyle}/>
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Notes (optional)</label>
+            <textarea value={form.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inputStyle,resize:"vertical"}} placeholder="Any specific scope or focus areas…"/>
+          </div>
+          <div style={{ display:"flex",gap:10,justifyContent:"flex-end",marginTop:4 }}>
+            <button onClick={onClose} style={{ background:"#f5f8fc",color:"#5f7285",border:"1px solid #dde3ea",borderRadius:8,padding:"9px 20px",fontWeight:600,fontSize:13,cursor:"pointer" }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:saving?"wait":"pointer" }}>
+              {saving?"Adding…":"Add Slot"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Baseline Programme Modal ─────────────────────────────────
+const BaselineProgrammeModal = ({ year, existingSlots, onSaveMany, onClose, orgAuditAreas=AUDIT_AREAS }) => {
+  const allAreas = orgAuditAreas || AUDIT_AREAS;
+  const [startMonth, setStartMonth] = useState(1);
+  const [endMonth,   setEndMonth]   = useState(6);
+  const [selAreas,   setSelAreas]   = useState(new Set(allAreas));
+  const [auditType,  setAuditType]  = useState("Internal");
+  const [saving,     setSaving]     = useState(false);
+
+  const toggleArea = (a) => setSelAreas(prev => {
+    const next = new Set(prev);
+    next.has(a) ? next.delete(a) : next.add(a);
+    return next;
+  });
+
+  // Preview: distribute selected areas across month range
+  const monthRange = [];
+  for(let m=startMonth; m<=endMonth; m++) monthRange.push(m);
+  const areas = allAreas.filter(a=>selAreas.has(a));
+  const preview = areas.map((area, i) => ({
+    area,
+    month: monthRange[i % monthRange.length],
+  }));
+
+  const handleSave = async () => {
+    if(areas.length===0){ alert("Select at least one area."); return; }
+    setSaving(true);
+    const slots = preview.map((p, i) => {
+      const existing = (existingSlots||[]).filter(s=>s.area===p.area && s.year===year && !s.ad_hoc);
+      const nextSlot = existing.length > 0 ? Math.max(...existing.map(s=>s.slot||0)) + 1 : 1;
+      return {
+        id: `AS-BL-${year}-${p.area.replace(/\s+/g,"-").substring(0,15)}-${nextSlot}-${Date.now()+i}`,
+        year: Number(year), area: p.area, slot: nextSlot,
+        month: p.month, status:"Scheduled", findings:0, observations:0,
+        ad_hoc: false, audit_type: auditType,
+        finding_items:"[]", attachments:"[]",
+      };
+    });
+    await onSaveMany(slots);
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:600,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 8px 50px rgba(0,0,0,0.25)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:"linear-gradient(135deg,#00695c,#00897b)",padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div>
+            <div style={{ color:"rgba(255,255,255,0.75)",fontSize:11,textTransform:"uppercase",letterSpacing:1 }}>Baseline Audit Programme</div>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:17 }}>Generate Baseline Schedule — {year}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.75)",fontSize:22,cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ padding:24,display:"flex",flexDirection:"column",gap:18 }}>
+          <div style={{ background:"#e0f2f1",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#00695c",borderLeft:"4px solid #00897b" }}>
+            A baseline audit covers all departments systematically. Select your date range and areas — the system distributes one slot per area across the months automatically.
+          </div>
+
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12 }}>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Start Month</label>
+              <select value={startMonth} onChange={e=>setStartMonth(Number(e.target.value))} style={{ width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}>
+                {MONTHS.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>End Month</label>
+              <select value={endMonth} onChange={e=>setEndMonth(Number(e.target.value))} style={{ width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}>
+                {MONTHS.map((m,i)=><option key={m} value={i+1} disabled={i+1<startMonth}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Audit Type</label>
+              <select value={auditType} onChange={e=>setAuditType(e.target.value)} style={{ width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}>
+                {AUDIT_TYPES.map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8 }}>
+              Areas to include ({selAreas.size} selected)
+              <button onClick={()=>setSelAreas(new Set(allAreas))} style={{ marginLeft:10,fontSize:11,color:"#01579b",background:"none",border:"none",cursor:"pointer",fontWeight:600 }}>All</button>
+              <button onClick={()=>setSelAreas(new Set())} style={{ marginLeft:6,fontSize:11,color:"#c62828",background:"none",border:"none",cursor:"pointer",fontWeight:600 }}>None</button>
+            </div>
+            <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
+              {allAreas.map(a=>(
+                <button key={a} onClick={()=>toggleArea(a)}
+                  style={{ padding:"5px 12px",borderRadius:20,border:`1.5px solid ${selAreas.has(a)?"#00897b":"#dde3ea"}`,
+                    background:selAreas.has(a)?"#e0f2f1":"#f5f8fc",color:selAreas.has(a)?"#00695c":"#5f7285",
+                    fontSize:12,fontWeight:600,cursor:"pointer",transition:"all 0.15s" }}>
+                  {selAreas.has(a)?"✓ ":""}{a}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview */}
+          {preview.length > 0 && (
+            <div>
+              <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8 }}>
+                Preview — {preview.length} slots across {MONTHS[startMonth-1]}–{MONTHS[endMonth-1]}
+              </div>
+              <div style={{ background:"#f5f8fc",borderRadius:8,border:"1px solid #dde3ea",overflow:"hidden",maxHeight:200,overflowY:"auto" }}>
+                {preview.map((p,i)=>(
+                  <div key={i} style={{ padding:"8px 14px",borderBottom:"1px solid #eef2f7",display:"flex",alignItems:"center",gap:12,fontSize:12 }}>
+                    <span style={{ background:"#e3f2fd",color:"#01579b",borderRadius:10,padding:"2px 10px",fontWeight:600,minWidth:32,textAlign:"center" }}>{MONTHS[p.month-1]}</span>
+                    <span style={{ color:"#1a2332",fontWeight:500 }}>{p.area}</span>
+                    <span style={{ color:"#8a9ab0",marginLeft:"auto" }}>Slot {(existingSlots||[]).filter(s=>s.area===p.area&&s.year===year&&!s.ad_hoc).length+1}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
+            <button onClick={onClose} style={{ background:"#f5f8fc",color:"#5f7285",border:"1px solid #dde3ea",borderRadius:8,padding:"9px 20px",fontWeight:600,fontSize:13,cursor:"pointer" }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving||areas.length===0} style={{ background:"#00695c",color:"#fff",border:"none",borderRadius:8,padding:"9px 24px",fontWeight:700,fontSize:13,cursor:(saving||areas.length===0)?"not-allowed":"pointer",opacity:(saving||areas.length===0)?0.6:1 }}>
+              {saving?`Creating ${preview.length} slots…`:`Generate ${preview.length} Slots`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=AUDIT_AREAS }) => {
+  const [form, setForm] = useState({
     trigger: ADHOC_TRIGGERS[0],
     trigger_detail: "",
     audit_type: "Internal",
@@ -5581,6 +6392,8 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
   const [approvalModal, setApprovalModal] = useState(false); // approval fields before generate
   const [approval,  setApproval]  = useState({ qm_name:"", qm_date:"", am_name:"", am_date:"" });
   const [adHocModal, setAdHocModal] = useState(false); // ad-hoc audit creator
+  const [addSlotModal, setAddSlotModal] = useState(false); // manual planned slot
+  const [baselineModal, setBaselineModal] = useState(false); // baseline programme generator
 
   const schedule = data.auditSchedule||[];
 
@@ -5647,7 +6460,16 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
     onRefresh();
   };
 
-  // Programme completion stats
+  // Batch save slots (for baseline programme)
+  const saveManySlots = async (slots) => {
+    const orgId = slots[0]?.org_id || schedule[0]?.org_id;
+    const rows = slots.map(s => ({ ...s, org_id: orgId }));
+    const { error } = await supabase.from("audit_schedule").insert(rows);
+    if(error){ showToast(`Error: ${error.message}`,"error"); return; }
+    showToast(`${slots.length} audit slots created`,"success");
+    setBaselineModal(false);
+    onRefresh();
+  };
   const totalSlots  = orgAuditAreas.length * 2;
   const yearSlots   = schedule.filter(s=>s.year===year);
   const adHocSlots  = yearSlots.filter(s=>s.ad_hoc);
@@ -5681,13 +6503,23 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
             ))}
           </div>
           {isQM && hasSchedule && (
-            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, yearSlots[0]||{}, orgAuditAreas)}>
+            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, {...(yearSlots[0]||{}),org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""}, orgAuditAreas)}>
               📥 Export Schedule PDF
             </Btn>
           )}
           {isQM && (
             <Btn variant="ghost" onClick={()=>setAdHocModal(true)}>
               ＋ Ad-Hoc Audit
+            </Btn>
+          )}
+          {isQM && (
+            <Btn variant="outline" onClick={()=>setAddSlotModal(true)} style={{ color:T.primary,borderColor:T.primary }}>
+              📅 Add Planned Slot
+            </Btn>
+          )}
+          {isQM && (
+            <Btn variant="ghost" onClick={()=>setBaselineModal(true)} style={{ color:T.teal,borderColor:T.teal,border:"1px solid" }}>
+              🗓️ Baseline Programme
             </Btn>
           )}
           {isQM && (
@@ -5878,7 +6710,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
                           {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
-                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG"})}>📄 PDF</Btn>}
+                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""})}>📄 PDF</Btn>}
                         </div>
                       </td>
                     </tr>
@@ -5918,6 +6750,31 @@ Planned: ${slot.planned_date||"Not set"}`}
         />
       )}
       {modal&&<AuditScheduleModal slot={modal} onSave={saveSlot} onClose={()=>setModal(null)} managers={managers} data={data} user={user} profile={profile} showToast={showToast} onRefresh={onRefresh} org={org}/>}
+      {addSlotModal&&(
+        <AddScheduledSlotModal
+          year={year}
+          existingSlots={schedule}
+          onSave={async(slot)=>{
+            const orgId = schedule[0]?.org_id;
+            const { error } = await supabase.from("audit_schedule").insert({ ...slot, org_id: orgId });
+            if(error){ showToast("Error: "+error.message,"error"); return; }
+            showToast("Planned audit slot added","success");
+            setAddSlotModal(false);
+            onRefresh();
+          }}
+          onClose={()=>setAddSlotModal(false)}
+          orgAuditAreas={orgAuditAreas}
+        />
+      )}
+      {baselineModal&&(
+        <BaselineProgrammeModal
+          year={year}
+          existingSlots={schedule}
+          onSaveMany={saveManySlots}
+          onClose={()=>setBaselineModal(false)}
+          orgAuditAreas={orgAuditAreas}
+        />
+      )}
 
       {/* Password Gate Modal */}
       {pwModal&&(
@@ -5996,6 +6853,7 @@ Planned: ${slot.planned_date||"Not set"}`}
           </div>
         </div>
       )}
+    </div>
   );
 };
 
@@ -6188,33 +7046,20 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     if(error){ showToast("Error: "+error.message,"error"); setCreating(false); return; }
 
     // 2. Create user account + send welcome email with credentials
-    // Uses direct fetch with service role key so edge function can call auth.admin.createUser
     if(newOrg.contact_email){
-      try {
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${SUPABASE_ANON}`,
-            "x-supabase-service-role": "true",
-          },
-          body: JSON.stringify({
-            type: "create_org_user",
-            record: {
-              org_id:       orgRow.id,
-              org_name:     orgRow.name,
-              org_slug:     slug,
-              contact_name: newOrg.contact_name || newOrg.contact_email.split("@")[0],
-              contact_email:newOrg.contact_email,
-              is_demo:      newOrgDemo ? "true" : "false",
-              demo_days:    String(demoDays),
-            },
-            recipients: [newOrg.contact_email],
-          }),
-        });
-        const result = await resp.json();
-        if(!result.ok) console.warn("create_org_user response:", result);
-      } catch(e) { console.error("create_org_user failed:", e); }
+      await sendNotification({
+        type: "create_org_user",
+        record: {
+          org_id:       orgRow.id,
+          org_name:     orgRow.name,
+          org_slug:     slug,
+          contact_name: newOrg.contact_name || newOrg.contact_email.split("@")[0],
+          contact_email:newOrg.contact_email,
+          is_demo:      newOrgDemo ? "true" : "false",
+          demo_days:    String(demoDays),
+        },
+        recipients: [newOrg.contact_email],
+      });
     }
 
     showToast(newOrgDemo
@@ -6315,34 +7160,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
     onRefresh();
   };
 
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-
-  const deleteOrg = (org) => {
-    setDeleteConfirm({ org, nameInput:"", passInput:"" });
-  };
-
-  const executeDelete = async () => {
-    const { org, nameInput, passInput } = deleteConfirm;
-    if(nameInput !== org.name){ showToast("Organisation name did not match","error"); return; }
-    const { error: authErr } = await supabase.auth.signInWithPassword({
-      email: "kmagita.pegasus@gmail.com",
-      password: passInput,
-    });
-    if(authErr){ showToast("Incorrect password — deletion cancelled","error"); return; }
-    setDeleteConfirm(null);
-    const tables = ["cars","caps","capa_verifications","audits","audit_schedule","documents",
-      "flight_school_docs","contractors","risk_register","responsible_managers","change_log","profiles"];
-    for(const table of tables){
-      await supabase.from(table).delete().eq("org_id", org.id);
-    }
-    const { error } = await supabase.from("organisations").delete().eq("id", org.id);
-    if(error){ showToast("Error: "+error.message,"error"); return; }
-    showToast(`"${org.name}" permanently deleted`,"success");
-    onRefresh();
-  };
-
-
-
   const sendResetLink = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: "https://aeroqualify.co.ke"
@@ -6400,7 +7217,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
   );
 
   return (
-    <div style={{ display:"flex",flexDirection:"column",gap:0,height:"100%",minHeight:0 }}>
+    <div style={{ display:"flex",flexDirection:"column",gap:0,height:"100%",minHeight:0,overflow:"visible" }}>
 
       {/* ── Header ── */}
       <div style={{ background:"linear-gradient(135deg,#0d1b2a,#1a3a5c)",borderRadius:12,padding:"24px 28px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
@@ -6500,7 +7317,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                               :<button onClick={e=>{e.stopPropagation();updateOrgStatus(o.id,"active");}} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
                           )}
                           <button onClick={e=>{e.stopPropagation();seedDemoOrg(o.id);}} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
-                          <button onClick={e=>{e.stopPropagation();deleteOrg(o);}} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🗑 Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -6583,7 +7399,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                               :<button onClick={()=>updateOrgStatus(o.id,"active")} style={{ background:"#e8f5e9",color:"#2e7d32",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>Activate</button>
                           )}
                           <button onClick={()=>seedDemoOrg(o.id)} style={{ background:"#f3e5f5",color:"#6a1b9a",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🌱 Seed</button>
-                          <button onClick={()=>deleteOrg(o)} style={{ background:"#ffebee",color:"#c62828",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>🗑 Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -6770,60 +7585,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
         </div>
       )}
 
-      {/* ── Delete Confirmation Modal ── */}
-      {deleteConfirm&&(
-        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
-          <div style={{ background:"#fff",borderRadius:14,padding:32,width:500,boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-            <div style={{ background:"#ffebee",borderRadius:10,padding:"16px 20px",marginBottom:24,display:"flex",gap:14,alignItems:"flex-start" }}>
-              <span style={{ fontSize:28,flexShrink:0 }}>⚠️</span>
-              <div>
-                <div style={{ fontWeight:800,fontSize:15,color:"#c62828",marginBottom:4 }}>Permanently Delete Organisation</div>
-                <div style={{ fontSize:13,color:"#b71c1c",lineHeight:1.6 }}>
-                  This will permanently delete <strong>{deleteConfirm.org.name}</strong> and all associated data — CARs, CAPs, audits, documents, risks and user profiles. <strong>This cannot be undone.</strong>
-                </div>
-              </div>
-            </div>
-            <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,display:"block",marginBottom:6 }}>
-                Step 1 — Type the organisation name exactly
-              </label>
-              <input value={deleteConfirm.nameInput}
-                onChange={e=>setDeleteConfirm(p=>({...p,nameInput:e.target.value}))}
-                placeholder={deleteConfirm.org.name}
-                style={{ width:"100%",padding:"9px 12px",border:`1.5px solid ${deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.nameInput?"#2e7d32":"#dde3ea"}`,borderRadius:8,fontSize:13,boxSizing:"border-box" }}/>
-              {deleteConfirm.nameInput&&deleteConfirm.nameInput!==deleteConfirm.org.name&&(
-                <div style={{ fontSize:11,color:"#c62828",marginTop:4 }}>Name does not match</div>
-              )}
-              {deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.nameInput&&(
-                <div style={{ fontSize:11,color:"#2e7d32",marginTop:4 }}>✓ Name confirmed</div>
-              )}
-            </div>
-            <div style={{ marginBottom:24 }}>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,display:"block",marginBottom:6 }}>
-                Step 2 — Enter your super admin password
-              </label>
-              <input type="password" value={deleteConfirm.passInput}
-                onChange={e=>setDeleteConfirm(p=>({...p,passInput:e.target.value}))}
-                onKeyDown={e=>e.key==="Enter"&&deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.passInput&&executeDelete()}
-                placeholder="Your password"
-                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box" }}/>
-            </div>
-            <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
-              <button onClick={()=>setDeleteConfirm(null)}
-                style={{ background:"none",border:"1px solid #dde3ea",borderRadius:8,padding:"9px 20px",fontSize:13,fontWeight:600,color:"#5f7285",cursor:"pointer" }}>
-                Cancel
-              </button>
-              <button onClick={executeDelete}
-                disabled={deleteConfirm.nameInput!==deleteConfirm.org.name||!deleteConfirm.passInput}
-                style={{ background:deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.passInput?"#c62828":"#e0e0e0",
-                  color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,fontWeight:700,
-                  cursor:deleteConfirm.nameInput===deleteConfirm.org.name&&deleteConfirm.passInput?"pointer":"not-allowed" }}>
-                🗑 Permanently Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -6832,7 +7593,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
 // ─── Generic Modal Shell ──────────────────────────────────────
 
 
-// ─── Pegasus Letterhead ───────────────────────────────────────
 // ─── Pending User Row ────────────────────────────────────────
 const PendingUserRow = ({ u, orgs, onAssign }) => {
   const [orgId, setOrgId] = useState("");
@@ -7083,7 +7843,15 @@ const OrgSettingsPage = ({ org, onSave }) => {
     try{ return JSON.parse(org?.audit_areas||"null") || ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
     catch{ return ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
   });
+  const [depts, setDepts] = useState(()=>{
+    try{ return JSON.parse(org?.departments||"null") || DEFAULT_DEPARTMENTS; }
+    catch{ return DEFAULT_DEPARTMENTS; }
+  });
+  const [reportName,    setReportName]    = useState(org?.report_org_name || org?.name || "");
+  const [reportAddress, setReportAddress] = useState(org?.report_address  || "");
+  const [reportPhone,   setReportPhone]   = useState(org?.report_phone    || "");
   const [newArea, setNewArea] = useState("");
+  const [newDept, setNewDept] = useState("");
   const [saving,  setSaving]  = useState(false);
 
   const addArea = () => {
@@ -7097,50 +7865,123 @@ const OrgSettingsPage = ({ org, onSave }) => {
     if(swap<0||swap>=next.length) return;
     [next[idx],next[swap]]=[next[swap],next[idx]]; setAreas(next);
   };
+
+  const addDept = () => {
+    const trimmed = newDept.trim();
+    if(!trimmed || depts.includes(trimmed)) return;
+    setDepts(prev=>[...prev, trimmed]); setNewDept("");
+  };
+  const removeDept = (d) => setDepts(prev=>prev.filter(x=>x!==d));
+  const moveDept = (idx, dir) => {
+    const next = [...depts]; const swap = idx+dir;
+    if(swap<0||swap>=next.length) return;
+    [next[idx],next[swap]]=[next[swap],next[idx]]; setDepts(next);
+  };
+
   const save = async() => {
     if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
     setSaving(true);
-    await onSave({ car_prefix: prefix.trim().toUpperCase(), audit_areas: JSON.stringify(areas) });
+    await onSave({
+      car_prefix:      prefix.trim().toUpperCase(),
+      audit_areas:     JSON.stringify(areas),
+      departments:     JSON.stringify(depts),
+      report_org_name: reportName.trim(),
+      report_address:  reportAddress.trim(),
+      report_phone:    reportPhone.trim(),
+    });
     setSaving(false);
   };
 
+  const ListEditor = ({ title, subtitle, items, onMove, onRemove, onAdd, newVal, setNewVal, placeholder }) => (
+    <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+      <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>{title}</div>
+      <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>{subtitle}</div>
+      <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
+        {items.map((a,i)=>(
+          <div key={a} style={{ display:"flex",alignItems:"center",gap:8,background:"#f5f8fc",borderRadius:8,padding:"8px 12px",border:"1px solid #dde3ea" }}>
+            <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
+              <button onClick={()=>onMove(i,-1)} disabled={i===0} style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▲</button>
+              <button onClick={()=>onMove(i,1)} disabled={i===items.length-1} style={{ background:"none",border:"none",cursor:i===items.length-1?"default":"pointer",color:i===items.length-1?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▼</button>
+            </div>
+            <span style={{ flex:1,fontSize:13,color:"#1a2332",fontWeight:500 }}>{a}</span>
+            <button onClick={()=>onRemove(a)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"3px 9px" }}>✕</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:"flex",gap:8 }}>
+        <input value={newVal} onChange={e=>setNewVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onAdd()}
+          style={{ flex:1,padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
+          placeholder={placeholder}/>
+        <button onClick={onAdd} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer" }}>+ Add</button>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ maxWidth:700,display:"flex",flexDirection:"column",gap:28 }}>
+
+      {/* ── Report Branding ── */}
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Report Branding</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>These details appear in all PDF report headers and footers. Leave blank to use the organisation name.</div>
+        <Input label="Organisation Name (for reports)" value={reportName} onChange={e=>setReportName(e.target.value)} placeholder={org?.name||"e.g. East African Air Charters Ltd."} />
+        <Input label="Address / Location" value={reportAddress} onChange={e=>setReportAddress(e.target.value)} placeholder="e.g. P.O Box 45611-00100, Wilson Airport, Nairobi" />
+        <Input label="Phone / Contact" value={reportPhone} onChange={e=>setReportPhone(e.target.value)} placeholder="e.g. +254 20 600 1467" />
+        {/* Live preview */}
+        <div style={{ background:"#f0f4f8",borderRadius:8,padding:"12px 16px",marginTop:4 }}>
+          <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>PDF Header Preview</div>
+          <div style={{ fontFamily:"monospace",fontSize:11,color:"#1a2332" }}>
+            ✈ {reportName||org?.name||"Organisation Name"}&nbsp;&nbsp;|&nbsp;&nbsp;CORRECTIVE ACTION REQUEST
+          </div>
+          <div style={{ fontFamily:"monospace",fontSize:10,color:"#5f7285",marginTop:4 }}>
+            {reportAddress||"Address not set"}&nbsp;&nbsp;·&nbsp;&nbsp;{reportPhone||"Phone not set"}
+          </div>
+        </div>
+      </div>
+
+      {/* ── CAR Naming ── */}
       <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
         <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>CAR Naming Convention</div>
         <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Set the prefix used to generate CAR and CAPA reference numbers.</div>
         <input value={prefix} onChange={e=>setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))}
           style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1,boxSizing:"border-box" }}
-          maxLength={6} placeholder="e.g. PGF, KQA, AMO"/>
+          maxLength={6} placeholder="e.g. EAAC, KQA, AMO"/>
         <div style={{ background:"#f0f4f8",borderRadius:8,padding:"12px 16px",marginTop:12 }}>
           <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Preview</div>
-          <div style={{ fontFamily:"monospace",fontSize:13,color:"#1a2332" }}>
-            <div>CAR ID: <strong>{prefix||"ORG"}-QMS-001-13032026-CAPA001</strong></div>
+          <div style={{ fontFamily:"monospace",fontSize:12,color:"#1a2332",display:"flex",flexDirection:"column",gap:3 }}>
+            <div>Internal: <strong>{prefix||"ORG"}-INT-13032026-001</strong></div>
+            <div>KCAA: <strong>{prefix||"ORG"}-KCAA-13032026-001</strong></div>
+            <div>Linked: <strong>{prefix||"ORG"}-QMS-007-13032026-CAPA-001</strong></div>
           </div>
         </div>
       </div>
-      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
-        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Audit Areas</div>
-        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Customise audit areas for your organisation.</div>
-        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
-          {areas.map((a,i)=>(
-            <div key={a} style={{ display:"flex",alignItems:"center",gap:8,background:"#f5f8fc",borderRadius:8,padding:"8px 12px",border:"1px solid #dde3ea" }}>
-              <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
-                <button onClick={()=>moveArea(i,-1)} disabled={i===0} style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▲</button>
-                <button onClick={()=>moveArea(i,1)} disabled={i===areas.length-1} style={{ background:"none",border:"none",cursor:i===areas.length-1?"default":"pointer",color:i===areas.length-1?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▼</button>
-              </div>
-              <span style={{ flex:1,fontSize:13,color:"#1a2332",fontWeight:500 }}>{a}</span>
-              <button onClick={()=>removeArea(a)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"3px 9px" }}>✕</button>
-            </div>
-          ))}
-        </div>
-        <div style={{ display:"flex",gap:8 }}>
-          <input value={newArea} onChange={e=>setNewArea(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addArea()}
-            style={{ flex:1,padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
-            placeholder="Add new area…"/>
-          <button onClick={addArea} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer" }}>+ Add</button>
-        </div>
-      </div>
+
+      {/* ── Departments ── */}
+      <ListEditor
+        title="Departments"
+        subtitle="Used in the CAR 'Department' dropdown. Customise to match your organisational structure."
+        items={depts}
+        onMove={moveDept}
+        onRemove={removeDept}
+        onAdd={addDept}
+        newVal={newDept}
+        setNewVal={setNewDept}
+        placeholder="Add department…"
+      />
+
+      {/* ── Audit Areas ── */}
+      <ListEditor
+        title="Audit Areas"
+        subtitle="Used in the audit schedule grid and audit CAR linking. Separate from departments."
+        items={areas}
+        onMove={moveArea}
+        onRemove={removeArea}
+        onAdd={addArea}
+        newVal={newArea}
+        setNewVal={setNewArea}
+        placeholder="Add audit area…"
+      />
+
       <div style={{ display:"flex",justifyContent:"flex-end" }}>
         <button onClick={save} disabled={saving}
           style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"12px 32px",fontWeight:700,fontSize:14,cursor:saving?"wait":"pointer",opacity:saving?0.7:1 }}>
@@ -7167,6 +8008,7 @@ export default function App() {
   const [org,setOrg]           = useState(null);
   const [loginOrgOverride,setLoginOrgOverride] = useState(null); // org ID forced at login
   const [isSuperAdmin,setIsSuperAdmin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [orgs,setOrgs]         = useState([]);   // super admin: all orgs
   const [orgUsers,setOrgUsers] = useState([]);   // super admin: all users
   const subs                   = useRef([]);
@@ -7400,7 +8242,7 @@ export default function App() {
   // ── Super admin fullscreen portal (no org ID entered at login) ──
   if(isSuperAdmin && !loginOrgOverride && !org) {
     return (
-      <div style={{ minHeight:"100vh", background:"#f0f4f8", display:"flex", flexDirection:"column" }}>
+      <div style={{ height:"100vh", maxHeight:"100vh", background:"#f0f4f8", display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <GlobalStyle/>
         {/* Top stripe */}
         <div style={{ position:"fixed", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,#0d1b2a,#1a3a5c,#01579b)`, zIndex:200 }} />
@@ -7438,7 +8280,7 @@ export default function App() {
           </div>
         </div>
         {/* Portal content */}
-        <div style={{ flex:1, padding:"24px 28px", overflowY:"auto" }}>
+        <div style={{ flex:1, padding:"24px 28px", overflowY:"auto", overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
           <SuperAdminPanel
             orgs={orgs} orgUsers={orgUsers}
             showToast={showToast}
@@ -7454,98 +8296,118 @@ export default function App() {
     );
   }
 
+  // Mobile bottom nav tabs — most used sections
+  const MOBILE_TABS = [
+    { id:"dashboard", icon:"📊", label:"Dashboard" },
+    { id:"cars",      icon:"📋", label:"CARs" },
+    { id:"audits",    icon:"🔍", label:"Audits" },
+    { id:"documents", icon:"📁", label:"Docs" },
+    { id:"_menu",     icon:"☰",  label:"More" },
+  ];
+
+  const SidebarContents = ({ onNav }) => (
+    <>
+      <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0 }}>✈</div>
+          <div className="sidebar-logo-text">
+            <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:17, color:T.primaryDk, lineHeight:1 }}>AeroQualify</div>
+            <div style={{ fontSize:9, color:T.muted, letterSpacing:1.5, textTransform:"uppercase" }}>Pro · QMS</div>
+          </div>
+        </div>
+      </div>
+      <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto" }}>
+        <div className="sidebar-section-label" style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Main</div>
+        {isSuperAdmin&&(
+          <div>
+            <div className="sidebar-section-label" style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Super Admin</div>
+            <button className={`nav-item${activeTab==="superadmin"?" active":""}`} onClick={()=>{ setTab("superadmin"); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:activeTab==="superadmin"?T.red:T.muted,fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:4,transition:"all 0.15s" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
+              <span className="sidebar-label">Organisations</span>
+            </button>
+          </div>
+        )}
+        {TABS.filter(t=>t.group==="main").map(t=>{
+          const cnt=counts[t.id]; const active=activeTab===t.id;
+          return (
+            <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>{ setTab(t.id); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
+              <span className="sidebar-label" style={{ flex:1 }}>{t.label}</span>
+              {cnt?<span style={{ background:T.red,color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700 }}>{cnt}</span>:null}
+            </button>
+          );
+        })}
+        <div className="sidebar-section-label" style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"14px 8px 4px", marginBottom:2 }}>Settings</div>
+        {TABS.filter(t=>t.group==="settings").map(t=>{
+          const active=activeTab===t.id;
+          return (
+            <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>{ setTab(t.id); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
+              <span className="sidebar-label" style={{ flex:1 }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}` }}>
+        <div className="sidebar-user-info" style={{ display:"flex",alignItems:"center",gap:9,marginBottom:10 }}>
+          <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff",flexShrink:0 }}>
+            {(profile?.full_name||user.email)[0].toUpperCase()}
+          </div>
+          <div style={{ flex:1,overflow:"hidden" }}>
+            <div style={{ fontSize:12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{profile?.full_name||user.email}</div>
+            <div style={{ marginTop:2, display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
+              <Badge label={profile?.role||"viewer"}/>
+              {isSuperAdmin&&<span style={{ background:T.redLt, color:T.red, borderRadius:20, padding:"1px 7px", fontSize:10, fontWeight:700 }}>Super Admin</span>}
+            </div>
+            {org&&(
+              <div style={{ fontSize:10, color:T.muted, marginTop:3, display:"flex", alignItems:"center", gap:4, overflow:"hidden" }}>
+                <span>🏢</span>
+                <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={org.name}>{org.name}</span>
+                <button onClick={()=>setShowOrgSwitcher(true)} title="Switch organisation"
+                  style={{ background:"none",border:"none",cursor:"pointer",color:T.primary,fontSize:11,padding:0,flexShrink:0,fontWeight:700 }}>⇄</button>
+              </div>
+            )}
+          </div>
+        </div>
+        <Btn variant="ghost" size="sm" onClick={()=>supabase.auth.signOut()} style={{ width:"100%",textAlign:"center" }}>Sign Out</Btn>
+        <div className="sidebar-user-info" style={{ fontSize:10,color:T.green,marginTop:8,display:"flex",alignItems:"center",gap:5 }}>
+          <span style={{ width:6,height:6,borderRadius:"50%",background:T.green,display:"inline-block",animation:"pulse 2s infinite" }}/>
+          Live sync active
+        </div>
+      </div>
+    </>
+  );
+
   return (
-    <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
+    <div style={{ display:"flex", height:"100vh", background:T.bg, overflow:"hidden", minWidth:0 }}>
       <GlobalStyle/>
       {/* Top stripe */}
       <div style={{ position:"fixed", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${T.primary},${T.sky},${T.teal})`, zIndex:200 }} />
 
-      {/* ── Sidebar ──────────────────────────────── */}
-      <aside style={{ width:220, flexShrink:0, background:"#fff", borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", marginTop:3, boxShadow:"2px 0 8px rgba(0,0,0,0.04)" }}>
-        {/* Logo */}
-        <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${T.border}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:36,height:36,borderRadius:9,background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,boxShadow:"0 2px 8px rgba(1,87,155,0.25)" }}>✈</div>
-            <div>
-              <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:17, color:T.primaryDk, lineHeight:1 }}>AeroQualify</div>
-              <div style={{ fontSize:9, color:T.muted, letterSpacing:1.5, textTransform:"uppercase" }}>Pro · QMS</div>
-            </div>
-          </div>
+      {/* ── Mobile drawer ── */}
+      <div className={`mobile-drawer${sidebarOpen?" open":""}`}>
+        <div className="mobile-drawer-overlay" onClick={()=>setSidebarOpen(false)}/>
+        <div className="mobile-drawer-panel" style={{ paddingTop:3 }}>
+          <SidebarContents onNav={()=>setSidebarOpen(false)}/>
         </div>
+      </div>
 
-        {/* Nav */}
-        <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto" }}>
-          <div style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Main</div>
-          {isSuperAdmin&&(
-            <div>
-              <div style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Super Admin</div>
-              <button className={`nav-item${activeTab==="superadmin"?" active":""}`} onClick={()=>setTab("superadmin")}
-                style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:activeTab==="superadmin"?T.red:T.muted,fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:4,transition:"all 0.15s" }}>
-                <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
-                <span>Organisations</span>
-              </button>
-            </div>
-          )}
-          {TABS.filter(t=>t.group==="main").map(t=>{
-            const cnt=counts[t.id]; const active=activeTab===t.id;
-            return (
-              <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>setTab(t.id)}
-                style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
-                <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
-                <span style={{ flex:1 }}>{t.label}</span>
-                {cnt?<span style={{ background:T.red,color:"#fff",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700 }}>{cnt}</span>:null}
-              </button>
-            );
-          })}
-          <div style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"14px 8px 4px", marginBottom:2 }}>Settings</div>
-          {TABS.filter(t=>t.group==="settings").map(t=>{
-            const active=activeTab===t.id;
-            return (
-              <button key={t.id} className={`nav-item${active?" active":""}`} onClick={()=>setTab(t.id)}
-                style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:active?T.primary:T.muted,fontWeight:active?600:400,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s" }}>
-                <span style={{ fontSize:15,width:20,textAlign:"center" }}>{t.icon}</span>
-                <span style={{ flex:1 }}>{t.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User */}
-        <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}` }}>
-          <div style={{ display:"flex",alignItems:"center",gap:9,marginBottom:10 }}>
-            <div style={{ width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${T.primary},${T.sky})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#fff",flexShrink:0 }}>
-              {(profile?.full_name||user.email)[0].toUpperCase()}
-            </div>
-            <div style={{ flex:1,overflow:"hidden" }}>
-              <div style={{ fontSize:12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{profile?.full_name||user.email}</div>
-              <div style={{ marginTop:2, display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
-                <Badge label={profile?.role||"viewer"}/>
-                {isSuperAdmin&&<span style={{ background:T.redLt, color:T.red, borderRadius:20, padding:"1px 7px", fontSize:10, fontWeight:700 }}>Super Admin</span>}
-              </div>
-              {org&&(
-                <div style={{ fontSize:10, color:T.muted, marginTop:3, display:"flex", alignItems:"center", gap:4, overflow:"hidden" }}>
-                  <span>🏢</span>
-                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={org.name}>{org.name}</span>
-                  <button onClick={()=>setShowOrgSwitcher(true)} title="Switch organisation"
-                    style={{ background:"none",border:"none",cursor:"pointer",color:T.primary,fontSize:11,padding:0,flexShrink:0,fontWeight:700 }}>⇄</button>
-                </div>
-              )}
-            </div>
-          </div>
-          <Btn variant="ghost" size="sm" onClick={()=>supabase.auth.signOut()} style={{ width:"100%",textAlign:"center" }}>Sign Out</Btn>
-          <div style={{ fontSize:10,color:T.green,marginTop:8,display:"flex",alignItems:"center",gap:5 }}>
-            <span style={{ width:6,height:6,borderRadius:"50%",background:T.green,display:"inline-block",animation:"pulse 2s infinite" }}/>
-            Live sync active
-          </div>
-        </div>
+      {/* ── Desktop Sidebar ──────────────────────────────── */}
+      <aside className="desktop-sidebar" style={{ width:220, flexShrink:0, background:"#fff", borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", marginTop:3, boxShadow:"2px 0 8px rgba(0,0,0,0.04)" }}>
+        <SidebarContents/>
       </aside>
 
       {/* ── Main ─────────────────────────────────── */}
-      <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",marginTop:3 }}>
+      <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",marginTop:3,minWidth:0 }}>
         <AlertBanner items={alertItems}/>
 
         {/* Header */}
-        <header style={{ background:"#fff",borderBottom:`1px solid ${T.border}`,padding:"12px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,0.04)" }}>
+        <header className="app-header" style={{ background:"#fff",borderBottom:`1px solid ${T.border}`,padding:"12px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,0.04)" }}>
+          {/* Hamburger — mobile only */}
+          <button onClick={()=>setSidebarOpen(true)} style={{ display:"none", background:"none", border:"none", cursor:"pointer", fontSize:22, color:T.primary, padding:"0 10px 0 0", flexShrink:0 }} className="hamburger-btn">☰</button>
           <div>
             <div style={{ fontFamily:"'Oxanium',sans-serif",fontSize:20,fontWeight:700,color:T.primaryDk }}>
               {TABS.find(t=>t.id===activeTab)?.label}
@@ -7561,7 +8423,7 @@ export default function App() {
         </header>
 
         {/* Content */}
-        <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+        <div className="main-scroll-area" style={{ flex:1,overflowY:"auto",overflowX:"auto",padding:24,WebkitOverflowScrolling:"touch",minWidth:0 }}>
 
           {/* Demo banner */}
           {org?.demo_expires_at&&(()=>{
@@ -7636,12 +8498,22 @@ export default function App() {
             setOrg(newOrg);
             setLoginOrgOverride(newOrg.id);
             setShowOrgSwitcher(false);
-            // Reload all data for the new org
             setTimeout(()=>loadAll(),100);
           }}
           onClose={()=>setShowOrgSwitcher(false)}
         />
       )}
+
+      {/* ── Mobile bottom nav ── */}
+      <nav className="mobile-nav">
+        {MOBILE_TABS.map(t=>(
+          <button key={t.id} className={`mobile-nav-item${activeTab===t.id?" active":""}`}
+            onClick={()=>{ if(t.id==="_menu") setSidebarOpen(true); else setTab(t.id); }}>
+            <span>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
