@@ -3,19 +3,6 @@ import { flushSync } from "react-dom";
 import { supabase, TABLES, logChange, sendNotification, SUPABASE_URL, SUPABASE_ANON } from "./supabase";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
-// ─── App Version ─────────────────────────────────────────────
-// Bump this with every successful deployment or new feature.
-const APP_VERSION = "4.0-beta";
-
-// ─── Org Profile Helpers ─────────────────────────────────────
-// Extract display strings from org for use in PDF headers
-const orgDisplayName    = (org) => org?.company_name    || org?.name    || "Organisation";
-const orgDisplayAddress = (org) => org?.company_address || "";
-const orgDisplayPhone   = (org) => org?.company_phone   || "";
-const orgDisplayEmail   = (org) => org?.company_email   || "";
-const orgFormPrefix     = (org) => org?.form_prefix     || "QMS";
-const orgHeaderLine     = (org) => [orgDisplayName(org), orgDisplayAddress(org), orgDisplayPhone(org)].filter(Boolean).join("  |  ");
-
 // ─── Global Styles ──────────────────────────────────────────
 const GlobalStyle = () => (
   <>
@@ -266,7 +253,7 @@ function LandingPage({ onShowLogin, onShowSignup }) {
   const [scrolled,    setScrolled]    = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const [demoModal,   setDemoModal]   = useState(false);
-  const [demoForm,    setDemoForm]    = useState({ name:"", company:"", email:"", phone:"", address:"", org_type:"", form_prefix:"QMS", message:"" });
+  const [demoForm,    setDemoForm]    = useState({ name:"", company:"", email:"", phone:"", role:"", message:"" });
   const [demoSent,    setDemoSent]    = useState(false);
   const [sending,     setSending]     = useState(false);
   const heroRef = useRef(null);
@@ -304,9 +291,6 @@ function LandingPage({ onShowLogin, onShowSignup }) {
         company: demoForm.company,
         email: demoForm.email,
         phone: demoForm.phone || null,
-        address: demoForm.address || null,
-        org_type: demoForm.org_type || null,
-        form_prefix: demoForm.form_prefix || "QMS",
         message: demoForm.message || null,
         submitted_at: new Date().toISOString(),
         status: "new",
@@ -319,8 +303,6 @@ function LandingPage({ onShowLogin, onShowSignup }) {
           company: demoForm.company,
           email: demoForm.email,
           phone: demoForm.phone || "",
-          address: demoForm.address || "",
-          org_type: demoForm.org_type || "",
           message: demoForm.message || "",
         },
         recipients: ["kmagita.pegasus@gmail.com", "aeroqualify@gmail.com"],
@@ -752,50 +734,28 @@ function LandingPage({ onShowLogin, onShowSignup }) {
                   <p style={{ fontSize: "0.9rem", color: C.slate }}>Tell us about your organisation and we'll be in touch.</p>
                 </div>
                 <form onSubmit={handleDemoSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                    <div>
-                      <label className="lp-label">Your Name *</label>
-                      <input className="lp-input" required placeholder="e.g. John Kamau" value={demoForm.name} onChange={e => setDemoForm(p => ({ ...p, name: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="lp-label">Your Role</label>
-                      <select className="lp-input" value={demoForm.role} onChange={e => setDemoForm(p => ({ ...p, role: e.target.value }))}>
-                        <option value="">Select your role…</option>
-                        {["Quality Manager","Accountable Manager","Safety Manager","Quality Auditor","Operations Director","Other"].map(r => <option key={r}>{r}</option>)}
-                      </select>
-                    </div>
+                  <div>
+                    <label className="lp-label">Your Name</label>
+                    <input className="lp-input" required placeholder="e.g. John Kamau" value={demoForm.name} onChange={e => setDemoForm(p => ({ ...p, name: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="lp-label">Organisation Name *</label>
-                    <input className="lp-input" required placeholder="Full legal name e.g. Pegasus Flyers (E.A.) Ltd." value={demoForm.company} onChange={e => setDemoForm(p => ({ ...p, company: e.target.value }))} />
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                    <div>
-                      <label className="lp-label">Organisation Type *</label>
-                      <select className="lp-input" required value={demoForm.org_type} onChange={e => setDemoForm(p => ({ ...p, org_type: e.target.value }))}>
-                        <option value="">Select type…</option>
-                        {["ATO — Approved Training Organisation","AOC — Air Operator Certificate","AMO — Approved Maintenance Organisation","Airport Operator","Other"].map(r => <option key={r}>{r}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="lp-label">QMS Form Prefix</label>
-                      <input className="lp-input" placeholder="QMS" maxLength={6} value={demoForm.form_prefix} onChange={e => setDemoForm(p => ({ ...p, form_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6) }))} style={{ fontFamily:"monospace", fontWeight:700, letterSpacing:1 }}/>
-                      <div style={{ fontSize:11, color:"#8a9ab0", marginTop:4 }}>Forms will be numbered e.g. QMS 002, AMO 004</div>
-                    </div>
+                    <label className="lp-label">Organisation Name</label>
+                    <input className="lp-input" required placeholder="Your organisation name" value={demoForm.company} onChange={e => setDemoForm(p => ({ ...p, company: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="lp-label">Physical Address</label>
-                    <input className="lp-input" placeholder="e.g. P.O Box 3341, Wilson Airport, Nairobi" value={demoForm.address} onChange={e => setDemoForm(p => ({ ...p, address: e.target.value }))} />
+                    <label className="lp-label">Work Email</label>
+                    <input className="lp-input" type="email" required placeholder="you@company.com" value={demoForm.email} onChange={e => setDemoForm(p => ({ ...p, email: e.target.value }))} />
                   </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                    <div>
-                      <label className="lp-label">Work Email *</label>
-                      <input className="lp-input" type="email" required placeholder="you@company.com" value={demoForm.email} onChange={e => setDemoForm(p => ({ ...p, email: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="lp-label">Phone Number</label>
-                      <input className="lp-input" type="tel" placeholder="e.g. +254 700 000 000" value={demoForm.phone} onChange={e => setDemoForm(p => ({ ...p, phone: e.target.value }))} />
-                    </div>
+                  <div>
+                    <label className="lp-label">Phone Number</label>
+                    <input className="lp-input" type="tel" placeholder="e.g. +254 700 000 000" value={demoForm.phone} onChange={e => setDemoForm(p => ({ ...p, phone: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="lp-label">Your Role</label>
+                    <select className="lp-input" value={demoForm.role} onChange={e => setDemoForm(p => ({ ...p, role: e.target.value }))}>
+                      <option value="">Select your role…</option>
+                      {["Quality Manager","Accountable Manager","Safety Manager","Quality Auditor","Operations Director","Other"].map(r => <option key={r}>{r}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="lp-label">Anything else? (optional)</label>
@@ -932,7 +892,6 @@ const PasswordResetScreen = ({ onDone }) => {
     setLoading(true); setMsg("");
     const { error } = await supabase.auth.updateUser({ password: pw });
     if(error){ setMsg("Error: "+error.message); setLoading(false); return; }
-    window.location.hash = ""; // safe to clear now — token has been consumed
     setDone(true);
     setTimeout(async()=>{ await supabase.auth.signOut(); onDone(); }, 2000);
   };
@@ -992,7 +951,7 @@ const OrgSwitcherModal = ({ userId, currentOrgId, onSwitch, onClose }) => {
       if(profRes.data?.org_id) orgIds.add(profRes.data.org_id);
       (memberRes.data||[]).forEach(m=>orgIds.add(m.org_id));
       if(orgIds.size > 0){
-        const { data: orgs } = await supabase.from("organisations").select("*").in("id",[...orgIds]);
+        const { data: orgs } = await supabase.from("organisations").select("id,name,slug,car_prefix").in("id",[...orgIds]);
         setMemberships(orgs||[]);
       }
       setLoading(false);
@@ -1100,50 +1059,34 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         });
         if(error){ setErr("Signup error: "+error.message); setLoading(false); return; }
         if(!signUpData?.user){ setErr("Signup failed: no user returned. Please try again."); setLoading(false); return; }
-
-        // If org slug provided, link the user to the org and notify the org admin
+        // If org slug provided, store the intended org on the profile
         if(resolvedOrgId){
-          // Poll for the profile row — the DB trigger creating it is async and may lag
-          let profileExists = false;
-          for(let attempt = 0; attempt < 20; attempt++){
-            const { data: profCheck } = await supabase.from("profiles").select("id").eq("id", signUpData.user.id).single();
-            if(profCheck){ profileExists = true; break; }
-            await new Promise(r => setTimeout(r, 500));
-          }
-          if(profileExists){
-            await supabase.from("profiles").update({
-              org_id: resolvedOrgId,
-              full_name: fullName || email.split("@")[0],
-            }).eq("id", signUpData.user.id);
-          }
-
-          // Fetch org info and org admins
-          const [{ data: orgInfo }, { data: adminProfiles }] = await Promise.all([
-            supabase.from("organisations").select("name,slug").eq("id", resolvedOrgId).single(),
-            supabase.from("profiles").select("email,full_name")
-              .eq("org_id", resolvedOrgId)
-              .eq("role", "admin")
-              .eq("status", "approved"),
-          ]);
-
+          await supabase.from("profiles").update({ org_id: resolvedOrgId }).eq("id", signUpData.user.id);
+          // Notify the org admin that a new user is waiting for approval
+          const { data: adminProfiles } = await supabase
+            .from("profiles")
+            .select("email,full_name")
+            .eq("org_id", resolvedOrgId)
+            .eq("role", "admin")
+            .eq("status", "approved");
+          const { data: orgInfo } = await supabase
+            .from("organisations")
+            .select("name")
+            .eq("id", resolvedOrgId)
+            .single();
           const adminEmails = (adminProfiles||[]).map(a=>a.email).filter(Boolean);
-          // Notify org admins if they exist, always also notify super admin so no signup is missed
-          const notifyRecipients = [...new Set([
-            ...adminEmails,
-            "kmagita.pegasus@gmail.com", // super admin always notified
-          ])];
-          await sendNotification({
-            type: "user_signup_request",
-            record: {
-              full_name: fullName || email.split("@")[0],
-              email: email,
-              org_name: orgInfo?.name || "",
-              org_id: orgInfo?.slug || "",
-              registered_at: new Date().toLocaleString("en-GB", {timeZone:"Africa/Nairobi"}),
-              no_org_admin: adminEmails.length === 0 ? "true" : "false",
-            },
-            recipients: notifyRecipients,
-          });
+          if(adminEmails.length > 0){
+            await sendNotification({
+              type: "user_signup_request",
+              record: {
+                full_name: fullName || email.split("@")[0],
+                email: email,
+                org_name: orgInfo?.name || "",
+                registered_at: new Date().toLocaleString("en-GB", {timeZone:"Africa/Nairobi"}),
+              },
+              recipients: adminEmails,
+            });
+          }
         }
         await supabase.auth.signOut();
         setMode("login");
@@ -1162,7 +1105,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         if(profErr || !prof){ setPopup("noProfile"); setLoading(false); await supabase.auth.signOut(); return; }
         if(prof.status !== "approved"){ setPopup("pending"); setLoading(false); await supabase.auth.signOut(); return; }
 
-        // Super admin with no org slug → platform portal (no org access)
+        // Super admin with no org slug → platform portal
         if(prof.is_super_admin && !orgSlug.trim()){
           onLogin(data.user, null, true); // null orgId, isSuperAdminMode=true
           setLoading(false);
@@ -1176,6 +1119,7 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
           if(!orgData){ const r3 = await supabase.from("organisations").select("id,name,status,demo_expires_at").eq("slug", orgSlug.trim().toLowerCase()).single(); orgData=r3.data; }
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
           if(orgData.status !== "active"){
+            // Check if it's a demo expiry
             if(orgData.demo_expires_at && new Date(orgData.demo_expires_at) < new Date()){
               setErr("Your demo account has expired. Please contact AeroQualify to activate a full account.");
             } else {
@@ -1188,27 +1132,19 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
             setErr("Your demo account has expired. Please contact AeroQualify to activate a full account.");
             await supabase.auth.signOut(); setLoading(false); return;
           }
-          // Verify user is an approved member of this org — super admins are NOT exempt.
-          // They must be accepted by the org admin just like any regular user.
-          const isPrimaryMember = prof.org_id === orgData.id && prof.status === "approved";
-          let isJunctionMember = false;
-          if(!isPrimaryMember){
+          // Verify user belongs to this org
+          if(prof.org_id !== orgData.id){
+            // Check user_organisations junction table for multi-org members
             const { data: membership } = await supabase.from("user_organisations")
               .select("status,role").eq("user_id", data.user.id).eq("org_id", orgData.id).single();
-            if(membership && membership.status === "approved") isJunctionMember = true;
-            else if(membership && membership.status !== "approved"){
-              setErr("Your access to this organisation is pending approval."); await supabase.auth.signOut(); setLoading(false); return;
-            } else {
-              // Not a member at all — super admin or not, access denied
-              setErr("You are not a member of this organisation. Ask the organisation admin to add your account first."); await supabase.auth.signOut(); setLoading(false); return;
-            }
+            if(!membership){ setErr("You do not have access to this organisation. Contact your administrator."); await supabase.auth.signOut(); setLoading(false); return; }
+            if(membership.status !== "approved"){ setErr("Your access to this organisation is pending approval."); await supabase.auth.signOut(); setLoading(false); return; }
           }
           onLogin(data.user, orgData.id, false);
           setLoading(false);
           return;
         }
 
-        // No org slug provided and not super admin → load with profile's default org
         onLogin(data.user, null, false);
       }
     } catch(ex){ setErr(ex.message); }
@@ -1336,7 +1272,7 @@ const Dashboard = ({ data }) => {
     {label:"CAPA Closure",    score:p1, max:25, desc:`${closedCARs}/${totalCARs} CARs closed`},
     {label:"CAP Compliance",  score:p2, max:20, desc:`${data.caps.filter(c=>c.status==="Complete").length}/${totalCARs} CAPs complete`},
     {label:"No Overdue/Critical",score:Math.min(p3,25),max:25,desc:`${overdueCARs} overdue · ${criticalOpen} critical open`},
-    {label:"Certificates & Approvals",score:p4,max:20, desc:`${totalFlDocs-expiredDocs}/${totalFlDocs} docs current`},
+    {label:"Document Currency",score:p4,max:20, desc:`${totalFlDocs-expiredDocs}/${totalFlDocs} docs current`},
     {label:"Audit & Contractors",score:p5,max:10,desc:`${auditsDone} audits done · ${contractorOk} approved contractors`},
   ];
 
@@ -1520,108 +1456,130 @@ const Dashboard = ({ data }) => {
 };
 
 // ─── CAR Form Modal ───────────────────────────────────────────
-// ORG_DEFAULT_AREAS is empty — each org must configure their own areas in Org Settings.
-const ORG_DEFAULT_AREAS = [];
-// Parse audit_areas — supports both legacy string[] and new {name,code}[] formats
-// Returns [] when no areas configured — callers must handle empty state explicitly.
-const parseAreas = (audit_areas) => {
-  try{
-    const p = JSON.parse(audit_areas||"null");
-    if(!Array.isArray(p)||!p.length) return [];
-    // Migrate legacy string[] to object[]
-    if(typeof p[0]==="string") return p.map((name,i)=>({name, code:String(i+1).padStart(3,"0")}));
-    return p;
-  }
-  catch{ return []; }
-};
-// Get area name strings from parsed areas (for backward compat with string-only consumers)
-const areaNames = (areas) => areas.map(a=>typeof a==="string"?a:a.name);
-// Get the area code for a given area name — checks org custom areas first, then hardcoded fallback
-const getAreaCode = (areaName, org) => {
-  if(org?.audit_areas){
-    try{
-      const areas = parseAreas(org.audit_areas);
-      const match = areas.find(a=>(typeof a==="string"?a:a.name)===areaName);
-      if(match && typeof match==="object" && match.code) return match.code;
-    }catch{}
-  }
-  return AREA_CODES_CAR[areaName]||"000";
-};
-
 const AREA_CODES_CAR = {
-  // Exact area names as they appear in the Pegasus audit_schedule table
-  "Ground School Training Records":"007","Flight Training Records":"008",
-  "Company Manuals and Relevant Documents":"009","Classrooms and Facilities":"010",
+  "Ground School Training":"007","Flight Training Records":"008",
+  "Company Manuals & Documents":"009","Base Training Facilities":"010",
   "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
-  "Ground & Flight Instructor Records":"014","Quality Management Systems":"016",
+  "Personnel Records & Qualifications":"014","Quality Management":"016",
   "Safety Management Systems":"017","Fuel Supplier":"022",
-  // Legacy aliases — kept so old CARs with these names still resolve correctly
-  "Ground School Training":"007","Company Manuals & Documents":"009",
-  "Base Training Facilities":"010","Personnel Records & Qualifications":"014",
-  "Quality Management":"016",
 };
-const getAuditRef = (slot, prefix="PGF", org=null) => {
-  const code = getAreaCode(slot.area, org);
+const getAuditRef = (slot, prefix="PGF") => {
+  const code = AREA_CODES_CAR[slot.area]||"000";
   const d = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
   const dd=String(d.getDate()).padStart(2,"0"), mm=String(d.getMonth()+1).padStart(2,"0"), yyyy=d.getFullYear();
   return `${prefix}-QMS-${code}-${dd}${mm}${yyyy}`;
 };
 
-const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, org=null, fromAudit=false }) => {
-  // When editing an existing CAR, find the audit slot whose computed ref matches car.audit_ref
-  const initialAuditId = (() => {
-    if(!car?.audit_ref) return "";
-    const match = (auditSchedule||[]).find(s => getAuditRef(s, orgPrefix, org) === car.audit_ref);
-    return match?.id || "";
-  })();
-  const [selectedAuditId, setSelectedAuditId] = useState(initialAuditId);
-  const auditRef = selectedAuditId
-    ? getAuditRef((auditSchedule||[]).find(s=>s.id===selectedAuditId)||{}, orgPrefix, org)
-    : car?.audit_ref || "";
+const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgPrefix="PGF", auditAreas, fromAudit=false, orgDepartments }) => {
+  const [selectedAuditId, setSelectedAuditId] = useState(car?.audit_ref||"");
+  const auditRef = selectedAuditId || car?.audit_ref || "";
 
-  // Count existing CARs linked to this audit ref to get next CAPA number
-  const existingCount = (allCars||[]).filter(c=>c.audit_ref===auditRef && (!car || c.id!==car.id)).length;
-  const nextNum = existingCount + 1;
-  const autoId = auditRef
-    ? `${auditRef}-CAPA-${String(nextNum).padStart(3,"0")}`
-    : `CAR-${String(Date.now()).slice(-6)}`;
+  // ── Helpers for auto-generating CAR IDs ──────────────────────
+  const buildAutoId = (src, aRef, prefix) => {
+    const d = new Date();
+    const datePart = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${d.getFullYear()}`;
+    if(aRef) {
+      const count = (allCars||[]).filter(c=>c.audit_ref===aRef && (!car || c.id!==car.id)).length;
+      return `${aRef}-CAPA-${String(count+1).padStart(3,"0")}`;
+    }
+    const isExt = isExternalSource(src);
+    const isKCAA = ["KCAA Surveillance Audit","KCAA Ramp Inspection","KCAA Documentation Review"].includes(src);
+    const typeCode = isKCAA ? "KCAA" : isExt ? "EXT" : "INT";
+    const existing = (allCars||[]).filter(c => {
+      if(!c.id) return false;
+      return c.id.startsWith(`${prefix}-${typeCode}-`);
+    });
+    return `${prefix}-${typeCode}-${datePart}-${String(existing.length+1).padStart(3,"0")}`;
+  };
 
   const [form, setForm] = useState(car || {
-    id: autoId, status:"Open",
-    severity:"Minor", date_raised:today(),
-    audit_ref: auditRef,
+    id: buildAutoId("Internal Scheduled Audit", auditRef, orgPrefix),
+    status:"Open", severity:"Minor", date_raised:today(),
+    audit_ref: auditRef, source: "Internal Scheduled Audit",
   });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  const extSrc = isExternalSource(form.source);
+
+  // When source changes, rebuild ID (only for new CARs)
+  const handleSourceChange = (src) => {
+    set("source", src);
+    if(!car) {
+      const newId = buildAutoId(src, auditRef, orgPrefix);
+      set("id", newId);
+    }
+  };
 
   // When audit selection changes, update both audit_ref and id
   const handleAuditChange = (slotId) => {
     setSelectedAuditId(slotId);
-    if(!slotId){ set("audit_ref",""); set("id",`CAR-${String(Date.now()).slice(-6)}`); return; }
+    if(!slotId){ set("audit_ref",""); set("id", buildAutoId(form.source, "", orgPrefix)); return; }
     const slot = (auditSchedule||[]).find(s=>s.id===slotId);
     if(!slot) return;
-    const ref = getAuditRef(slot, orgPrefix, org);
+    const ref = getAuditRef(slot, orgPrefix);
     const count = (allCars||[]).filter(c=>c.audit_ref===ref && (!car||c.id!==car.id)).length;
     const num = String(count+1).padStart(3,"0");
     set("audit_ref", ref);
     set("id", `${ref}-CAPA-${num}`);
   };
 
-  // Sorted audit schedule for dropdown — most recent first
-  // Only show completed audits for linking — incomplete audits cannot have CARs raised against them
+  // Departments: use org custom list, fallback to DEFAULT_DEPARTMENTS
+  const deptList = (() => {
+    if(orgDepartments) {
+      try { const p = typeof orgDepartments==="string" ? JSON.parse(orgDepartments) : orgDepartments; if(Array.isArray(p)&&p.length) return p; } catch{}
+    }
+    if(auditAreas) {
+      try { const p = typeof auditAreas==="string" ? JSON.parse(auditAreas) : auditAreas; if(Array.isArray(p)&&p.length) return p; } catch{}
+    }
+    return DEFAULT_DEPARTMENTS;
+  })();
+
+  // Sorted audit schedule for dropdown — most recent first; only completed audits
   const auditOptions = [...(auditSchedule||[])]
     .filter(s=>s.status==="Completed")
     .sort((a,b)=>b.year-a.year||b.month-a.month);
+
   return (
     <ModalShell title={car?"Edit CAR":"Raise New CAR"} onClose={onClose} wide>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 20px" }}>
-        {!fromAudit&&(
+
+        {/* Source of CAR */}
+        <div style={{ gridColumn:"1/-1" }}>
+          <label style={{ display:"block",fontSize:11,fontWeight:600,color:T.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4 }}>Source of CAR</label>
+          <select value={form.source||""} onChange={e=>handleSourceChange(e.target.value)}
+            style={{ width:"100%",background:"#f8fafc",border:`1px solid ${extSrc?"#e65100":T.border}`,borderRadius:6,padding:"9px 12px",color:T.text,fontSize:13,marginBottom:14 }}>
+            <option value="">— Select source —</option>
+            <optgroup label="Internal">
+              {CAR_SOURCES_INTERNAL.map(s=><option key={s}>{s}</option>)}
+            </optgroup>
+            <optgroup label="External / Regulatory">
+              {CAR_SOURCES_EXTERNAL.map(s=><option key={s}>{s}</option>)}
+            </optgroup>
+          </select>
+        </div>
+
+        {/* External source info banner */}
+        {extSrc && (
+          <div style={{ gridColumn:"1/-1", background:"#fff8e1", border:"1px solid #ffe082", borderRadius:8, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#e65100" }}>
+            <strong>External / Regulatory CAR</strong> — This CAR will follow a simplified feedback workflow. No internal CAP process will be required; the Quality Manager logs the response and tracks acceptance by the external body.
+          </div>
+        )}
+
+        {/* External ref + auditor (when external) */}
+        {extSrc && (<>
+          <Input label="External Body Reference No." value={form.external_ref||""} onChange={e=>set("external_ref",e.target.value)} placeholder="e.g. KCAA/AW/2026/034" />
+          <Input label="External Auditor / Inspector (optional)" value={form.external_auditor||""} onChange={e=>set("external_auditor",e.target.value)} placeholder="Name or team" />
+        </>)}
+
+        {/* Audit link (internal only) */}
+        {!fromAudit && !extSrc && (
           <div style={{ gridColumn:"1/-1" }}>
             <Select label="Link to Audit (optional)" value={selectedAuditId} onChange={e=>handleAuditChange(e.target.value)}>
               <option value="">— Standalone CAR (not linked to audit) —</option>
-              {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix,org)} · {s.area} · {s.year}</option>)}
+              {auditOptions.map(s=><option key={s.id} value={s.id}>{getAuditRef(s,orgPrefix)} · {s.area} · {s.year}</option>)}
             </Select>
           </div>
         )}
+
         <Input label="CAR Number" value={form.id||""} onChange={e=>set("id",e.target.value)} />
         <Input label="Date Raised" type="date" value={form.date_raised||""} onChange={e=>set("date_raised",e.target.value)} />
         {form.audit_ref&&<div style={{ gridColumn:"1/-1" }}><Input label="Audit Reference" value={form.audit_ref} readOnly style={{ background:"#f5f8fc",color:"#5f7285",fontFamily:"monospace" }} /></div>}
@@ -1640,12 +1598,14 @@ const CARModal = ({ car, managers, onSave, onClose, allCars, auditSchedule, orgP
         </Select>
         <Select label="Department" value={form.department||""} onChange={e=>set("department",e.target.value)}>
           <option value="">Select…</option>
-          {areaNames(auditAreas ? parseAreas(typeof auditAreas==="string" ? auditAreas : JSON.stringify(auditAreas)) : ORG_DEFAULT_AREAS).map(o=><option key={o}>{o}</option>)}
+          {deptList.map(o=><option key={o}>{o}</option>)}
         </Select>
         <Input label="Due Date" type="date" value={form.due_date||""} onChange={e=>set("due_date",e.target.value)} />
-        <div style={{ gridColumn:"1/-1" }}>
-          <Input label="Additional Notification Recipients (comma separated emails)" value={form.additional_notify_text||""} onChange={e=>set("additional_notify_text",e.target.value)} placeholder="person@company.com, other@company.com" />
-        </div>
+        {!extSrc && (
+          <div style={{ gridColumn:"1/-1" }}>
+            <Input label="Additional Notification Recipients (comma separated emails)" value={form.additional_notify_text||""} onChange={e=>set("additional_notify_text",e.target.value)} placeholder="person@company.com, other@company.com" />
+          </div>
+        )}
       </div>
       <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
@@ -1901,7 +1861,7 @@ const RCAView = ({ data, user, profile }) => {
 };
 
 // ─── Risk Assessment Modal (from CAP) ─────────────────────────
-const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, org, onAccept, onClose }) => {
+const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, onAccept, onClose }) => {
   const [severity,   setSeverity]   = useState(3);
   const [likelihood, setLikelihood] = useState(3);
   const [category,   setCategory]   = useState("Training");
@@ -1932,7 +1892,6 @@ const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, or
         status: "Open",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        ...(org?.id ? { org_id: org.id } : {}),
       };
       const { error } = await supabase.from(TABLES.risks).insert(riskEntry);
       if(error) throw new Error(error.message);
@@ -2007,7 +1966,7 @@ const RiskAssessmentModal = ({ car, managers, data, user, profile, showToast, or
 };
 
 // ─── CAP Form Modal ───────────────────────────────────────────
-const CAPModal = ({ car, cap, onSave, onClose, data, user, profile, managers, showToast, org }) => {
+const CAPModal = ({ car, cap, onSave, onClose, data, user, profile, managers, showToast }) => {
   const [form, setForm] = useState(cap || { id:`CAP-${String(Date.now()).slice(-6)}`, car_id:car?.id, status:"Pending" });
   const [newFiles, setNewFiles] = useState([]); // files staged for upload
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
@@ -2143,7 +2102,6 @@ const CAPModal = ({ car, cap, onSave, onClose, data, user, profile, managers, sh
           user={user}
           profile={profile}
           showToast={showToast}
-          org={org}
           onAccept={(summary, riskId)=>{ set("risk_assessment", summary); set("linked_risk_id", riskId); setShowRisk(false); }}
           onClose={()=>setShowRisk(false)}
         />
@@ -2228,20 +2186,25 @@ const ModalShell = ({ title, children, onClose, wide }) => (
 );
 
 
-// ─── Pegasus Letterhead ───────────────────────────────────────
-const PegasusLetterhead = () => (
-  <div style={{ borderBottom:`2px solid #01579b`, paddingBottom:14, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-    <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:"#01579b", letterSpacing:1 }}>✈ Pegasus Flyers (E.A.) Ltd.</div>
-    <div style={{ textAlign:"right" }}>
-      <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:13, color:"#01579b" }}>CORRECTIVE ACTION REQUEST</div>
-      <div style={{ fontSize:10, color:"#5f7285", marginTop:2 }}>P.O Box 3341-00100 Wilson Airport, Nairobi Kenya</div>
-      <div style={{ fontSize:10, color:"#5f7285" }}>Tel: +254206001467/8 · Email: pegasus@africaonline.co.ke</div>
+// ─── Org Letterhead (replaces hardcoded Pegasus branding) ─────
+const OrgLetterhead = ({ org }) => {
+  const name    = org?.report_org_name || org?.name || "Organisation";
+  const address = org?.report_address  || "";
+  const phone   = org?.report_phone    || "";
+  return (
+    <div style={{ borderBottom:`2px solid #01579b`, paddingBottom:14, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:"#01579b", letterSpacing:1 }}>✈ {name}</div>
+      <div style={{ textAlign:"right" }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:13, color:"#01579b" }}>CORRECTIVE ACTION REQUEST</div>
+        {address && <div style={{ fontSize:10, color:"#5f7285", marginTop:2 }}>{address}</div>}
+        {phone   && <div style={{ fontSize:10, color:"#5f7285" }}>Tel: {phone}</div>}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── CAPA Detail / Progress Modal ────────────────────────────
-const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }) => {
+const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose, org }) => {
   const steps = [
     { label:"CAR Raised",           done:true,                                  active:car.status==="Open" },
     { label:"In Progress",          done:["In Progress","Pending Verification","Closed","Overdue"].includes(car.status), active:car.status==="In Progress" },
@@ -2274,7 +2237,7 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 
         <div style={{ padding:24 }}>
           {/* Letterhead */}
-          <PegasusLetterhead />
+          <OrgLetterhead org={org} />
 
           {/* Progress tracker */}
           {(()=>{
@@ -2484,7 +2447,7 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 
           {/* Footer */}
           <div style={{ marginTop:20,paddingTop:14,borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-            <div style={{ fontSize:11,color:T.muted }}>Pegasus Flyers (E.A.) Ltd. · QMS Document · {new Date().toLocaleDateString("en-GB")}</div>
+            <div style={{ fontSize:11,color:T.muted }}>{org?.report_org_name||org?.name||"Organisation"} · QMS Document · {new Date().toLocaleDateString("en-GB")}</div>
             <Btn size="sm" onClick={onPDF}>📄 Export PDF Report</Btn>
           </div>
         </div>
@@ -2494,9 +2457,355 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose }
 };
 
 
+// ─── External CAR status derivation (shared) ─────────────────
+// Status is auto-derived from data — never manually set.
+const deriveExternalStatus = (car) => {
+  const cycles = (() => {
+    try { const p = JSON.parse(car.external_cycles||"[]"); if(Array.isArray(p)&&p.length) return p; } catch {}
+    return [];
+  })();
+  if(!cycles.length || !cycles[0]?.dateSubmitted) return "Open";
+  if(car.external_cap_accepted_date) {
+    if(car.external_followup_date) {
+      return new Date(car.external_followup_date) <= new Date() ? "Closed" : "Follow-up Pending";
+    }
+    return "Accepted";
+  }
+  const last = cycles[cycles.length-1];
+  if(last.dateReturned) return "Returned";
+  if(cycles.length > 1 && cycles[cycles.length-1].dateSubmitted) return "Resubmitted";
+  return "Submitted";
+};
+
+const EXT_STATUS_META = {
+  "Open":             { color:"#5f7285", bg:"#f5f5f5",  border:"#b0bec5" },
+  "Submitted":        { color:"#1d4ed8", bg:"#dbeafe",  border:"#93c5fd" },
+  "Returned":         { color:"#991b1b", bg:"#fee2e2",  border:"#fca5a5" },
+  "Resubmitted":      { color:"#c2410c", bg:"#fff7ed",  border:"#fed7aa" },
+  "Accepted":         { color:"#15803d", bg:"#dcfce7",  border:"#86efac" },
+  "Follow-up Pending":{ color:"#3730a3", bg:"#e0e7ff",  border:"#a5b4fc" },
+  "Closed":           { color:"#166534", bg:"#f0fdf4",  border:"#bbf7d0" },
+};
+
+// ─── External Response Modal ──────────────────────────────────
+// Cycle-based tracker mirroring the EAAC KCAA CAR Tracker HTML app.
+// Status is derived automatically from submission/return/acceptance data.
+const ExternalResponseModal = ({ car, onSave, onClose, profile, user }) => {
+
+  // Parse existing cycles or seed with empty first cycle
+  const parseCycles = () => {
+    try {
+      const p = JSON.parse(car.external_cycles||"[]");
+      if(Array.isArray(p) && p.length) return p;
+    } catch {}
+    return [{ dateSubmitted:"", kcaaRef:"", dateReturned:"", returnRemarks:"" }];
+  };
+
+  const [cycles,         setCycles]         = useState(parseCycles);
+  const [capAcceptedDate,setCapAcceptedDate] = useState(car.external_cap_accepted_date||"");
+  const [followupDate,   setFollowupDate]    = useState(car.external_followup_date||"");
+  const [remarks,        setRemarks]         = useState(car.external_response||"");
+  const [loggedBy,       setLoggedBy]        = useState(car.external_response_by||profile?.full_name||user?.email||"");
+  const [saving,         setSaving]          = useState(false);
+
+  const updateCycle = (i,k,v) => setCycles(prev=>prev.map((c,idx)=>idx===i?{...c,[k]:v}:c));
+  const addCycle    = ()  => setCycles(prev=>[...prev,{dateSubmitted:"",kcaaRef:"",dateReturned:"",returnRemarks:""}]);
+  const removeCycle = (i) => { if(cycles.length<=1) return; setCycles(prev=>prev.filter((_,idx)=>idx!==i)); };
+
+  // Derive status live from current form state
+  const liveStatus = (() => {
+    if(!cycles[0]?.dateSubmitted) return "Open";
+    if(capAcceptedDate) {
+      if(followupDate) return new Date(followupDate) <= new Date() ? "Closed" : "Follow-up Pending";
+      return "Accepted";
+    }
+    const last = cycles[cycles.length-1];
+    if(last.dateReturned) return "Returned";
+    if(cycles.length > 1 && cycles[cycles.length-1].dateSubmitted) return "Resubmitted";
+    return "Submitted";
+  })();
+
+  const sc = EXT_STATUS_META[liveStatus] || EXT_STATUS_META["Open"];
+  const returnCount = cycles.filter(c=>c.dateReturned).length;
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      external_cycles:           JSON.stringify(cycles),
+      external_cap_accepted_date: capAcceptedDate||null,
+      external_followup_date:    followupDate||null,
+      external_response:         remarks,
+      external_response_by:      loggedBy,
+      external_response_date:    today(),
+      status:                    liveStatus,
+    });
+    setSaving(false);
+  };
+
+  // ── Styles ──────────────────────────────────────────────────
+  const N = "#0a1628"; // navy
+  const G = "#c9973a"; // gold
+  const inp = { width:"100%",padding:"7px 9px",border:"1px solid #cbd5e0",borderRadius:5,fontSize:12,background:"#fff",color:"#1a2332",boxSizing:"border-box" };
+  const lbl = { fontSize:10,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:3 };
+  const secLabel = (icon,text) => (
+    <div style={{ fontSize:10,fontWeight:700,color:N,textTransform:"uppercase",letterSpacing:0.6,
+      paddingBottom:6,borderBottom:`2px solid ${N}`,marginBottom:10,display:"flex",alignItems:"center",gap:6 }}>
+      <span>{icon}</span>{text}
+    </div>
+  );
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(10,22,40,0.65)",zIndex:2000,
+      display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"24px 16px" }}
+      onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:10,width:"100%",maxWidth:680,margin:"auto",
+        boxShadow:"0 20px 60px rgba(0,0,0,0.35)",borderTop:`4px solid ${G}` }}
+        onClick={e=>e.stopPropagation()}>
+
+        {/* ── Header ── */}
+        <div style={{ background:N,padding:"14px 18px",borderRadius:"6px 6px 0 0",
+          display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:10,color:"#8baac4",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2 }}>
+              KCAA / External CAR Response Tracker
+            </div>
+            <div style={{ fontWeight:700,fontSize:15,color:"#fff",fontFamily:"'Oxanium',sans-serif" }}>
+              {car.id}
+            </div>
+          </div>
+          <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+            <span style={{ background:sc.bg,color:sc.color,border:`1px solid ${sc.border}`,
+              borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700 }}>
+              {liveStatus}
+              {returnCount>0&&<span style={{ marginLeft:6,opacity:0.75 }}>· {returnCount}× returned</span>}
+            </span>
+            <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.6)",fontSize:20,cursor:"pointer",lineHeight:1 }}>✕</button>
+          </div>
+        </div>
+
+        <div style={{ padding:18,display:"flex",flexDirection:"column",gap:16,maxHeight:"74vh",overflowY:"auto" }}>
+
+          {/* ── CAR summary banner ── */}
+          <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"11px 14px" }}>
+            <div style={{ display:"flex",gap:20,flexWrap:"wrap" }}>
+              <div>
+                <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Source</div>
+                <div style={{ fontSize:12,fontWeight:700,color:"#e65100",marginTop:1 }}>{car.source||"External"}</div>
+              </div>
+              {car.external_ref&&(
+                <div>
+                  <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>External Ref</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:N,fontFamily:"'Courier New',monospace",marginTop:1 }}>{car.external_ref}</div>
+                </div>
+              )}
+              {car.external_auditor&&(
+                <div>
+                  <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Auditor / Inspector</div>
+                  <div style={{ fontSize:12,color:"#1a2332",marginTop:1 }}>{car.external_auditor}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Severity</div>
+                <div style={{ marginTop:1 }}><Badge label={car.severity}/></div>
+              </div>
+              <div style={{ flex:1,minWidth:200 }}>
+                <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.5 }}>Finding</div>
+                <div style={{ fontSize:11,color:"#475569",lineHeight:1.5,marginTop:1 }}>{car.finding_description}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Visual cycle progress tracker ── */}
+          <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"12px 16px" }}>
+            <div style={{ fontSize:9,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.6,marginBottom:10 }}>
+              Submission Progress
+            </div>
+            <div style={{ display:"flex",alignItems:"center",flexWrap:"wrap",gap:4 }}>
+              {cycles.map((c,i)=>{
+                const submitted = !!c.dateSubmitted;
+                const returned  = !!c.dateReturned;
+                const isFirst   = i===0;
+                return (
+                  <div key={i} style={{ display:"flex",alignItems:"center",gap:4 }}>
+                    {/* Cycle node */}
+                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
+                      <div style={{
+                        width:32,height:32,borderRadius:"50%",
+                        background: submitted?(returned?"#fee2e2":"#dbeafe"):"#f1f5f9",
+                        border:`2px solid ${submitted?(returned?"#fca5a5":"#93c5fd"):"#cbd5e0"}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:11,fontWeight:700,
+                        color: submitted?(returned?"#991b1b":"#1d4ed8"):"#94a3b8",
+                      }}>
+                        {submitted?(returned?"↩":"✓"):(i+1)}
+                      </div>
+                      <div style={{ fontSize:9,color:"#64748b",fontWeight:600,textAlign:"center",whiteSpace:"nowrap" }}>
+                        {isFirst?"Initial":"Resub "+(i)}<br/>
+                        {submitted?(returned?"Returned":"Submitted"):"Pending"}
+                      </div>
+                    </div>
+                    {/* Connector */}
+                    {returned&&(
+                      <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:1,margin:"0 2px" }}>
+                        <div style={{ width:32,height:2,background:"#fca5a5",borderRadius:1 }}/>
+                        <div style={{ fontSize:8,color:"#991b1b",fontWeight:600 }}>RETURNED</div>
+                      </div>
+                    )}
+                    {!returned&&i<cycles.length-1&&(
+                      <div style={{ width:32,height:2,background:"#cbd5e0",borderRadius:1,margin:"0 2px",marginBottom:18 }}/>
+                    )}
+                  </div>
+                );
+              })}
+              {/* → Accepted node */}
+              <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                {cycles.length>0&&(
+                  <div style={{ width:32,height:2,background:capAcceptedDate?"#86efac":"#cbd5e0",borderRadius:1,margin:"0 2px",marginBottom:18 }}/>
+                )}
+                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
+                  <div style={{
+                    width:32,height:32,borderRadius:"50%",
+                    background:capAcceptedDate?"#dcfce7":"#f1f5f9",
+                    border:`2px solid ${capAcceptedDate?"#86efac":"#cbd5e0"}`,
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,
+                    color:capAcceptedDate?"#15803d":"#94a3b8",
+                  }}>
+                    {capAcceptedDate?"✓":"◎"}
+                  </div>
+                  <div style={{ fontSize:9,color:"#64748b",fontWeight:600,textAlign:"center" }}>
+                    Accepted<br/>
+                    {capAcceptedDate?<span style={{color:"#15803d"}}>{fmt(capAcceptedDate)}</span>:"Pending"}
+                  </div>
+                </div>
+                {/* → Closed node */}
+                <div style={{ width:32,height:2,background:liveStatus==="Closed"?"#86efac":"#cbd5e0",borderRadius:1,margin:"0 2px",marginBottom:18 }}/>
+                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
+                  <div style={{
+                    width:32,height:32,borderRadius:"50%",
+                    background:liveStatus==="Closed"?"#f0fdf4":"#f1f5f9",
+                    border:`2px solid ${liveStatus==="Closed"?"#bbf7d0":"#cbd5e0"}`,
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,
+                    color:liveStatus==="Closed"?"#166534":"#94a3b8",
+                  }}>
+                    {liveStatus==="Closed"?"✓":"⊙"}
+                  </div>
+                  <div style={{ fontSize:9,color:"#64748b",fontWeight:600,textAlign:"center" }}>Closed</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Submission cycles ── */}
+          <div>
+            {secLabel("◾","Submission & Response Cycles")}
+            <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+              {cycles.map((c,i)=>(
+                <div key={i} style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,
+                  padding:13,borderLeft:`3px solid ${i===0?N:G}`,position:"relative" }}>
+                  <div style={{ fontSize:10,fontWeight:700,color:i===0?N:G,textTransform:"uppercase",
+                    letterSpacing:0.5,marginBottom:10,display:"flex",alignItems:"center",gap:6 }}>
+                    <span style={{ background:i===0?N:G,color:"#fff",padding:"1px 7px",borderRadius:10,fontSize:9 }}>{i+1}</span>
+                    {i===0?"Initial Submission":`Resubmission — Cycle ${i+1}`}
+                  </div>
+                  {cycles.length>1&&(
+                    <button onClick={()=>removeCycle(i)}
+                      style={{ position:"absolute",top:10,right:10,background:"#fee2e2",border:"none",
+                        borderRadius:4,color:"#991b1b",fontWeight:700,fontSize:11,cursor:"pointer",padding:"2px 7px" }}>✕</button>
+                  )}
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10 }}>
+                    <div>
+                      <label style={lbl}>Date Submitted</label>
+                      <input type="date" value={c.dateSubmitted||""} onChange={e=>updateCycle(i,"dateSubmitted",e.target.value)} style={inp}/>
+                    </div>
+                    <div>
+                      <label style={lbl}>KCAA Reference Number</label>
+                      <input type="text" value={c.kcaaRef||""} onChange={e=>updateCycle(i,"kcaaRef",e.target.value)}
+                        placeholder="e.g. KCAA/AI/2026/0042" style={inp}/>
+                    </div>
+                  </div>
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+                    <div>
+                      <label style={lbl}>Date Returned by Regulator</label>
+                      <input type="date" value={c.dateReturned||""} onChange={e=>updateCycle(i,"dateReturned",e.target.value)} style={inp}/>
+                    </div>
+                    <div>
+                      <label style={lbl}>Reason for Return</label>
+                      <input type="text" value={c.returnRemarks||""} onChange={e=>updateCycle(i,"returnRemarks",e.target.value)}
+                        placeholder="KCAA remarks on return…" style={inp}/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={addCycle}
+              style={{ width:"100%",padding:9,background:"#fff",border:"1px dashed #93c5fd",borderRadius:6,
+                color:"#1d4ed8",fontSize:12,cursor:"pointer",fontWeight:600,marginTop:8,transition:"background 0.15s" }}
+              onMouseEnter={e=>e.target.style.background="#eff6ff"}
+              onMouseLeave={e=>e.target.style.background="#fff"}>
+              ＋ Add resubmission cycle
+            </button>
+          </div>
+
+          {/* ── Resolution ── */}
+          <div>
+            {secLabel("◾","Resolution")}
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10 }}>
+              <div>
+                <label style={lbl}>Date CAP Accepted by Regulator</label>
+                <input type="date" value={capAcceptedDate} onChange={e=>setCapAcceptedDate(e.target.value)} style={inp}/>
+              </div>
+              <div>
+                <label style={lbl}>Follow-up Audit Date (if required)</label>
+                <input type="date" value={followupDate} onChange={e=>setFollowupDate(e.target.value)} style={inp}/>
+                {followupDate&&<div style={{ fontSize:10,color:"#64748b",marginTop:3 }}>Status moves to Closed once this date passes</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Remarks ── */}
+          <div>
+            {secLabel("◾","Internal Notes")}
+            <textarea value={remarks} onChange={e=>setRemarks(e.target.value)} rows={3}
+              placeholder="Internal notes, actions taken, evidence gathered, QMS document references…"
+              style={{...inp,resize:"vertical",lineHeight:1.5}}/>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:10,marginTop:10 }}>
+              <div>
+                <label style={lbl}>Logged By</label>
+                <input value={loggedBy} onChange={e=>setLoggedBy(e.target.value)} style={inp}/>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── Footer ── */}
+        <div style={{ padding:"12px 18px",borderTop:"1px solid #e2e8f0",
+          display:"flex",justifyContent:"space-between",alignItems:"center",
+          background:"#f8fafc",borderRadius:"0 0 10px 10px" }}>
+          <div style={{ fontSize:11,color:"#64748b" }}>
+            Status auto-derived:&nbsp;
+            <span style={{ fontWeight:700,color:sc.color }}>{liveStatus}</span>
+          </div>
+          <div style={{ display:"flex",gap:8 }}>
+            <button onClick={onClose}
+              style={{ background:"#fff",color:"#475569",border:"1px solid #cbd5e0",borderRadius:5,padding:"7px 16px",fontWeight:500,fontSize:12,cursor:"pointer" }}>
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              style={{ background:N,color:"#fff",border:"none",borderRadius:5,padding:"7px 20px",fontWeight:700,fontSize:12,cursor:saving?"wait":"pointer",opacity:saving?0.7:1 }}>
+              {saving?"Saving…":"Save CAR Response"}
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
 // ─── CARs Table View ──────────────────────────────────────────
 const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
-  const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify'
+  const [modal, setModal]   = useState(null); // null | 'car' | 'cap' | 'verify' | 'external'
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -2507,24 +2816,54 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
 
   const canRaiseCAR = ["admin","quality_manager","quality_auditor"].includes(profile?.role);
 
+  // Org helper values
+  const orgName    = org?.report_org_name || org?.name || "Organisation";
+  const orgAddress = org?.report_address  || "";
+  const orgPhone   = org?.report_phone    || "";
+
   const saveCar = async(form) => {
     const isNew = !data.cars.find(c=>c.id===form.id);
     const payload = {...form, title: form.finding_description?.slice(0,80)||form.id, updated_at:new Date().toISOString()};
     delete payload.additional_notify_text;
     if(isNew) {
       payload.raised_by=user.id; payload.raised_by_name=profile?.full_name||user.email;
-      if(org?.id) payload.org_id = org.id; // ensure org scoping on insert
       const{error}=await supabase.from(TABLES.cars).insert(payload);
       if(error){showToast(`Error: ${error.message}`,"error");return;}
       await logChange({user,action:"created",table:"cars",recordId:form.id,recordTitle:form.title||form.id,newData:form});
-      const carRm=managers.find(m=>m.role_title===form.responsible_manager); const extraEmails=(form.additional_notify_text||"").split(",").map(s=>s.trim()).filter(Boolean); await sendNotification({type:"car_raised",record:{...form,raised_by_name:profile?.full_name||user.email},recipients:[carRm?.email,...extraEmails].filter(Boolean)});
-      showToast("CAR raised -- responsible manager notified","success");
+      // Only send email for internal sources
+      if(!isExternalSource(form.source)){
+        const carRm=managers.find(m=>m.role_title===form.responsible_manager);
+        const extraEmails=(form.additional_notify_text||"").split(",").map(s=>s.trim()).filter(Boolean);
+        await sendNotification({type:"car_raised",record:{...form,raised_by_name:profile?.full_name||user.email},recipients:[carRm?.email,...extraEmails].filter(Boolean)});
+        showToast("CAR raised — responsible manager notified","success");
+      } else {
+        showToast("External CAR recorded","success");
+      }
     } else {
       const{error}=await supabase.from(TABLES.cars).update(payload).eq("id",form.id);
       if(error){showToast(`Error: ${error.message}`,"error");return;}
       await logChange({user,action:"updated",table:"cars",recordId:form.id,recordTitle:form.title||form.id,newData:form});
       showToast("CAR updated","success");
     }
+    setModal(null); onRefresh();
+  };
+
+  // Save external response directly on the CAR record
+  const saveExternalResponse = async(responseForm) => {
+    const payload = {
+      external_cycles:            responseForm.external_cycles,
+      external_cap_accepted_date: responseForm.external_cap_accepted_date,
+      external_followup_date:     responseForm.external_followup_date,
+      external_response:          responseForm.external_response,
+      external_response_by:       responseForm.external_response_by,
+      external_response_date:     responseForm.external_response_date,
+      status:                     responseForm.status,
+      updated_at:                 new Date().toISOString(),
+    };
+    const{error}=await supabase.from(TABLES.cars).update(payload).eq("id",selected.id);
+    if(error){showToast(`Error: ${error.message}`,"error");return;}
+    await logChange({user,action:"updated external CAR response",table:"cars",recordId:selected.id,recordTitle:selected.finding_description?.slice(0,60),newData:{status:payload.status}});
+    showToast(`External CAR saved — status: ${responseForm.status}`,"success");
     setModal(null); onRefresh();
   };
 
@@ -2576,7 +2915,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const allFilled = form.immediate_action&&form.root_cause_analysis&&form.corrective_action&&form.preventive_action&&hasEvidence;
     const isResubmission = selected.status==="Returned for Resubmission";
     const capId = isResubmission ? `${selected.id}-cap-${Date.now()}` : form.id;
-    const capPayload={...form,id:capId,evidence_files,evidence_url,evidence_filename,submitted_by:user.id,submitted_by_name:profile?.full_name||user.email,submitted_at:new Date().toISOString(),status:allFilled?"Complete":"Pending",...(org?.id?{org_id:org.id}:{})};
+    const capPayload={...form,id:capId,evidence_files,evidence_url,evidence_filename,submitted_by:user.id,submitted_by_name:profile?.full_name||user.email,submitted_at:new Date().toISOString(),status:allFilled?"Complete":"Pending"};
     const{error}=await supabase.from(TABLES.caps).upsert(capPayload);
     if(error){showToast(`Error saving CAP: ${error.message}`,"error");return;}
     if(allFilled){
@@ -2706,7 +3045,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     doc.text("AeroQualify Pro",margin,12);
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(200,220,255);
     doc.text("CAPA PROGRESS REPORT",margin+52,12);
-    doc.text("Pegasus Flyers (E.A.) Ltd.  |  Wilson Airport, Nairobi  |  +254206001467/8",W-margin,9,{align:"right"});
+    doc.text(`${orgName}${orgAddress?`  |  ${orgAddress}`:""}${orgPhone?`  |  ${orgPhone}`:""}`,W-margin,9,{align:"right"});
     doc.text("Generated: "+new Date().toLocaleDateString("en-GB"),W-margin,14,{align:"right"});
     y=24;
 
@@ -3123,7 +3462,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         doc.text(`EVIDENCE OF CLOSURE  |  File ${evInfo.fileIndex} of ${evInfo.fileTotal}  |  ${evInfo.fileName}`,margin,293);
         doc.setFont("helvetica","normal");
       } else {
-        doc.text("Pegasus Flyers (E.A.) Ltd.  |  Confidential QMS Document  |  AS9100D / ISO 9001:2015",margin,293);
+        doc.text(`${orgName}  |  Confidential QMS Document  |  AS9100D / ISO 9001:2015`,margin,293);
       }
       doc.text("Page "+p+" of "+totalPagesBeforeMerge,W-margin,293,{align:"right"});
     }
@@ -3233,7 +3572,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(1,87,155);
     doc.text("CAPA STATUS REPORT",14,38);
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(100,100,100);
-    doc.text("Pegasus Flyers (E.A.) Ltd. · "+`Generated: ${new Date().toLocaleDateString("en-GB")}  |  Total CARs: ${data.cars.length}`,14,44);
+    doc.text(`${org?.report_org_name||org?.name||"Organisation"} · `+`Generated: ${new Date().toLocaleDateString("en-GB")}  |  Total CARs: ${data.cars.length}`,14,44);
     doc.setTextColor(0,0,0);
     autoTable(doc,{startY:50,head:[["CAR #","Severity","Status","Department","Raised","Due","Resp. Manager"]],
       body:data.cars.map(c=>[c.id,c.severity,c.status,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"]),
@@ -3258,7 +3597,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       />
       {/* Filters */}
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
-        {["all","Open","In Progress","Pending Verification","Returned for Resubmission","Closed","Overdue"].map(f=>(
+        {["all","Open","In Progress","Pending Verification","Returned for Resubmission","Pending Acceptance","Closed","Overdue"].map(f=>(
           <button key={f} onClick={()=>setFilter(f)}
             style={{ padding:"5px 14px", borderRadius:20, border:`1px solid ${filter===f?T.primary:T.border}`, background:filter===f?T.primary:"#fff", color:filter===f?"#fff":T.muted, fontSize:12, fontWeight:filter===f?600:400, cursor:"pointer" }}>
             {f==="all"?"All":f}
@@ -3273,7 +3612,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead>
             <tr style={{ background:"#f5f8fc" }}>
-              {["CAR #","Finding","Clause","Severity","Status","Dept","Due Date","Resp. Manager","Actions"].map(h=>(
+              {["CAR #","Source","Finding","Severity","Status","Dept","Due Date","Resp. Manager","Actions"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:T.muted, fontSize:10, fontWeight:700, letterSpacing:0.8, textTransform:"uppercase", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr>
@@ -3282,35 +3621,56 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
             {filtered.length===0
               ? <tr><td colSpan={9} style={{ padding:32, textAlign:"center", color:T.muted }}>No CARs found</td></tr>
               : filtered.map(c=>{
-                const od=isOverdue(c.due_date)&&!["Closed","Completed"].includes(c.status); const cap=getCAP(c.id); const verif=getVerif(c.id);
+                const od=isOverdue(c.due_date)&&!["Closed","Completed"].includes(c.status);
+                const cap=getCAP(c.id); const verif=getVerif(c.id);
+                const extCar = isExternalSource(c.source);
                 return (
                   <tr key={c.id} className="row-hover" style={{ borderBottom:`1px solid ${T.border}`, background:od&&c.status!=="Closed"?"#fff8f8":"" }}>
-                    <td style={{ padding:"10px 14px", fontFamily:"'Source Code Pro',monospace", color:T.primary, fontSize:11, fontWeight:600 }}>{c.id}</td>
-                    <td style={{ padding:"10px 14px", maxWidth:220 }}>
+                    <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
+                      <div style={{ fontFamily:"'Source Code Pro',monospace", color:T.primary, fontSize:11, fontWeight:600 }}>{c.id}</div>
+                      {c.external_ref && <div style={{ fontSize:10,color:"#8a9ab0",marginTop:2,fontFamily:"monospace" }}>Ext: {c.external_ref}</div>}
+                    </td>
+                    <td style={{ padding:"10px 14px", maxWidth:140 }}>
+                      {extCar
+                        ? <span style={{ fontSize:10,fontWeight:700,background:"#fff3e0",color:"#e65100",padding:"2px 7px",borderRadius:10,border:"1px solid #ffcc80",whiteSpace:"nowrap" }}>🌐 {c.source?.replace("KCAA ","").replace("External ","").replace(" Audit","")}</span>
+                        : <span style={{ fontSize:10,color:T.muted }}>{c.source?.replace("Internal ","") || "Internal"}</span>
+                      }
+                    </td>
+                    <td style={{ padding:"10px 14px", maxWidth:200 }}>
                       <div className="tooltip-wrap">
-                        <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:T.text, maxWidth:210 }}>{c.finding_description}</div>
+                        <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:T.text, maxWidth:190 }}>{c.finding_description}</div>
                         <div className="tooltip-box"><strong style={{color:"#90caf9"}}>Finding:</strong><br/>{c.finding_description}</div>
                       </div>
                     </td>
-                    <td style={{ padding:"10px 14px", maxWidth:160 }}>
-                      <div className="tooltip-wrap">
-                        <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:"'Source Code Pro',monospace", fontSize:11, color:T.muted, maxWidth:150 }}>{c.qms_clause||"—"}</div>
-                        {c.qms_clause&&<div className="tooltip-box"><strong style={{color:"#90caf9"}}>QMS Clause:</strong><br/>{c.qms_clause}</div>}
-                      </div>
-                    </td>
                     <td style={{ padding:"10px 14px" }}><Badge label={c.severity}/></td>
-                    <td style={{ padding:"10px 14px" }}><Badge label={c.status}/></td>
+                    <td style={{ padding:"10px 14px" }}>
+                      {extCar ? (()=>{
+                        const es = deriveExternalStatus(c);
+                        const em = EXT_STATUS_META[es]||EXT_STATUS_META["Open"];
+                        return <span style={{ background:em.bg,color:em.color,border:`1px solid ${em.border}`,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:600,whiteSpace:"nowrap",fontFamily:"'Source Code Pro',monospace" }}>{es}</span>;
+                      })() : <Badge label={c.status}/>}
+                    </td>
                     <td style={{ padding:"10px 14px", color:T.muted, fontSize:12 }}>{c.department||"--"}</td>
-                    <td style={{ padding:"10px 14px", color:od?T.red:T.text, fontSize:12, fontWeight:od?600:400 }}>{fmt(c.due_date)}{od?` ⚠`:""}</td>
+                    <td style={{ padding:"10px 14px", color:od?T.red:T.text, fontSize:12, fontWeight:od?600:400 }}>{fmt(c.due_date)}{od?" ⚠":""}</td>
                     <td style={{ padding:"10px 14px", color:T.muted, fontSize:12 }}>{c.responsible_manager||"--"}</td>
                     <td style={{ padding:"10px 14px" }}>
                       <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
                         {canRaiseCAR&&<Btn size="sm" variant="ghost" onClick={()=>{setSelected(c);setModal("car")}}>Edit</Btn>}
-                        <Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("detail")}} style={{color:T.teal,borderColor:T.teal}}>View</Btn>
-                        {c.status!=="Closed"&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("cap")}}>CAP</Btn>}
-                        {c.status==="Pending Verification"&&["admin","quality_manager"].includes(profile?.role)&&
-                          <Btn size="sm" variant="success" onClick={()=>{setSelected(c);setModal("verify")}}>Verify</Btn>}
-                        {(cap||verif)&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
+                        {extCar ? (<>
+                          {/* External CAR: cycle-based response flow */}
+                          {c.status!=="Closed"&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("external")}}
+                            style={{color:"#0a1628",borderColor:"#c9973a",background:"#fffdf5"}}>
+                            {c.external_cycles?"Update Response":"Log Response"}
+                          </Btn>}
+                          {(c.external_cycles||c.external_response)&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
+                        </>) : (<>
+                          {/* Internal CAR: full CAP/Verification flow */}
+                          <Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("detail")}} style={{color:T.teal,borderColor:T.teal}}>View</Btn>
+                          {c.status!=="Closed"&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("cap")}}>CAP</Btn>}
+                          {c.status==="Pending Verification"&&["admin","quality_manager"].includes(profile?.role)&&
+                            <Btn size="sm" variant="success" onClick={()=>{setSelected(c);setModal("verify")}}>Verify</Btn>}
+                          {(cap||verif)&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
+                        </>)}
                       </div>
                     </td>
                   </tr>
@@ -3320,10 +3680,11 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
         </table>
       </div>
 
-      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} org={org} />}
-      {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast} org={org}/>}
+      {modal==="car"&&<CARModal car={selected} managers={managers} onSave={saveCar} onClose={()=>setModal(null)} allCars={data.cars||[]} auditSchedule={data.auditSchedule||[]} orgPrefix={org?.car_prefix||"ORG"} auditAreas={org?.audit_areas||null} orgDepartments={org?.departments||null} />}
+      {modal==="cap"&&selected&&<CAPModal car={selected} cap={getCAP(selected.id)} onSave={saveCap} onClose={()=>setModal(null)} data={data} user={user} profile={profile} managers={managers} showToast={showToast}/>}
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
-      {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} />}
+      {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} org={org}/>}
+      {modal==="external"&&selected&&<ExternalResponseModal car={selected} onSave={saveExternalResponse} onClose={()=>setModal(null)} profile={profile} user={user}/>}
     </div>
   );
 };
@@ -3448,12 +3809,11 @@ const GenericModal = ({ title, fields, defaults, onSave, onClose }) => {
 };
 
 // ─── Managers Settings Page ───────────────────────────────────
-const ManagersPage = ({ managers, onRefresh, showToast, isAdmin, user }) => {
+const ManagersPage = ({ managers, onRefresh, showToast, isAdmin }) => {
   const [editing, setEditing] = useState(null);
   const save = async(mgr) => {
     const{error}=await supabase.from(TABLES.managers).update({person_name:mgr.person_name,email:mgr.email,updated_at:new Date().toISOString()}).eq("id",mgr.id);
     if(error){showToast(`Error: ${error.message}`,"error");return;}
-    await logChange({user,action:"updated manager",table:"responsible_managers",recordId:mgr.id,recordTitle:mgr.role_title,newData:{person_name:mgr.person_name,email:mgr.email}});
     showToast("Manager updated","success"); setEditing(null); onRefresh();
   };
   const [pendingUsers, setPendingUsers] = useState([]);
@@ -3492,7 +3852,6 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin, user }) => {
         recipients: [approvedU.email],
       });
     }
-    await logChange({user,action:"approved user",table:"profiles",recordId:userId,recordTitle:approvedU?.email||userId,newData:{status:"approved",role}});
     showToast("User approved — confirmation email sent","success");
     setPendingUsers(p=>p.filter(u=>u.id!==userId));
     setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"approved",role}:u));
@@ -3501,8 +3860,6 @@ const ManagersPage = ({ managers, onRefresh, showToast, isAdmin, user }) => {
   const revokeUser = async(userId) => {
     const{error}=await supabase.from("profiles").update({status:"pending"}).eq("id",userId);
     if(error){showToast("Error: "+error.message,"error");return;}
-    const revokedU = allUsers.find(u=>u.id===userId);
-    await logChange({user,action:"revoked user access",table:"profiles",recordId:userId,recordTitle:revokedU?.email||userId,newData:{status:"pending"}});
     showToast("User access revoked","success");
     setAllUsers(p=>p.map(u=>u.id===userId?{...u,status:"pending"}:u));
     setPendingUsers(p=>[...p,allUsers.find(u=>u.id===userId)].filter(Boolean));
@@ -3608,143 +3965,115 @@ const AboutView = () => {
 
   const COMPLIANCE_DATA = [
     { std:"AS9100D / ISO 9001:2015", color:"#01579b", bg:"#e3f2fd", items:[
-      { clause:"10.2.1", text:"Nonconformity & corrective action — full CAR/CAP workflow with resubmission cycle", ok:true },
-      { clause:"10.2.2", text:"Evidence of corrective action effectiveness — verification checklist with Effective/Returned outcomes", ok:true },
-      { clause:"10.2.3", text:"Review of corrective actions and trends — 6-month dashboard charts", ok:true },
-      { clause:"7.5",    text:"Control of documented information — QMS document register with revision tracking", ok:true },
-      { clause:"7.5.3",  text:"Audit trail — full change log across all modules", ok:true },
-      { clause:"8.4",    text:"Control of externally provided processes — approved contractor register with ratings", ok:true },
-      { clause:"9.2",    text:"Internal audit programme — biannual schedule builder with ad-hoc audit support", ok:true },
-      { clause:"9.2.2",  text:"Audit findings management — per-finding level classification, CAR linkage, PDF reports", ok:true },
-      { clause:"6.1",    text:"Actions to address risks and opportunities — ICAO 5×5 risk register with CAR linkage", ok:true },
-      { clause:"9.3",    text:"Management review — compliance score provides inputs but the review itself is a management process outside software scope", ok:"n/a" },
-      { clause:"4.1",    text:"Context of the organisation — a formal documented analysis of internal/external issues; a management document, not a software function", ok:"n/a" },
-      { clause:"6.2",    text:"Quality objectives — set and owned by management, outside software scope", ok:"n/a" },
-      { clause:"7.1.5",  text:"Calibration register — applicable to AMOs/test equipment only, not in current scope", ok:"n/a" },
+      { clause:"10.2.1", text:"Nonconformity & corrective action — full CAR/CAP workflow", ok:true },
+      { clause:"10.2.2", text:"Evidence of corrective action effectiveness", ok:true },
+      { clause:"10.2.3", text:"Review of corrective actions and trends", ok:true },
+      { clause:"7.5",    text:"Control of documented information", ok:true },
+      { clause:"7.5.3",  text:"Audit trail — full change log", ok:true },
+      { clause:"8.4",    text:"Control of externally provided processes — contractor register", ok:true },
+      { clause:"9.2",    text:"Internal audit programme", ok:true },
+      { clause:"6.1",    text:"Actions to address risks and opportunities — Risk Register", ok:true },
+      { clause:"9.3",    text:"Management review inputs (dashboard)", ok:"partial" },
+      { clause:"4.1",    text:"Context of the organisation", ok:"partial" },
+      { clause:"6.2",    text:"Quality objectives register", ok:false },
+      { clause:"7.1.5",  text:"Calibration and measurement resources register", ok:false },
     ]},
-    { std:"Civil Aviation Regulatory Compliance", color:"#2e7d32", bg:"#e8f5e9", items:[
-      { clause:"CAP Tracking",     text:"Corrective Action Plans — full submit / review / verify / close cycle", ok:true },
-      { clause:"Doc Control",      text:"Quality Manual and company document control with expiry tracking", ok:true },
-      { clause:"Cert Tracking",    text:"AOC, certificates, approvals and regulatory document expiry alerting", ok:true },
-      { clause:"Contractors",      text:"Approved maintenance and service provider register with A+/A/B/C/F ratings", ok:true },
-      { clause:"Audit Trail",      text:"Immutable change log of all quality-related actions and decisions", ok:true },
-      { clause:"Multi-Org",        text:"Multi-tenant — supports ATO, AOC and AMO organisations independently", ok:true },
-      { clause:"Audit Refs",       text:"Organisation-specific CAR/audit reference numbering with custom area codes", ok:true },
-      { clause:"QM Amendment",     text:"Referencing the system in the Quality Manual is an operator action, not a software function", ok:"n/a" },
-      { clause:"Training Rec.",    text:"Instructor and student training records", ok:"planned" },
-      { clause:"Occurrence",       text:"Mandatory occurrence reporting system", ok:"planned" },
-      { clause:"Maintenance",      text:"Aircraft maintenance tracking and technical log", ok:"planned" },
+    { std:"Regulatory Document Compliance", color:"#2e7d32", bg:"#e8f5e9", items:[
+      { clause:"CAP Tracking",  text:"System for tracking internal and KCAA-issued CAPs", ok:true },
+      { clause:"Doc Control",   text:"Quality Manual and associated document control", ok:true },
+      { clause:"Cert Tracking", text:"Certificates, approvals and regulatory document expiry tracking", ok:true },
+      { clause:"Contractors",   text:"Approved maintenance and service provider register", ok:true },
+      { clause:"Audit Trail",   text:"Record of all quality-related actions and decisions", ok:true },
+      { clause:"QM Amendment",  text:"System referenced in Quality Manual — amendment pending", ok:"partial" },
+      { clause:"Training Rec.", text:"Instructor and student training records", ok:"planned" },
+      { clause:"Occurrence",    text:"Mandatory occurrence reporting system", ok:"planned" },
+      { clause:"Maintenance",   text:"Aircraft maintenance tracking and tech log", ok:"planned" },
     ]},
     { std:"ICAO Annex 19 — SMS Framework", color:"#e65100", bg:"#fff3e0", items:[
-      { clause:"2.1", text:"Hazard identification — 10-category risk register with structured entry", ok:true },
-      { clause:"2.2", text:"Safety risk assessment — ICAO 5×5 severity × likelihood matrix", ok:true },
-      { clause:"2.3", text:"Safety risk mitigation — treatment tracking, residual scoring, CAR linkage", ok:true },
-      { clause:"3.1", text:"Safety performance monitoring — live QMS compliance score across 5 pillars", ok:true },
-      { clause:"1.1", text:"Safety management commitment — AM approval documented on audit schedule; safety policy, accountabilities and resource allocation remain organisational responsibilities", ok:"partial" },
-      { clause:"1.4", text:"Safety Performance Indicators — defined and monitored by management, outside software scope", ok:"n/a" },
-      { clause:"3.2", text:"Management of change — a management process, not a software function in current scope", ok:"n/a" },
+      { clause:"2.1", text:"Hazard identification — 7-category risk register", ok:true },
+      { clause:"2.2", text:"Safety risk assessment — ICAO 5x5 matrix", ok:true },
+      { clause:"2.3", text:"Safety risk mitigation and treatment tracking", ok:true },
+      { clause:"3.1", text:"Safety performance monitoring -- QMS compliance score", ok:true },
+      { clause:"1.1", text:"Safety management commitment and responsibility", ok:"partial" },
+      { clause:"1.4", text:"Safety Performance Indicators (SPIs) and targets", ok:false },
+      { clause:"3.2", text:"Management of change workflow", ok:false },
       { clause:"4.1", text:"Training and education records", ok:"planned" },
-      { clause:"4.2", text:"Safety communication and promotion log — management process, outside current scope", ok:"n/a" },
+      { clause:"4.2", text:"Safety communication and promotion log", ok:false },
     ]},
   ];
 
-  const si = (ok) => ok===true?{icon:"✓",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{icon:"~",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{icon:"◦",bg:"#e8eaf6",color:"#3949ab"}:ok==="n/a"?{icon:"—",bg:"#f5f5f5",color:"#9e9e9e"}:{icon:"✕",bg:"#ffebee",color:"#c62828"};
-  const st = (ok) => ok===true?{label:"Compliant",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{label:"Partial",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{label:"Planned",bg:"#e8eaf6",color:"#3949ab"}:ok==="n/a"?{label:"N/A",bg:"#f5f5f5",color:"#9e9e9e"}:{label:"Gap",bg:"#ffebee",color:"#c62828"};
-
-  const totalItems = COMPLIANCE_DATA.flatMap(s=>s.items);
-  const counts = {
-    compliant: totalItems.filter(i=>i.ok===true).length,
-    partial:   totalItems.filter(i=>i.ok==="partial").length,
-    planned:   totalItems.filter(i=>i.ok==="planned").length,
-    gap:       totalItems.filter(i=>i.ok===false).length,
-    na:        totalItems.filter(i=>i.ok==="n/a").length,
-  };
-  // Exclude N/A items from the score — they are out of scope, not gaps
-  const scorableItems = totalItems.filter(i=>i.ok!=="n/a");
-  const pct = scorableItems.length>0 ? Math.round((counts.compliant + counts.partial*0.5) / scorableItems.length * 100) : 0;
+  const si = (ok) => ok===true?{icon:"✓",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{icon:"~",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{icon:"~",bg:"#e8eaf6",color:"#3949ab"}:{icon:"x",bg:"#ffebee",color:"#c62828"};
+  const st = (ok) => ok===true?{label:"Compliant",bg:"#e8f5e9",color:"#2e7d32"}:ok==="partial"?{label:"Partial",bg:"#fff8e1",color:"#f57f17"}:ok==="planned"?{label:"Planned",bg:"#e8eaf6",color:"#3949ab"}:{label:"Gap",bg:"#ffebee",color:"#c62828"};
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:960 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:900 }}>
 
-      {/* ── Hero Header ── */}
-      <div style={{ background:"linear-gradient(135deg,#0a1628 0%,#0d2e5e 50%,#01579b 100%)", borderRadius:14, padding:"36px 40px", color:"#fff", position:"relative", overflow:"hidden", boxShadow:"0 8px 40px rgba(1,87,155,0.3)" }}>
-        {/* Background rings */}
-        <div style={{ position:"absolute",top:-60,right:-60,width:280,height:280,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.05)" }}/>
-        <div style={{ position:"absolute",top:-20,right:-20,width:180,height:180,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.07)" }}/>
-        <div style={{ position:"absolute",bottom:-80,left:"40%",width:320,height:320,borderRadius:"50%",background:"rgba(2,119,189,0.15)" }}/>
-
-        <div style={{ position:"relative" }}>
-          {/* Top row: logo + version */}
-          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap", marginBottom:24 }}>
-            <div>
-              <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:8 }}>
-                <div style={{ width:48,height:48,borderRadius:12,background:"linear-gradient(135deg,#0288d1,#01579b)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,boxShadow:"0 4px 16px rgba(0,0,0,0.3)" }}>✈</div>
-                <div>
-                  <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:30, fontWeight:800, letterSpacing:0.5, lineHeight:1 }}>
-                    AeroQualify <span style={{ color:"#40c4ff" }}>Pro</span>
-                  </div>
-                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:3, letterSpacing:1, textTransform:"uppercase", fontWeight:400 }}>Aviation Quality Management System</div>
-                </div>
-              </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
-                {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA","Multi-Tenant SaaS"].map(b=>(
-                  <span key={b} style={{ fontSize:10, fontWeight:700, background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, padding:"3px 10px", letterSpacing:0.5, color:"rgba(255,255,255,0.8)" }}>{b}</span>
-                ))}
-              </div>
+      {/* Hero */}
+      <div className="card" style={{ background:`linear-gradient(135deg,${T.navy} 0%,#0d3060 100%)`, padding:"32px 36px", borderRadius:12, color:"#fff", position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute",top:-40,right:-40,width:220,height:220,borderRadius:"50%",background:"rgba(255,255,255,0.03)" }}/>
+        <div style={{ position:"absolute",bottom:-60,right:60,width:300,height:300,borderRadius:"50%",background:"rgba(255,255,255,0.02)" }}/>
+        <div style={{ position:"relative", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:20, flexWrap:"wrap" }}>
+          <div>
+            <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:32, fontWeight:800, letterSpacing:0.5, lineHeight:1 }}>
+              AeroQualify <span style={{ color:T.sky }}>Pro</span>
             </div>
-            <div style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, padding:"16px 24px", textAlign:"center", flexShrink:0, backdropFilter:"blur(10px)" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"rgba(255,255,255,0.4)", letterSpacing:2, textTransform:"uppercase", marginBottom:6 }}>Version</div>
-              <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:36, fontWeight:800, color:"#40c4ff", lineHeight:1 }}>{APP_VERSION}</div>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginTop:6 }}>{year} Release</div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:6, fontWeight:300 }}>Aviation Quality Management System</div>
+            <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
+              {["AS9100D","ISO 9001:2015","ICAO Annex 19","KCAA"].map(b=>(
+                <span key={b} style={{ fontSize:10, fontWeight:700, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, padding:"3px 9px", letterSpacing:0.5 }}>{b}</span>
+              ))}
             </div>
           </div>
-
-          {/* Stat bar */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
-            {[
-              { label:"Compliant", value:counts.compliant, color:"#69f0ae", bg:"rgba(105,240,174,0.1)" },
-              { label:"Partial",   value:counts.partial,   color:"#ffd740", bg:"rgba(255,215,64,0.1)" },
-              { label:"Planned",   value:counts.planned,   color:"#82b1ff", bg:"rgba(130,177,255,0.1)" },
-              { label:"N/A",       value:counts.na,        color:"#bdbdbd", bg:"rgba(189,189,189,0.1)" },
-            ].map(s=>(
-              <div key={s.label} style={{ background:s.bg, border:`1px solid ${s.color}22`, borderRadius:10, padding:"12px 16px", textAlign:"center" }}>
-                <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:26, fontWeight:800, color:s.color, lineHeight:1 }}>{s.value}</div>
-                <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", marginTop:4, textTransform:"uppercase", letterSpacing:0.8, fontWeight:600 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Compliance progress bar */}
-          <div style={{ marginTop:16 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-              <span style={{ fontSize:11, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>Overall Standards Coverage</span>
-              <span style={{ fontSize:11, color:"#40c4ff", fontWeight:700 }}>{pct}%</span>
-            </div>
-            <div style={{ height:6, background:"rgba(255,255,255,0.1)", borderRadius:3, overflow:"hidden" }}>
-              <div style={{ height:"100%", width:`${pct}%`, background:"linear-gradient(90deg,#0288d1,#40c4ff)", borderRadius:3, transition:"width 1s ease" }}/>
-            </div>
+          <div style={{ textAlign:"right", flexShrink:0 }}>
+            <div style={{ fontFamily:"'Source Code Pro',monospace", fontSize:11, color:"rgba(255,255,255,0.4)", marginBottom:4 }}>VERSION</div>
+            <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:28, fontWeight:800, color:T.sky }}>3.0</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:2 }}>{year}</div>
           </div>
         </div>
       </div>
 
-      {/* ── System Information ── */}
-      <div className="card" style={{ padding:"24px 28px" }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ fontSize:16 }}>⚙️</span> System Information
+      {/* Legal Ownership */}
+      <div className="card" style={{ padding:"24px 28px", borderLeft:`4px solid ${T.primary}` }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16 }}>Legal Ownership &amp; Copyright</div>
+        <div style={{ background:T.primaryLt, borderRadius:8, padding:"16px 18px", marginBottom:16, border:`1px solid ${T.border}` }}>
+          <div style={{ fontSize:13, fontWeight:700, color:T.primaryDk, marginBottom:8 }}>Copyright Notice</div>
+          <div style={{ fontSize:13, color:T.text, lineHeight:1.8 }}>
+            Copyright &copy; {year} Kornelius Magita. All rights reserved.
+          </div>
+          <div style={{ fontSize:12, color:T.muted, marginTop:10, lineHeight:1.8 }}>
+            AeroQualify Pro and all associated software, source code, design, documentation, workflows, and data structures — including all current and future versions and editions — are the exclusive intellectual property of Kornelius Magita No part of this software may be reproduced, distributed, modified, sublicensed, sold, or transferred to any third party without the express written consent of Kornelius Magita.
+          </div>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           {[
-            { label:"Version",    value:`v${APP_VERSION}` },
+            { label:"Software Owner",   value:"Kornelius Magita" },
+            { label:"Rights",           value:"All rights reserved — full copyright" },
+            { label:"Jurisdiction",     value:"Republic of Kenya" },
+            { label:"Licence Type",     value:"Proprietary -- not open source" },
+            { label:"Covers",           value:"This and all future editions" },
+            { label:"Unauthorised Use", value:"Strictly prohibited" },
+          ].map(r=>(
+            <div key={r.label} style={{ background:"#f8fafc", borderRadius:6, padding:"10px 14px", border:`1px solid ${T.border}` }}>
+              <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.8, marginBottom:3 }}>{r.label}</div>
+              <div style={{ fontSize:13, color:T.text, fontWeight:600 }}>{r.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* System Info */}
+      <div className="card" style={{ padding:"24px 28px" }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16 }}>System Information</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+          {[
             { label:"Platform",   value:"Web / Cloud (Vercel)" },
             { label:"Database",   value:"Supabase (PostgreSQL)" },
+            { label:"Version",    value:"3.0.0" },
             { label:"Framework",  value:"React 18" },
             { label:"Auth",       value:"Supabase Auth (JWT)" },
-            { label:"Email",      value:"Resend API" },
-            { label:"PDF Engine", value:"jsPDF + pdf-lib" },
-            { label:"Charts",     value:"Recharts" },
-            { label:"Backup",     value:"Supabase daily snapshots" },
+            { label:"Backup",     value:"Daily -- Google Drive" },
           ].map(r=>(
-            <div key={r.label} style={{ background:"#f8fafc", borderRadius:8, padding:"10px 14px", border:"1px solid #eef2f7" }}>
+            <div key={r.label} style={{ background:"#f8fafc", borderRadius:6, padding:"10px 14px", border:`1px solid ${T.border}` }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.8, marginBottom:3 }}>{r.label}</div>
               <div style={{ fontFamily:"'Source Code Pro',monospace", fontSize:12, color:T.primary, fontWeight:600 }}>{r.value}</div>
             </div>
@@ -3752,43 +4081,42 @@ const AboutView = () => {
         </div>
       </div>
 
-      {/* ── Compliance Checklist ── */}
+      {/* Compliance Checklist */}
       <div className="card" style={{ padding:"24px 28px" }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ fontSize:16 }}>📋</span> Standards Compliance Checklist
-        </div>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:6 }}>Standards Compliance Checklist</div>
         <div style={{ fontSize:12, color:T.muted, marginBottom:16 }}>
-          Current coverage of AeroQualify Pro against aviation quality and safety management standards. Updated with each version release.
+          AeroQualify Pro is designed to support compliance with the standards below. This checklist reflects the current state of the system and is updated as new modules are developed.
         </div>
-        <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:20, padding:"10px 14px", background:"#f8fafc", borderRadius:8, border:"1px solid #eef2f7" }}>
-          {[{l:"Compliant",c:"#2e7d32"},{l:"Partial",c:"#f57f17"},{l:"Planned",c:"#3949ab"},{l:"N/A",c:"#9e9e9e"}].map(x=>(
+        {/* Legend */}
+        <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:20, padding:"10px 14px", background:"#f8fafc", borderRadius:8, border:`1px solid ${T.border}` }}>
+          {[{l:"Compliant",c:"#2e7d32"},{l:"Partial",c:"#f57f17"},{l:"Planned",c:"#3949ab"},{l:"Gap",c:"#c62828"}].map(x=>(
             <div key={x.l} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
               <div style={{ width:10,height:10,borderRadius:"50%",background:x.c }}/>
-              <span style={{ color:T.muted, fontWeight:600 }}>{x.l}</span>
+              <span style={{ color:T.muted }}>{x.l}</span>
             </div>
           ))}
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
           {COMPLIANCE_DATA.map(std=>(
-            <div key={std.std} style={{ border:"1px solid #dde3ea", borderRadius:10, overflow:"hidden" }}>
-              <div style={{ background:std.bg, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #dde3ea", flexWrap:"wrap", gap:8 }}>
+            <div key={std.std} style={{ border:`1px solid ${T.border}`, borderRadius:10, overflow:"hidden" }}>
+              <div style={{ background:std.bg, padding:"12px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${T.border}`, flexWrap:"wrap", gap:8 }}>
                 <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:13, fontWeight:700, color:std.color }}>{std.std}</div>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {[{ok:true,label:"compliant"},{ok:"partial",label:"partial"},{ok:"planned",label:"planned"},{ok:"n/a",label:"n/a"},{ok:false,label:"gaps"}].map(b=>{
+                  {[{ok:true,label:"compliant"},{ok:"partial",label:"partial"},{ok:false,label:"gaps"},{ok:"planned",label:"planned"}].map(b=>{
                     const cnt=std.items.filter(i=>i.ok===b.ok).length;
                     if(!cnt) return null;
                     const s=st(b.ok);
-                    return <span key={b.label} style={{ fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:10,background:s.bg,color:s.color }}>{cnt} {b.label}</span>;
+                    return <span key={b.label} style={{ fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:s.bg,color:s.color }}>{cnt} {b.label}</span>;
                   })}
                 </div>
               </div>
               {std.items.map((item,idx)=>{
                 const s=si(item.ok); const tag=st(item.ok);
                 return (
-                  <div key={item.clause} style={{ display:"grid", gridTemplateColumns:"28px 110px 1fr 90px", alignItems:"center", gap:12, padding:"10px 18px", background:idx%2===0?"#fff":"#fafbfc", borderBottom:idx<std.items.length-1?"1px solid #f0f3f7":"none" }}>
-                    <div style={{ width:22,height:22,borderRadius:"50%",background:s.bg,color:s.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0 }}>{s.icon}</div>
-                    <span style={{ fontFamily:"'Source Code Pro',monospace",fontSize:10,fontWeight:600,color:std.color,background:std.bg,padding:"3px 8px",borderRadius:4,whiteSpace:"nowrap" }}>{item.clause}</span>
-                    <span style={{ fontSize:12,color:T.text,lineHeight:1.5 }}>{item.text}</span>
+                  <div key={item.clause} style={{ display:"grid", gridTemplateColumns:"28px 100px 1fr 90px", alignItems:"center", gap:12, padding:"10px 18px", borderBottom:idx<std.items.length-1?`1px solid #f0f3f7`:"none" }}>
+                    <div style={{ width:22,height:22,borderRadius:"50%",background:s.bg,color:s.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,flexShrink:0 }}>{s.icon}</div>
+                    <span style={{ fontFamily:"'Source Code Pro',monospace",fontSize:10,fontWeight:600,color:T.primary,background:"#e3f2fd",padding:"3px 8px",borderRadius:4,whiteSpace:"nowrap" }}>{item.clause}</span>
+                    <span style={{ fontSize:12,color:T.text }}>{item.text}</span>
                     <span style={{ fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:10,textAlign:"center",background:tag.bg,color:tag.color,whiteSpace:"nowrap" }}>{tag.label}</span>
                   </div>
                 );
@@ -3798,42 +4126,47 @@ const AboutView = () => {
         </div>
       </div>
 
-      {/* ── Legal Ownership ── */}
-      <div className="card" style={{ padding:"24px 28px", borderLeft:`4px solid ${T.primary}` }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontSize:14, fontWeight:700, color:T.primaryDk, marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ fontSize:16 }}>⚖️</span> Legal Ownership &amp; Copyright
-        </div>
-        <div style={{ background:T.primaryLt, borderRadius:8, padding:"14px 18px", marginBottom:16, border:`1px solid ${T.border}` }}>
-          <div style={{ fontSize:12, color:T.text, lineHeight:1.8 }}>
-            Copyright &copy; {year} <strong>Kornelius Magita</strong>. All rights reserved. AeroQualify Pro and all associated software, source code, design, documentation, workflows, and data structures — including all current and future versions — are the exclusive intellectual property of Kornelius Magita. No part of this software may be reproduced, distributed, modified, sublicensed, sold, or transferred without express written consent.
-          </div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+      {/* Legal Disclaimer Section */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #dde3ea", padding:28, marginBottom:16 }}>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:16, color:"#1a2332", marginBottom:4 }}>Legal Ownership & Disclaimer</div>
+        <div style={{ fontSize:11, color:T.muted, marginBottom:16 }}>Copyright © 2026 Kornelius M. Magita. All rights reserved.</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           {[
-            { label:"Software Owner",   value:"Kornelius Magita" },
-            { label:"Rights",           value:"All rights reserved — full copyright" },
-            { label:"Jurisdiction",     value:"Republic of Kenya" },
-            { label:"Licence Type",     value:"Proprietary — not open source" },
-            { label:"Covers",           value:"This and all future editions" },
-            { label:"Unauthorised Use", value:"Strictly prohibited" },
-          ].map(r=>(
-            <div key={r.label} style={{ background:"#f8fafc", borderRadius:6, padding:"10px 14px", border:"1px solid #eef2f7" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:0.8, marginBottom:3 }}>{r.label}</div>
-              <div style={{ fontSize:13, color:T.text, fontWeight:600 }}>{r.value}</div>
+            ["Software Owner", "Kornelius M. Magita"],
+            ["Jurisdiction", "Republic of Kenya"],
+            ["Licence Type", "Proprietary — not open source"],
+          ].map(([k,v])=>(
+            <div key={k} style={{ display:"flex", gap:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#5f7285", minWidth:160 }}>{k}</div>
+              <div style={{ fontSize:12, color:"#1a2332" }}>{v}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop:16, padding:"14px 16px", background:"#fff3e0", borderRadius:8, border:"1px solid #ffcc80" }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#e65100", marginBottom:4 }}>LIMITATION OF LIABILITY</div>
-          <div style={{ fontSize:11, color:"#795548", lineHeight:1.7 }}>
-            To the fullest extent permitted by applicable law, Kornelius Magita shall not be liable for any direct, indirect, incidental, or consequential damages arising from the use of this software, including loss of data, regulatory non-compliance, or business interruption. Compliance responsibility rests solely with the licensed operator and its designated accountable manager.
+        <div style={{ marginTop:20, background:"#f8fafc", borderRadius:8, padding:"16px 18px", maxHeight:320, overflowY:"auto", border:"1px solid #eef2f7" }}>
+          {[
+            ["User Licence Terms", "Authorised Use: This software is licensed, not sold. Authorised users may access and use AeroQualify Pro solely for the purpose of managing quality, safety, and compliance records within their organisation, as agreed in writing with Kornelius M. Magita."],
+            ["Prohibited Activities", "Users may not copy, decompile, reverse engineer, disassemble, modify, or create derivative works based on this software. Sharing access credentials or granting unauthorised third-party access is strictly prohibited."],
+            ["Data Ownership", "All data entered into the system by the licensed organisation remains the property of that organisation. Kornelius M. Magita does not claim ownership of customer data."],
+            ["Confidentiality", "Users must treat all aspects of the software — including its workflows, design, and features — as confidential. This obligation survives termination of the licence agreement."],
+            ["Warranty Disclaimer", "The software is provided in good faith. Kornelius M. Magita makes no warranties as to fitness for any specific regulatory purpose. It is the operator's responsibility to ensure the system meets applicable regulatory requirements in their jurisdiction."],
+          ].map(([title, text])=>(
+            <div key={title} style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:"#1a2332", marginBottom:3 }}>{title}</div>
+              <div style={{ fontSize:12, color:"#5f7285", lineHeight:1.6 }}>{text}</div>
+            </div>
+          ))}
+          <div style={{ marginTop:8, padding:"12px 14px", background:"#fff3e0", borderRadius:6, border:"1px solid #ffcc80" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#e65100", marginBottom:4 }}>LIMITATION OF LIABILITY</div>
+            <div style={{ fontSize:11, color:"#795548", lineHeight:1.6 }}>
+              TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, KORNELIUS M. MAGITA SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR IN CONNECTION WITH THE USE OF THIS SOFTWARE, INCLUDING BUT NOT LIMITED TO: LOSS OF DATA; REGULATORY NON-COMPLIANCE; FAILURE TO DETECT SAFETY OCCURRENCES; BUSINESS INTERRUPTION; OR LOSS OF REVENUE. Compliance responsibility rests solely with the licensed operator and its designated accountable manager.
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Footer ── */}
+      {/* Footer */}
       <div style={{ textAlign:"center", fontSize:11, color:T.muted, paddingBottom:8 }}>
-        AeroQualify Pro &nbsp;&middot;&nbsp; Copyright &copy; {year} Kornelius Magita &nbsp;&middot;&nbsp; v{APP_VERSION}
+        AeroQualify Pro &nbsp;&middot;&nbsp; Copyright &copy; {year} Kornelius Magita. All rights reserved. &nbsp;&middot;&nbsp; v3.0.0
       </div>
     </div>
   );
@@ -4118,7 +4451,7 @@ const RiskModal = ({ risk, cars, onSave, onClose }) => {
   );
 };
 
-const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
+const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast }) => {
   const [modal, setModal]     = useState(false);
   const [editing, setEditing] = useState(null);
   const [filter, setFilter]   = useState("all");
@@ -4144,7 +4477,7 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast,
 
   const save = async(form) => {
     const isNew=!(data.risks||[]).find(r=>r.id===form.id);
-    const payload={...form, updated_at:new Date().toISOString(), ...(org?.id&&isNew?{org_id:org.id}:{})};
+    const payload={...form, updated_at:new Date().toISOString()};
     if(isNew) payload.created_at=new Date().toISOString();
     const{error}=await supabase.from(TABLES.risks).upsert(payload);
     if(error){showToast(`Error: ${error.message}`,"error");return;}
@@ -4276,21 +4609,33 @@ const RiskRegisterView = ({ data, user, profile, managers, onRefresh, showToast,
 
 
 // ─── Annual Audit Schedule Builder ────────────────────────────
-// AUDIT_AREAS kept as empty — areas are configured per-org in Org Settings.
-// Hardcoded defaults have been removed to prevent contamination of new org schedules.
-const AUDIT_AREAS = [];
+const AUDIT_AREAS = [
+  "Management Personnel Records",
+  "Ground & Flight Instructor Records",
+  "Ground School Training Records",
+  "Flight Training Records",
+  "Company Manuals and Relevant Documents",
+  "Classrooms and Facilities",
+  "Aircraft",
+  "AMO",
+  "Fuel Supplier",
+  "Safety Management Systems",
+  "Quality Management Systems",
+];
 // Helper: get org-specific audit areas, falling back to defaults
 const getAuditAreas = (org) => {
-  return areaNames(parseAreas(org?.audit_areas||null));
+  if(!org?.audit_areas) return AUDIT_AREAS;
+  try {
+    const parsed = JSON.parse(org.audit_areas);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : AUDIT_AREAS;
+  } catch { return AUDIT_AREAS; }
 };
-// ─── Signature Pad Modal ──────────────────────────────────────
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const AUDIT_TYPES = ["Internal","Supplier","External","Regulatory","Surveillance"];
 
 const FINDING_LEVELS = ["Level 1 - Critical NC","Level 2 - Major NC","Level 3 - Minor NC","Observation","Repeat Finding","Regulatory"];
 
-
-const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profile, showToast, onRefresh, org, readOnly=false }) => {
+const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profile, showToast, onRefresh, org }) => {
   const [tab, setTab] = useState("details");
   const [form, setForm] = useState({
     lead_auditor:     slot.lead_auditor||"",
@@ -4312,13 +4657,11 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
     prepared_by:      slot.prepared_by||"",
     approved_by:      slot.approved_by||"",
     finding_items:    slot.finding_items||"[]",
-    deferred_from:    slot.deferred_from||"",
-    deferred_reason:  slot.deferred_reason||"",
+    deferred_from:    slot.deferred_from||"",   // original planned date before deferral
+    deferred_reason:  slot.deferred_reason||"",  // reason for deferral
   });
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
   const [showDefer, setShowDefer] = useState(false);
-
-
 
   // Finding items management
   const [findingItems, setFindingItems] = useState(()=>{
@@ -4344,7 +4687,19 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
   // ── CAR raising from findings ──────────────────────────────
   const [carModal, setCarModal] = useState(null); // { finding } | null
 
-  const auditRef = getAuditRef(slot, org?.car_prefix||"ORG", org);
+  const auditRef = (() => {
+    const AREA_CODES_AM = {
+      "Ground School Training":"007","Flight Training Records":"008",
+      "Company Manuals & Documents":"009","Base Training Facilities":"010",
+      "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
+      "Ground & Flight Instructor Records":"014","Quality Management":"016",
+      "Safety Management Systems":"017","Fuel Supplier":"022",
+    };
+    const code = AREA_CODES_AM[slot.area]||"000";
+    const d = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
+    const dd=String(d.getDate()).padStart(2,"0"), mm=String(d.getMonth()+1).padStart(2,"0"), yyyy=d.getFullYear();
+    return `PGF-QMS-${code}-${dd}${mm}${yyyy}`;
+  })();
 
   const saveCarFromFinding = async (carForm, findingId) => {
     const payload = {
@@ -4353,7 +4708,6 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
       raised_by: user?.id,
       raised_by_name: profile?.full_name||user?.email,
       updated_at: new Date().toISOString(),
-      ...(org?.id ? { org_id: org.id } : {}),
     };
     const extraEmails = (carForm.additional_notify_text||"").split(",").map(s=>s.trim()).filter(Boolean);
     delete payload.additional_notify_text;
@@ -4413,7 +4767,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
   return (
     <>
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
-      <div style={{ background:"#fff",borderRadius:14,width:720,maxHeight:"92vh",boxShadow:"0 8px 50px rgba(0,0,0,0.2)",display:"flex",flexDirection:"column" }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:"#fff",borderRadius:14,width:720,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 8px 50px rgba(0,0,0,0.2)",display:"flex",flexDirection:"column" }} onClick={e=>e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ background:"linear-gradient(135deg,#01579b,#0277bd)",padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0 }}>
@@ -4583,14 +4937,14 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
             <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                 <div style={{ fontSize:13,color:T.muted }}>Record each individual finding. Findings will auto-populate the report summary.</div>
-                {!readOnly&&<Btn size="sm" onClick={addFinding}>+ Add Finding</Btn>}
+                <Btn size="sm" onClick={addFinding}>+ Add Finding</Btn>
               </div>
               {findingItems.length===0 && (
                 <div style={{ padding:40,textAlign:"center",background:"#f5f8fc",borderRadius:10,border:"2px dashed #dde3ea" }}>
                   <div style={{ fontSize:32,marginBottom:8 }}>🔍</div>
                   <div style={{ fontSize:14,fontWeight:600,color:T.muted,marginBottom:4 }}>No findings recorded</div>
                   <div style={{ fontSize:12,color:T.muted,marginBottom:16 }}>Add findings, observations and non-conformances from this audit</div>
-                  {!readOnly&&<Btn size="sm" onClick={addFinding}>+ Add First Finding</Btn>}
+                  <Btn size="sm" onClick={addFinding}>+ Add First Finding</Btn>
                 </div>
               )}
               {findingItems.map((f,i)=>{
@@ -4613,10 +4967,10 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
                       </div>
                       <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                         {f.level==="Observation"
-                          ? <span style={{ fontSize:10,fontWeight:700,background:"#e3f2fd",color:"#0288d1",border:"1px solid #90caf9",borderRadius:5,padding:"2px 8px" }}>ℹ N/A — Observation</span>
-                          : (f.car_raised || f.car_id)
-                            ? <span style={{ fontFamily:"monospace",fontSize:10,fontWeight:700,background:"#e8f5e9",color:"#2e7d32",border:"1px solid #a5d6a7",borderRadius:5,padding:"2px 7px" }}>✓ {f.car_id||"CAR Raised"}</span>
-                            : (!readOnly&&<button onClick={()=>setCarModal({finding:f})} style={{ fontSize:11,fontWeight:700,color:"#01579b",background:"#e3f2fd",border:"1px solid #90caf9",borderRadius:6,padding:"3px 10px",cursor:"pointer" }}>+ Raise CAR</button>)
+                          ? <span style={{ fontSize:10,fontWeight:700,background:"#e3f2fd",color:"#0288d1",border:"1px solid #90caf9",borderRadius:5,padding:"2px 8px" }}>ℹ No CAR Required</span>
+                          : f.car_raised && f.car_id
+                            ? <span style={{ fontFamily:"monospace",fontSize:10,fontWeight:700,background:"#e8f5e9",color:"#2e7d32",border:"1px solid #a5d6a7",borderRadius:5,padding:"2px 7px" }}>✓ {f.car_id}</span>
+                            : <button onClick={()=>setCarModal({finding:f})} style={{ fontSize:11,fontWeight:700,color:"#01579b",background:"#e3f2fd",border:"1px solid #90caf9",borderRadius:6,padding:"3px 10px",cursor:"pointer" }}>+ Raise CAR</button>
                         }
                         <button onClick={()=>removeFinding(f.id)} style={{ background:"none",border:"none",color:lc.text,cursor:"pointer",fontSize:16,fontWeight:700 }}>✕</button>
                       </div>
@@ -4700,17 +5054,14 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
               </div>
             </div>
           )}
-
-          {/* ── SIGNATURES TAB ── */}
-        </div>{/* end scroll area */}
+        </div>
 
         {/* Footer */}
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
-          <Btn variant="ghost" onClick={onClose}>{readOnly?"Close":"Cancel"}</Btn>
-          {!readOnly&&<Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments},org)}>🔔 Notification Form</Btn>}
-          {!readOnly&&slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",_managers:managers,_org:org}, data?.cars||[])}>📄 Audit Report PDF</Btn>}
-          {!readOnly&&<Btn onClick={handleSave}>💾 Save Audit Record</Btn>}
-          {readOnly&&<div style={{ fontSize:11,color:"#8a9ab0",alignSelf:"center" }}>👁 Read-only — QM or Admin can edit</div>}
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments})}>🔔 Notification Form</Btn>
+          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""})}>📄 Audit Report PDF</Btn>}
+          <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
     </div>
@@ -4736,7 +5087,6 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
           auditSchedule={data?.auditSchedule||[]}
           orgPrefix={org?.car_prefix||"ORG"}
           auditAreas={org?.audit_areas||null}
-          org={org}
           fromAudit={true}
           onSave={(carForm)=>saveCarFromFinding(carForm, f.id)}
           onClose={()=>setCarModal(null)}
@@ -4748,13 +5098,12 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
 };
 
 // ─── Audit Report PDF Generator ───────────────────────────────
-const generateAuditReport = async (slot, allCars=[]) => {
+const generateAuditReport = async (slot) => {
   const { jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210; const M=14; const col=W-M*2;
   const LINE_H=4.5; const LABEL_SZ=6.5; const BODY_SZ=9;
-  const _org = slot._org||null; // org passed from call site
 
   let findingItems = [];
   try { findingItems = JSON.parse(slot.finding_items||"[]"); } catch {}
@@ -4806,7 +5155,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
       doc.setPage(i);
       doc.setDrawColor(221,227,234); doc.setLineWidth(0.3); doc.line(M,286,W-M,286);
       doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(140,160,180);
-      doc.text(`${orgDisplayName(_org)} · Quality Management System · Audit Report  |  ${orgFormPrefix(_org)} 004  |  CONTROLLED DOCUMENT`, M, 290);
+      doc.text("AeroQualify Pro · Quality Management System · Audit Report  |  QMS 004  |  CONTROLLED DOCUMENT", M, 290);
       doc.text(`Page ${i} of ${pages}`, W-M, 290, {align:"right"});
     }
   };
@@ -4816,14 +5165,24 @@ const generateAuditReport = async (slot, allCars=[]) => {
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(255,255,255);
   doc.text("AeroQualify Pro", M, 11);
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
-  doc.text(`AUDIT REPORT — ${orgFormPrefix(_org)} 004`, M, 17);
+  doc.text("AUDIT REPORT — QMS 004", M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
   doc.text(`Issued: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 34;
 
   // ── AUDIT IDENTITY BAR ───────────────────────────────────────
-  const auditRefNum = getAuditRef(slot, slot.org_prefix||"ORG", slot._org||null);
+  const AREA_CODES_PDF = {
+    "Ground School Training":"007","Flight Training Records":"008",
+    "Company Manuals & Documents":"009","Base Training Facilities":"010",
+    "Aircraft":"011","AMO":"012","Management Personnel Records":"013",
+    "Ground & Flight Instructor Records":"014","Quality Management":"016",
+    "Safety Management Systems":"017","Fuel Supplier":"022",
+  };
+  const _aCode = AREA_CODES_PDF[slot.area]||"000";
+  const _aDate = slot.planned_date ? new Date(slot.planned_date) : new Date(slot.year,(slot.month||1)-1,1);
+  const _dd=String(_aDate.getDate()).padStart(2,"0"),_mm=String(_aDate.getMonth()+1).padStart(2,"0"),_yyyy=_aDate.getFullYear();
+  const auditRefNum = `${slot.org_prefix||"ORG"}-QMS-${_aCode}-${_dd}${_mm}${_yyyy}`;
   const statusColors = {
     Completed:[46,125,50], "In Progress":[1,87,155],
     Scheduled:[245,127,23], Overdue:[198,40,40], Cancelled:[117,117,117]
@@ -4897,29 +5256,9 @@ const generateAuditReport = async (slot, allCars=[]) => {
       doc.setFillColor(...levelC); doc.rect(M,y,col,7,"F");
       doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
       doc.text(`Finding #${fi+1}  —  ${f.level}${f.ref?" ("+f.ref+")":""}`, M+3, y+4.8);
-      // Cross-reference live cars table: find CAR by stored car_id, or by audit_ref + description match
-      const linkedCar = (() => {
-        if(f.car_id){
-          return allCars.find(c => c.id === f.car_id || c.id.toLowerCase() === (f.car_id||"").toLowerCase());
-        }
-        // Fall back: find any CAR with matching audit_ref and similar description
-        const slotCars = allCars.filter(c => c.audit_ref === auditRefNum);
-        if(!slotCars.length) return null;
-        const desc40 = (f.description||"").toLowerCase().slice(0,40);
-        return slotCars.find(c => desc40 && (c.finding_description||"").toLowerCase().includes(desc40)) || null;
-      })();
-      const carRaisedForFinding = linkedCar || f.car_id || f.car_raised;
-      const carIdDisplay = linkedCar?.id || f.car_id || "";
-      if(f.level==="Observation"){
-        // no right-side text
-      } else if(carRaisedForFinding){
-        // no right-side text
-      } else {
-        // no right-side text
-      }
+      if((f.car_raised||f.car_id) && f.level!=="Observation"){ doc.text("CAR RAISED ✓", W-M-3, y+4.8, {align:"right"}); }
       y += 9;
-      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["CAR Raised", f.level==="Observation"?"N/A":carRaisedForFinding?"Yes":"No"]], M, y, col); }
-      if(!f.clause){ y = boxRow([["CAR Raised", f.level==="Observation"?"N/A":carRaisedForFinding?"Yes":"No"],["Level", f.level]], M, y, col); }
+      if(f.clause){ y = boxRow([["QMS Clause / Reference", f.clause],["Car Raised", f.level==="Observation"?"N/A — Observation":(f.car_raised||f.car_id)?`Yes — ${f.car_id||""}`.trim():"No"]], M, y, col); }
       y = needPage(y,20); y = box("Finding Description", f.description||"—", M, y, col);
       if(f.requirement){ y = needPage(y,20); y = box("Requirement / Standard Not Met", f.requirement, M, y, col); }
       if(f.evidence){ y = needPage(y,20); y = box("Objective Evidence", f.evidence, M, y, col); }
@@ -4943,11 +5282,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
   y = needPage(y, 45);
   doc.setDrawColor(221,227,234); doc.setLineWidth(0.3);
   const sigW3 = (col-8)/3;
-  const qmPersonName = slot._managers?.find?.(m=>m.role_title==="Quality Manager")?.person_name||slot.approved_by||"";
-  const amPersonName = slot._managers?.find?.(m=>m.role_title==="Accountable Manager")?.person_name||"";
-  const leadIsQM = slot.lead_auditor && qmPersonName &&
-    slot.lead_auditor.toLowerCase().includes((qmPersonName.split(" ")[0]||"").toLowerCase());
-  [["Lead Auditor", slot.lead_auditor||slot.prepared_by||""], ["Quality Manager", qmPersonName||""], ["Accountable Manager", amPersonName||""]].forEach(([label, name], i) => {
+  [["Lead Auditor Signature", slot.lead_auditor||""], ["Quality Manager Signature", slot.approved_by||""], ["Accountable Manager Signature", ""]].forEach(([label, name], i) => {
     const bx = M + i*(sigW3+4);
     doc.setFillColor(245,248,252); doc.rect(bx,y,sigW3,30,"F");
     doc.setDrawColor(221,227,234); doc.rect(bx,y,sigW3,30,"S");
@@ -4955,18 +5290,12 @@ const generateAuditReport = async (slot, allCars=[]) => {
     doc.text(label.toUpperCase(), bx+3, y+5);
     doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(26,35,50);
     if(name) doc.text(name, bx+3, y+13);
-    // Independence note for QM=Lead
-    if(i===1 && leadIsQM){
-      doc.setFont("helvetica","italic"); doc.setFontSize(6.5); doc.setTextColor(230,81,0);
-      doc.text("Note: Lead Auditor & QM are the same person", bx+3, y+13, {maxWidth:sigW3-6});
-    }
     doc.setDrawColor(170,190,210); doc.line(bx+3, y+22, bx+sigW3-3, y+22);
     doc.setFontSize(7); doc.setTextColor(140,160,180);
     doc.text("Signature", bx+3, y+26);
     doc.line(bx+3, y+29, bx+sigW3-3, y+29);
   });
   y += 34;
-
 
   // ── Attached Evidence Files ──────────────────────────────────
   let auditEvidenceFiles = [];
@@ -5071,7 +5400,7 @@ const generateAuditReport = async (slot, allCars=[]) => {
     doc.setLineWidth(0.3); doc.line(0,287,W,287);
     doc.setFont("helvetica","normal"); doc.setFontSize(7);
     doc.setTextColor(isEvPage?200:95, isEvPage?210:114, isEvPage?220:133);
-    doc.text(`${orgDisplayName(slot._org||null)} · Quality Management System · Audit Report  |  ${orgFormPrefix(slot._org||null)} 004  |  CONTROLLED DOCUMENT`, M, 293);
+    doc.text("AeroQualify Pro · Quality Management System · Audit Report  |  QMS 004  |  CONTROLLED DOCUMENT", M, 293);
     doc.text(`Page ${i} of ${totalPages}`, W-M, 293, {align:"right"});
   }
 
@@ -5107,12 +5436,10 @@ const generateAuditReport = async (slot, allCars=[]) => {
 };
 
 
-// Schedule password is stored per-org in organisations.qm_password (set via Org Settings).
-// Falls back to a default only if the org has not yet configured one.
-const SCHEDULE_PASSWORD_DEFAULT = "QM2024!";
+const SCHEDULE_PASSWORD = "QM2024!";
 
 // ── Schedule PDF export ────────────────────────────────────────
-const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUDIT_AREAS, org=null) => {
+const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUDIT_AREAS) => {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
   const W=297; const H=210; const M=12; const col=W-M*2;
@@ -5134,7 +5461,7 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
   doc.text(`ANNUAL AUDIT PROGRAMME — ${year}`, M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text(orgHeaderLine(org), W-M, 10, {align:"right"});
+  doc.text(`${slot.org_name||"Organisation"}${slot.org_address?`  |  ${slot.org_address}`:""}${slot.org_phone?`  |  ${slot.org_phone}`:""}`, W-M, 10, {align:"right"});
   doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 28;
@@ -5229,7 +5556,7 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
 };
 
 // ── Audit Notification PDF ─────────────────────────────────────
-const generateNotificationPDF = async (slot, org=null) => {
+const generateNotificationPDF = async (slot) => {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210; const M=14; const col=W-M*2;
@@ -5240,15 +5567,28 @@ const generateNotificationPDF = async (slot, org=null) => {
       doc.setPage(i);
       doc.setDrawColor(221,227,234); doc.setLineWidth(0.3); doc.line(M,285,W-M,285);
       doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(140,160,180);
-      doc.text(`${orgDisplayName(org)} · ${orgFormPrefix(org)} 002 · Audit Notification · Ref: ${notifRef}`, M, 289);
+      doc.text(`${slot.org_name||"Organisation"} · QMS 002 · Audit Notification · Ref: ${notifRef}`, M, 289);
       doc.text(`CONTROLLED DOCUMENT  ·  Page ${i} of ${pages}`, W-M, 289, {align:"right"});
     }
   };
 
   const FOOTER_Y = 276; const NEW_PAGE_Y = 20;
 
-  const areaCode = getAreaCode(slot.area, org);
-  const prefix   = slot.org_prefix || org?.car_prefix || "ORG";
+  // Area code lookup — PGF-QMS-XXX
+  const AREA_CODES = {
+    "Ground School Training"       : "007",
+    "Flight Training Records"      : "008",
+    "Company Manuals & Documents"  : "009",
+    "Base Training Facilities"     : "010",
+    "Aircraft"                     : "011",
+    "AMO"                          : "012",
+    "Management Personnel Records" : "013",
+    "Ground & Flight Instructor Records": "014",
+    "Quality Management"           : "016",
+    "Safety Management Systems"    : "017",
+    "Fuel Supplier"                : "022",
+  };
+  const areaCode = AREA_CODES[slot.area] || "000";
 
   // Date of scheduled audit — use planned_date if set, else derive from month/year
   const auditDateObj = slot.planned_date
@@ -5258,7 +5598,7 @@ const generateNotificationPDF = async (slot, org=null) => {
   const mm   = String(auditDateObj.getMonth()+1).padStart(2,"0");
   const yyyy = auditDateObj.getFullYear();
 
-  const notifRef = `${prefix}-QMS-${areaCode}-${dd}${mm}${yyyy}`;
+  const notifRef = `PGF-QMS-${areaCode}-${dd}${mm}${yyyy}`;
 
   const needPage = (cy, need=20) => { if(cy+need>FOOTER_Y){ doc.addPage(); return NEW_PAGE_Y; } return cy; };
 
@@ -5267,9 +5607,9 @@ const generateNotificationPDF = async (slot, org=null) => {
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(255,255,255);
   doc.text("AeroQualify Pro", M, 11);
   doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
-  doc.text(`AUDIT NOTIFICATION FORM — ${orgFormPrefix(org)} 002`, M, 17);
+  doc.text("AUDIT NOTIFICATION FORM — QMS 002", M, 17);
   doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text(orgHeaderLine(org), W-M, 11, {align:"right"});
+  doc.text(`${approval?.org_name||"Organisation"}${approval?.org_address?`  |  ${approval.org_address}`:""}${approval?.org_phone?`  |  ${approval.org_phone}`:""}`, W-M, 11, {align:"right"});
   doc.text(`Issued: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
 
   let y = 34;
@@ -5605,11 +5945,255 @@ const ADHOC_TRIGGERS = [
   "Other",
 ];
 
-const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=AUDIT_AREAS }) => {
+// ─── CAR Source constants ─────────────────────────────────────
+const CAR_SOURCES_INTERNAL = [
+  "Internal Scheduled Audit",
+  "Internal Ad-hoc / Triggered Audit",
+  "Management Review Finding",
+  "Supplier / Contractor Audit",
+  "Incident / Occurrence Report",
+  "Customer Feedback",
+  "Staff Observation / Near Miss",
+  "Other Internal",
+];
+const CAR_SOURCES_EXTERNAL = [
+  "KCAA Surveillance Audit",
+  "KCAA Ramp Inspection",
+  "KCAA Documentation Review",
+  "External Regulatory Audit",
+  "Third-Party Audit",
+  "Other External",
+];
+const isExternalSource = (src) => CAR_SOURCES_EXTERNAL.includes(src);
+
+// ─── Default department list ──────────────────────────────────
+const DEFAULT_DEPARTMENTS = [
+  "Flight Operations","Maintenance","Training","Safety",
+  "Quality","Administration","Engineering","Ground Operations",
+  "Fuel Management","Cabin Crew","Dispatch","Security",
+];
+
+// ─── Add Scheduled Slot Modal ─────────────────────────────────
+const AddScheduledSlotModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=AUDIT_AREAS }) => {
   const [form, setForm] = useState({
     area: (orgAuditAreas||AUDIT_AREAS)[0],
-    custom_area: "",
-    use_custom: false,
+    month: new Date().getMonth()+1,
+    audit_type: "Internal",
+    lead_auditor: "",
+    planned_date: "",
+    audit_criteria: "AS9100D / KCAA ANO / Quality Manual",
+    notes: "",
+  });
+  const set = (k,v) => setForm(p=>({...p,[k]:v}));
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if(!form.area){ alert("Please select an audit area."); return; }
+    setSaving(true);
+    // Assign next slot number for this area+year
+    const existingForArea = (existingSlots||[]).filter(s=>s.area===form.area && s.year===year && !s.ad_hoc);
+    const nextSlot = existingForArea.length > 0 ? Math.max(...existingForArea.map(s=>s.slot||0)) + 1 : 1;
+    const id = `AS-${year}-${form.area.replace(/\s+/g,"-").substring(0,20)}-${nextSlot}-${Date.now()}`;
+    await onSave({
+      id, year: Number(year), area: form.area, slot: nextSlot,
+      month: Number(form.month), status:"Scheduled", findings:0, observations:0,
+      ad_hoc: false,
+      audit_type: form.audit_type,
+      lead_auditor: form.lead_auditor,
+      planned_date: form.planned_date||null,
+      audit_criteria: form.audit_criteria,
+      notes: form.notes,
+      finding_items: "[]", attachments: "[]",
+    });
+    setSaving(false);
+  };
+
+  const inputStyle = { width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box",background:"#fff" };
+  const labelStyle = { fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:480,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 8px 50px rgba(0,0,0,0.25)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:"linear-gradient(135deg,#01579b,#0277bd)",padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div>
+            <div style={{ color:"rgba(255,255,255,0.75)",fontSize:11,textTransform:"uppercase",letterSpacing:1 }}>Annual Programme</div>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:17 }}>Add Planned Audit Slot — {year}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.75)",fontSize:22,cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ padding:24,display:"flex",flexDirection:"column",gap:14 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <div style={{ gridColumn:"1/-1" }}>
+              <label style={labelStyle}>Audit Area</label>
+              <select value={form.area} onChange={e=>set("area",e.target.value)} style={inputStyle}>
+                {(orgAuditAreas||AUDIT_AREAS).map(a=><option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Month</label>
+              <select value={form.month} onChange={e=>set("month",Number(e.target.value))} style={inputStyle}>
+                {MONTHS.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Audit Type</label>
+              <select value={form.audit_type} onChange={e=>set("audit_type",e.target.value)} style={inputStyle}>
+                {AUDIT_TYPES.map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Lead Auditor (optional)</label>
+              <input value={form.lead_auditor} onChange={e=>set("lead_auditor",e.target.value)} style={inputStyle} placeholder="Name"/>
+            </div>
+            <div>
+              <label style={labelStyle}>Planned Date (optional)</label>
+              <input type="date" value={form.planned_date} onChange={e=>set("planned_date",e.target.value)} style={inputStyle}/>
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Notes (optional)</label>
+            <textarea value={form.notes} onChange={e=>set("notes",e.target.value)} rows={2} style={{...inputStyle,resize:"vertical"}} placeholder="Any specific scope or focus areas…"/>
+          </div>
+          <div style={{ display:"flex",gap:10,justifyContent:"flex-end",marginTop:4 }}>
+            <button onClick={onClose} style={{ background:"#f5f8fc",color:"#5f7285",border:"1px solid #dde3ea",borderRadius:8,padding:"9px 20px",fontWeight:600,fontSize:13,cursor:"pointer" }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontWeight:700,fontSize:13,cursor:saving?"wait":"pointer" }}>
+              {saving?"Adding…":"Add Slot"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Baseline Programme Modal ─────────────────────────────────
+const BaselineProgrammeModal = ({ year, existingSlots, onSaveMany, onClose, orgAuditAreas=AUDIT_AREAS }) => {
+  const allAreas = orgAuditAreas || AUDIT_AREAS;
+  const [startMonth, setStartMonth] = useState(1);
+  const [endMonth,   setEndMonth]   = useState(6);
+  const [selAreas,   setSelAreas]   = useState(new Set(allAreas));
+  const [auditType,  setAuditType]  = useState("Internal");
+  const [saving,     setSaving]     = useState(false);
+
+  const toggleArea = (a) => setSelAreas(prev => {
+    const next = new Set(prev);
+    next.has(a) ? next.delete(a) : next.add(a);
+    return next;
+  });
+
+  // Preview: distribute selected areas across month range
+  const monthRange = [];
+  for(let m=startMonth; m<=endMonth; m++) monthRange.push(m);
+  const areas = allAreas.filter(a=>selAreas.has(a));
+  const preview = areas.map((area, i) => ({
+    area,
+    month: monthRange[i % monthRange.length],
+  }));
+
+  const handleSave = async () => {
+    if(areas.length===0){ alert("Select at least one area."); return; }
+    setSaving(true);
+    const slots = preview.map((p, i) => {
+      const existing = (existingSlots||[]).filter(s=>s.area===p.area && s.year===year && !s.ad_hoc);
+      const nextSlot = existing.length > 0 ? Math.max(...existing.map(s=>s.slot||0)) + 1 : 1;
+      return {
+        id: `AS-BL-${year}-${p.area.replace(/\s+/g,"-").substring(0,15)}-${nextSlot}-${Date.now()+i}`,
+        year: Number(year), area: p.area, slot: nextSlot,
+        month: p.month, status:"Scheduled", findings:0, observations:0,
+        ad_hoc: false, audit_type: auditType,
+        finding_items:"[]", attachments:"[]",
+      };
+    });
+    await onSaveMany(slots);
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:14,width:600,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 8px 50px rgba(0,0,0,0.25)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ background:"linear-gradient(135deg,#00695c,#00897b)",padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div>
+            <div style={{ color:"rgba(255,255,255,0.75)",fontSize:11,textTransform:"uppercase",letterSpacing:1 }}>Baseline Audit Programme</div>
+            <div style={{ color:"#fff",fontWeight:700,fontSize:17 }}>Generate Baseline Schedule — {year}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.75)",fontSize:22,cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ padding:24,display:"flex",flexDirection:"column",gap:18 }}>
+          <div style={{ background:"#e0f2f1",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#00695c",borderLeft:"4px solid #00897b" }}>
+            A baseline audit covers all departments systematically. Select your date range and areas — the system distributes one slot per area across the months automatically.
+          </div>
+
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12 }}>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Start Month</label>
+              <select value={startMonth} onChange={e=>setStartMonth(Number(e.target.value))} style={{ width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}>
+                {MONTHS.map((m,i)=><option key={m} value={i+1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>End Month</label>
+              <select value={endMonth} onChange={e=>setEndMonth(Number(e.target.value))} style={{ width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}>
+                {MONTHS.map((m,i)=><option key={m} value={i+1} disabled={i+1<startMonth}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Audit Type</label>
+              <select value={auditType} onChange={e=>setAuditType(e.target.value)} style={{ width:"100%",padding:"8px 10px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}>
+                {AUDIT_TYPES.map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8 }}>
+              Areas to include ({selAreas.size} selected)
+              <button onClick={()=>setSelAreas(new Set(allAreas))} style={{ marginLeft:10,fontSize:11,color:"#01579b",background:"none",border:"none",cursor:"pointer",fontWeight:600 }}>All</button>
+              <button onClick={()=>setSelAreas(new Set())} style={{ marginLeft:6,fontSize:11,color:"#c62828",background:"none",border:"none",cursor:"pointer",fontWeight:600 }}>None</button>
+            </div>
+            <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
+              {allAreas.map(a=>(
+                <button key={a} onClick={()=>toggleArea(a)}
+                  style={{ padding:"5px 12px",borderRadius:20,border:`1.5px solid ${selAreas.has(a)?"#00897b":"#dde3ea"}`,
+                    background:selAreas.has(a)?"#e0f2f1":"#f5f8fc",color:selAreas.has(a)?"#00695c":"#5f7285",
+                    fontSize:12,fontWeight:600,cursor:"pointer",transition:"all 0.15s" }}>
+                  {selAreas.has(a)?"✓ ":""}{a}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview */}
+          {preview.length > 0 && (
+            <div>
+              <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8 }}>
+                Preview — {preview.length} slots across {MONTHS[startMonth-1]}–{MONTHS[endMonth-1]}
+              </div>
+              <div style={{ background:"#f5f8fc",borderRadius:8,border:"1px solid #dde3ea",overflow:"hidden",maxHeight:200,overflowY:"auto" }}>
+                {preview.map((p,i)=>(
+                  <div key={i} style={{ padding:"8px 14px",borderBottom:"1px solid #eef2f7",display:"flex",alignItems:"center",gap:12,fontSize:12 }}>
+                    <span style={{ background:"#e3f2fd",color:"#01579b",borderRadius:10,padding:"2px 10px",fontWeight:600,minWidth:32,textAlign:"center" }}>{MONTHS[p.month-1]}</span>
+                    <span style={{ color:"#1a2332",fontWeight:500 }}>{p.area}</span>
+                    <span style={{ color:"#8a9ab0",marginLeft:"auto" }}>Slot {(existingSlots||[]).filter(s=>s.area===p.area&&s.year===year&&!s.ad_hoc).length+1}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
+            <button onClick={onClose} style={{ background:"#f5f8fc",color:"#5f7285",border:"1px solid #dde3ea",borderRadius:8,padding:"9px 20px",fontWeight:600,fontSize:13,cursor:"pointer" }}>Cancel</button>
+            <button onClick={handleSave} disabled={saving||areas.length===0} style={{ background:"#00695c",color:"#fff",border:"none",borderRadius:8,padding:"9px 24px",fontWeight:700,fontSize:13,cursor:(saving||areas.length===0)?"not-allowed":"pointer",opacity:(saving||areas.length===0)?0.6:1 }}>
+              {saving?`Creating ${preview.length} slots…`:`Generate ${preview.length} Slots`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=AUDIT_AREAS }) => {
+  const [form, setForm] = useState({
     trigger: ADHOC_TRIGGERS[0],
     trigger_detail: "",
     audit_type: "Internal",
@@ -5768,25 +6352,30 @@ const AdHocAuditModal = ({ year, existingSlots, onSave, onClose, orgAuditAreas=A
 
 
 const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }) => {
-  // orgAuditAreas = name strings used for GENERATING new schedule slots
-  const orgAuditAreas = areaNames(parseAreas(org?.audit_areas||null));
-  // displayAuditAreas = configured areas + ALL areas that have any slots in the DB
-  // No filtering — every area with a slot is shown, regardless of status
-  const displayAuditAreas = (() => {
-    const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
-    return [...new Set([...orgAuditAreas, ...scheduleAreas.filter(a=>!orgAuditAreas.includes(a))])];
+  // Use org-specific audit areas if set, otherwise fall back to AUDIT_AREAS constant
+  const orgAuditAreas = (() => {
+    try {
+      const custom = JSON.parse(org?.audit_areas||"null");
+      const base = (custom && custom.length > 0) ? custom : AUDIT_AREAS;
+      // Also include any areas from existing schedule slots that aren't in the list
+      // This preserves integrity of old data when areas are renamed
+      const scheduleAreas = [...new Set((data.auditSchedule||[]).map(s=>s.area).filter(Boolean))];
+      const combined = [...new Set([...base, ...scheduleAreas.filter(a=>!base.includes(a))])];
+      return combined;
+    } catch { return AUDIT_AREAS; }
   })();
-  const isQM         = ["admin","quality_manager"].includes(profile?.role);
-  const isAdmin      = profile?.role==="admin";
-  const canViewAudits= ["admin","quality_manager","quality_auditor","manager"].includes(profile?.role);
+  const isQM    = ["admin","quality_manager"].includes(profile?.role);
+  const isAdmin = profile?.role==="admin";
   const [view,      setView]      = useState("schedule");
   const [year,      setYear]      = useState(new Date().getFullYear());
   const [modal,     setModal]     = useState(null);
   const [generating, setGenerating] = useState(false);
-  const [pwModal,   setPwModal]   = useState(false);    // password gate for generate only
+  const [pwModal,   setPwModal]   = useState(false);    // password gate
   const [approvalModal, setApprovalModal] = useState(false); // approval fields before generate
   const [approval,  setApproval]  = useState({ qm_name:"", qm_date:"", am_name:"", am_date:"" });
   const [adHocModal, setAdHocModal] = useState(false); // ad-hoc audit creator
+  const [addSlotModal, setAddSlotModal] = useState(false); // manual planned slot
+  const [baselineModal, setBaselineModal] = useState(false); // baseline programme generator
 
   const schedule = data.auditSchedule||[];
 
@@ -5812,25 +6401,15 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
   const generateSchedule = async () => {
     setGenerating(true);
     try {
-      // Delete ALL existing non-completed slots for this year+org before inserting fresh ones.
-      // This clears out stale areas from previous generates without touching completed audits.
-      const deleteQuery = supabase.from("audit_schedule")
-        .delete()
-        .eq("year", year)
-        .not("status", "in", "(Completed,In Progress)");
-      if(org?.id) deleteQuery.eq("org_id", org.id);
-      await deleteQuery;
-
       const rows = [];
       orgAuditAreas.forEach((area, idx) => {
         const month1 = 1 + (idx % 6);
         const month2 = 7 + (idx % 6);
-        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-1`, year, area, slot:1, month:month1, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date, ...(org?.id?{org_id:org.id}:{}) });
-        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-2`, year, area, slot:2, month:month2, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date, ...(org?.id?{org_id:org.id}:{}) });
+        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-1`, year, area, slot:1, month:month1, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date });
+        rows.push({ id:`AS-${year}-${area.replace(/\s+/g,"-")}-2`, year, area, slot:2, month:month2, status:"Scheduled", findings:0, observations:0, qm_name:approval.qm_name, qm_date:approval.qm_date, am_name:approval.am_name, am_date:approval.am_date });
       });
-      const { error } = await supabase.from("audit_schedule").insert(rows);
+      const { error } = await supabase.from("audit_schedule").upsert(rows, { onConflict:"id" });
       if(error) { showToast(`Error: ${error.message}`,"error"); return; }
-      await logChange({user,action:`generated ${year} audit schedule`,table:"audit_schedule",recordId:`schedule-${year}`,recordTitle:`${year} Audit Programme (${rows.length} slots)`,newData:{year,rows:rows.length}});
       showToast(`${year} audit schedule generated — ${rows.length} slots created`,"success");
       setApprovalModal(false);
       onRefresh();
@@ -5840,10 +6419,9 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
 
   // Save a slot + send notification email
   const saveSlot = async (slot) => {
-    const payload = { id: slot.id||`AS-${slot.year||year}-${slot.area?.replace(/\s+/g,"-")}-${slot.slot}`, year:slot.year||year, area:slot.area, slot:slot.slot, month:slot.month, ...slot, ...(org?.id?{org_id:org.id}:{}) };
+    const payload = { id: slot.id||`AS-${slot.year||year}-${slot.area?.replace(/\s+/g,"-")}-${slot.slot}`, year:slot.year||year, area:slot.area, slot:slot.slot, month:slot.month, ...slot };
     const { error } = await supabase.from("audit_schedule").upsert(payload, { onConflict:"id" });
     if(error) { showToast(`Error: ${error.message}`,"error"); return; }
-    await logChange({user,action:"updated audit slot",table:"audit_schedule",recordId:payload.id,recordTitle:`${slot.area} ${slot.year} Slot ${slot.slot}`,newData:payload});
 
     // Send notification emails when a slot has a planned date and lead auditor set
     if(slot.planned_date && slot.lead_auditor) {
@@ -5864,17 +6442,24 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
     onRefresh();
   };
 
-  // Programme completion stats
-  const yearSlots      = schedule.filter(s=>s.year===year);
-  const adHocSlots     = yearSlots.filter(s=>s.ad_hoc);
-  const regularSlots   = yearSlots.filter(s=>!s.ad_hoc);
-  // totalSlots = actual regular slots in DB for this year (not derived from area list)
-  const totalSlots     = regularSlots.length;
-  const completed      = regularSlots.filter(s=>s.status==="Completed").length;
-  const overdue        = regularSlots.filter(s=>s.status==="Overdue"||(!["Completed","Cancelled"].includes(s.status)&&s.planned_date&&new Date(s.planned_date)<new Date())).length;
-  const pct            = totalSlots>0 ? Math.round(completed/totalSlots*100) : 0;
-  const totalFindings  = yearSlots.reduce((a,s)=>a+Number(s.findings||0),0);
-  const totalObs       = yearSlots.reduce((a,s)=>a+Number(s.observations||0),0);
+  // Batch save slots (for baseline programme)
+  const saveManySlots = async (slots) => {
+    const orgId = slots[0]?.org_id || schedule[0]?.org_id;
+    const rows = slots.map(s => ({ ...s, org_id: orgId }));
+    const { error } = await supabase.from("audit_schedule").insert(rows);
+    if(error){ showToast(`Error: ${error.message}`,"error"); return; }
+    showToast(`${slots.length} audit slots created`,"success");
+    setBaselineModal(false);
+    onRefresh();
+  };
+  const totalSlots  = orgAuditAreas.length * 2;
+  const yearSlots   = schedule.filter(s=>s.year===year);
+  const adHocSlots  = yearSlots.filter(s=>s.ad_hoc);
+  const completed   = yearSlots.filter(s=>s.status==="Completed").length;
+  const overdue     = yearSlots.filter(s=>s.status==="Overdue"||(!["Completed","Cancelled"].includes(s.status)&&s.planned_date&&new Date(s.planned_date)<new Date())).length;
+  const pct         = totalSlots>0 ? Math.round(completed/totalSlots*100) : 0;
+  const totalFindings = yearSlots.reduce((a,s)=>a+Number(s.findings||0),0);
+  const totalObs      = yearSlots.reduce((a,s)=>a+Number(s.observations||0),0);
 
   const hasSchedule = yearSlots.length > 0;
 
@@ -5900,7 +6485,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
             ))}
           </div>
           {isQM && hasSchedule && (
-            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, yearSlots[0]||{}, orgAuditAreas, org)}>
+            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, {...(yearSlots[0]||{}),org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""}, orgAuditAreas)}>
               📥 Export Schedule PDF
             </Btn>
           )}
@@ -5910,9 +6495,19 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
             </Btn>
           )}
           {isQM && (
-            orgAuditAreas.length===0
-              ? <Btn disabled title="Configure audit areas in Org Settings first">⚡ Generate {year} Schedule</Btn>
-              : <Btn onClick={handleGenerateClick} disabled={generating}>{generating?"Generating...":"⚡ Generate "+year+" Schedule"}</Btn>
+            <Btn variant="outline" onClick={()=>setAddSlotModal(true)} style={{ color:T.primary,borderColor:T.primary }}>
+              📅 Add Planned Slot
+            </Btn>
+          )}
+          {isQM && (
+            <Btn variant="ghost" onClick={()=>setBaselineModal(true)} style={{ color:T.teal,borderColor:T.teal,border:"1px solid" }}>
+              🗓️ Baseline Programme
+            </Btn>
+          )}
+          {isQM && (
+            <Btn onClick={handleGenerateClick} disabled={generating}>
+              {generating?"Generating...":"⚡ Generate "+year+" Schedule"}
+            </Btn>
           )}
         </div>
       </div>
@@ -5950,21 +6545,9 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
           {!hasSchedule ? (
             <div style={{ padding:60,textAlign:"center" }}>
               <div style={{ fontSize:48,marginBottom:16 }}>📅</div>
-              {orgAuditAreas.length===0 ? (
-                <>
-                  <div style={{ fontSize:18,fontWeight:700,color:T.primaryDk,marginBottom:8 }}>No audit areas configured</div>
-                  <div style={{ fontSize:13,color:T.muted,marginBottom:24,maxWidth:400,margin:"0 auto 24px" }}>
-                    Set up your audit areas before generating a schedule.<br/>Go to <strong>Org Settings → Audit Areas</strong> to add your areas and codes.
-                  </div>
-                  {isAdmin&&<Btn onClick={()=>{}}>Go to Org Settings</Btn>}
-                </>
-              ) : (
-                <>
-                  <div style={{ fontSize:18,fontWeight:700,color:T.primaryDk,marginBottom:8 }}>No schedule for {year}</div>
-                  <div style={{ fontSize:13,color:T.muted,marginBottom:24 }}>Generate the annual audit programme to populate the schedule</div>
-                  {isQM&&<Btn onClick={handleGenerateClick} disabled={generating}>{generating?"Generating...":"⚡ Generate "+year+" Audit Schedule"}</Btn>}
-                </>
-              )}
+              <div style={{ fontSize:18,fontWeight:700,color:T.primaryDk,marginBottom:8 }}>No schedule for {year}</div>
+              <div style={{ fontSize:13,color:T.muted,marginBottom:24 }}>Generate the annual audit programme to populate the schedule</div>
+              {isQM&&<Btn onClick={handleGenerateClick} disabled={generating}>{generating?"Generating...":"⚡ Generate "+year+" Audit Schedule"}</Btn>}
             </div>
           ) : (
             <>
@@ -5979,7 +6562,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
                 </tr>
               </thead>
               <tbody>
-                {displayAuditAreas.map((area,ai)=>{
+                {orgAuditAreas.map((area,ai)=>{
                   const slot1 = getSlot(area,1);
                   const slot2 = getSlot(area,2);
                   const bothDone = slot1?.status==="Completed" && slot2?.status==="Completed";
@@ -5999,12 +6582,12 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
                         return (
                           <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                             <div
-                              onClick={()=>canViewAudits&&setModal(slot)}
+                              onClick={()=>isQM&&setModal(slot)}
                               title={`${area} — Slot ${slot.slot}
 Status: ${slot.status||"Scheduled"}
 Lead: ${slot.lead_auditor||"Not assigned"}
 Planned: ${slot.planned_date||"Not set"}`}
-                              style={{ width:28,height:28,borderRadius:6,background:c.bg,border:`2px solid ${c.border}`,margin:"0 auto",cursor:canViewAudits?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:1 }}
+                              style={{ width:28,height:28,borderRadius:6,background:c.bg,border:`2px solid ${c.border}`,margin:"0 auto",cursor:isQM?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s" }}
                               onMouseEnter={e=>{if(isQM)e.target.style.transform="scale(1.2)";}}
                               onMouseLeave={e=>{e.target.style.transform="scale(1)";}}
                             >
@@ -6050,9 +6633,9 @@ Planned: ${slot.planned_date||"Not set"}`}
                             return (
                               <td key={mi} style={{ padding:"4px",textAlign:"center" }}>
                                 <div
-                                  onClick={()=>canViewAudits&&setModal(s)}
+                                  onClick={()=>isQM&&setModal(s)}
                                   title={s.area+" (Ad-Hoc)\nTrigger: "+(s.trigger||"—")+"\nStatus: "+(s.status||"Scheduled")+"\nLead: "+(s.lead_auditor||"Not assigned")+"\nPlanned: "+(s.planned_date||"Not set")}
-                                  style={{ width:28,height:28,borderRadius:6,background:c.bg,border:"2px dashed "+c.border,margin:"0 auto",cursor:canViewAudits?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s",opacity:1 }}
+                                  style={{ width:28,height:28,borderRadius:6,background:c.bg,border:"2px dashed "+c.border,margin:"0 auto",cursor:isQM?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:c.text,transition:"transform 0.15s" }}
                                   onMouseEnter={e=>{if(isQM)e.currentTarget.style.transform="scale(1.2)";}}
                                   onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
                                 >
@@ -6109,7 +6692,7 @@ Planned: ${slot.planned_date||"Not set"}`}
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
                           {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
-                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",_managers:managers,_org:org}, data.cars||[])}>📄 PDF</Btn>}
+                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""})}>📄 PDF</Btn>}
                         </div>
                       </td>
                     </tr>
@@ -6139,10 +6722,8 @@ Planned: ${slot.planned_date||"Not set"}`}
           year={year}
           existingSlots={schedule}
           onSave={async(slot)=>{
-            const slotWithOrg = { ...slot, ...(org?.id?{org_id:org.id}:{}) };
-            const { error } = await supabase.from("audit_schedule").upsert(slotWithOrg, { onConflict:"id" });
+            const { error } = await supabase.from("audit_schedule").upsert(slot, { onConflict:"id" });
             if(error){ showToast("Error: "+error.message,"error"); return; }
-            await logChange({user,action:"added ad-hoc audit",table:"audit_schedule",recordId:slotWithOrg.id,recordTitle:`Ad-hoc: ${slot.area} ${slot.year}`,newData:slotWithOrg});
             showToast("Ad-hoc audit added to schedule","success");
             setAdHocModal(false);
             onRefresh();
@@ -6150,7 +6731,32 @@ Planned: ${slot.planned_date||"Not set"}`}
           onClose={()=>setAdHocModal(false)}
         />
       )}
-      {modal&&<AuditScheduleModal slot={modal} onSave={saveSlot} onClose={()=>setModal(null)} managers={managers} data={data} user={user} profile={profile} showToast={showToast} onRefresh={onRefresh} org={org} readOnly={!isQM}/>}
+      {modal&&<AuditScheduleModal slot={modal} onSave={saveSlot} onClose={()=>setModal(null)} managers={managers} data={data} user={user} profile={profile} showToast={showToast} onRefresh={onRefresh} org={org}/>}
+      {addSlotModal&&(
+        <AddScheduledSlotModal
+          year={year}
+          existingSlots={schedule}
+          onSave={async(slot)=>{
+            const orgId = schedule[0]?.org_id;
+            const { error } = await supabase.from("audit_schedule").insert({ ...slot, org_id: orgId });
+            if(error){ showToast("Error: "+error.message,"error"); return; }
+            showToast("Planned audit slot added","success");
+            setAddSlotModal(false);
+            onRefresh();
+          }}
+          onClose={()=>setAddSlotModal(false)}
+          orgAuditAreas={orgAuditAreas}
+        />
+      )}
+      {baselineModal&&(
+        <BaselineProgrammeModal
+          year={year}
+          existingSlots={schedule}
+          onSaveMany={saveManySlots}
+          onClose={()=>setBaselineModal(false)}
+          orgAuditAreas={orgAuditAreas}
+        />
+      )}
 
       {/* Password Gate Modal */}
       {pwModal&&(
@@ -6158,9 +6764,7 @@ Planned: ${slot.planned_date||"Not set"}`}
           <div style={{ background:"#fff",borderRadius:14,width:380,padding:32,boxShadow:"0 8px 50px rgba(0,0,0,0.3)" }} onClick={e=>e.stopPropagation()}>
             <div style={{ fontSize:32,textAlign:"center",marginBottom:12 }}>🔐</div>
             <div style={{ fontWeight:800,fontSize:18,color:"#1a2332",textAlign:"center",marginBottom:6 }}>Quality Manager Authorisation</div>
-            <div style={{ fontSize:13,color:"#5f7285",textAlign:"center",marginBottom:20 }}>
-              {`Enter the QM password to generate or overwrite the ${year} audit schedule`}
-            </div>
+            <div style={{ fontSize:13,color:"#5f7285",textAlign:"center",marginBottom:20 }}>Enter the QM password to generate or overwrite the {year} audit schedule</div>
             <input
               id="pw-input"
               type="password"
@@ -6169,11 +6773,8 @@ Planned: ${slot.planned_date||"Not set"}`}
               style={{ width:"100%",padding:"10px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,boxSizing:"border-box",marginBottom:14 }}
               onKeyDown={e=>{
                 if(e.key==="Enter"){
-                  const correctPw = org?.qm_password || SCHEDULE_PASSWORD_DEFAULT;
-                  if(e.target.value===correctPw){
-                    setPwModal(false); e.target.value="";
-                    setApprovalModal(true);
-                  } else { e.target.style.borderColor="#c62828"; setTimeout(()=>e.target.style.borderColor="#dde3ea",1000); }
+                  if(e.target.value===SCHEDULE_PASSWORD){ setPwModal(false); setApprovalModal(true); e.target.value=""; }
+                  else { e.target.style.borderColor="#c62828"; setTimeout(()=>e.target.style.borderColor="#dde3ea",1000); }
                 }
               }}
             />
@@ -6181,11 +6782,8 @@ Planned: ${slot.planned_date||"Not set"}`}
               <Btn variant="ghost" onClick={()=>setPwModal(false)}>Cancel</Btn>
               <Btn onClick={()=>{
                 const val=document.getElementById("pw-input").value;
-                const correctPw = org?.qm_password || SCHEDULE_PASSWORD_DEFAULT;
-                if(val===correctPw){
-                  setPwModal(false); document.getElementById("pw-input").value="";
-                  setApprovalModal(true);
-                } else { document.getElementById("pw-input").style.borderColor="#c62828"; setTimeout(()=>document.getElementById("pw-input").style.borderColor="#dde3ea",1000); }
+                if(val===SCHEDULE_PASSWORD){ setPwModal(false); setApprovalModal(true); document.getElementById("pw-input").value=""; }
+                else { document.getElementById("pw-input").style.borderColor="#c62828"; setTimeout(()=>document.getElementById("pw-input").style.borderColor="#dde3ea",1000); }
               }}>Confirm</Btn>
             </div>
           </div>
@@ -6245,8 +6843,8 @@ Planned: ${slot.planned_date||"Not set"}`}
 const TABS = [
   {id:"dashboard",    label:"Dashboard",       icon:"▦",  group:"main"},
   {id:"cars",         label:"CARs",            icon:"📋", group:"main"},
-  {id:"documents",    label:"Document Register", icon:"📄", group:"main"},
-  {id:"flightdocs",   label:"Certificates & Approvals",icon:"📂",group:"main"},
+  {id:"documents",    label:"Documents",       icon:"📄", group:"main"},
+  {id:"flightdocs",   label:"Company Documents",icon:"📂",group:"main"},
   {id:"audits",       label:"Audits",          icon:"🔍", group:"main"},
   {id:"contractors",  label:"Contractors",     icon:"🔧", group:"main"},
   {id:"risks",        label:"Risk Register",   icon:"⚠️", group:"main"},
@@ -6398,7 +6996,7 @@ const SuperAdminUsersTab = ({ orgUsers, orgs, pendingUsers, assignUser, sendRese
 
 const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
   const [tab, setTab]           = useState("dashboard");
-  const [newOrg, setNewOrg]     = useState({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"", company_address:"", company_phone:"", company_email:"", form_prefix:"QMS", org_type:"" });
+  const [newOrg, setNewOrg]     = useState({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
   const [newOrgDemo, setNewOrgDemo] = useState(false);
   const [demoDays,   setDemoDays]   = useState(14);
   const [creating, setCreating] = useState(false);
@@ -6421,19 +7019,10 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
       ? new Date(Date.now() + demoDays * 86400000).toISOString()
       : null;
 
-    // 1. Create the organisation — explicitly list columns to avoid spreading unknown fields
+    // 1. Create the organisation
     const { data: orgRow, error } = await supabase.from("organisations").insert({
-      name:            newOrg.name,
-      slug,
-      country:         newOrg.country||"Kenya",
-      contact_name:    newOrg.contact_name||null,
-      contact_email:   newOrg.contact_email||null,
+      ...newOrg, slug,
       demo_expires_at: demoExpiry,
-      company_name:    newOrg.name,
-      company_address: newOrg.company_address||null,
-      company_phone:   newOrg.company_phone||null,
-      company_email:   newOrg.company_email||null,
-      form_prefix:     newOrg.form_prefix||"QMS",
     }).select().single();
 
     if(error){ showToast("Error: "+error.message,"error"); setCreating(false); return; }
@@ -6459,7 +7048,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
       ? `Demo organisation created — expires in ${demoDays} days. Welcome email sent.`
       : "Organisation created. Welcome email sent.",
       "success");
-    setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"", company_address:"", company_phone:"", company_email:"", form_prefix:"QMS", org_type:"" });
+    setNewOrg({ name:"", slug:"", country:"Kenya", contact_email:"", contact_name:"" });
     setNewOrgDemo(false); setDemoDays(14);
     onRefresh(); setTab("orgs");
     setCreating(false);
@@ -6820,7 +7409,7 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <table style={{ width:"100%",borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f8fafc" }}>
-                  {["Name","Organisation","Type","Email","Phone","Address","Submitted","Action"].map(h=>(
+                  {["Name","Organisation","Email","Phone","Message","Submitted","Action"].map(h=>(
                     <th key={h} style={{ padding:"9px 14px",borderBottom:"1px solid #dde3ea",textAlign:"left",fontSize:11,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase" }}>{h}</th>
                   ))}
                 </tr>
@@ -6830,10 +7419,9 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                   <tr key={r.id} className="row-hover">
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:600,color:"#1a2332" }}>{r.name}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:13,fontWeight:700,color:"#01579b" }}>{r.company}</td>
-                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#5f7285",whiteSpace:"nowrap" }}>{r.org_type?.split("—")[0]?.trim()||"—"}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{r.email}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285" }}>{r.phone||"—"}</td>
-                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.address||"—"}</td>
+                    <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:12,color:"#5f7285",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.message||"—"}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8",fontSize:11,color:"#8a9ab0",whiteSpace:"nowrap" }}>{fmt(r.submitted_at)}</td>
                     <td style={{ padding:"11px 14px",borderBottom:"1px solid #f0f4f8" }}>
                       <div style={{ display:"flex",gap:6 }}>
@@ -6844,11 +7432,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
                             country: "Kenya",
                             contact_name: r.name,
                             contact_email: r.email,
-                            company_address: r.address||"",
-                            company_phone: r.phone||"",
-                            company_email: r.email||"",
-                            form_prefix: r.form_prefix||"QMS",
-                            org_type: r.org_type||"",
                           });
                           setTab("new");
                         }} style={{ background:"#e3f2fd",color:"#01579b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer" }}>
@@ -6896,25 +7479,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
             <Input label="Country" value={newOrg.country} onChange={e=>setNewOrg(p=>({...p,country:e.target.value}))} placeholder="Kenya"/>
             <Input label="Contact Name" value={newOrg.contact_name} onChange={e=>setNewOrg(p=>({...p,contact_name:e.target.value}))} placeholder="Quality Manager name"/>
             <Input label="Contact Email" type="email" value={newOrg.contact_email} onChange={e=>setNewOrg(p=>({...p,contact_email:e.target.value}))} placeholder="qm@organisation.com"/>
-            <Input label="Phone" value={newOrg.company_phone||""} onChange={e=>setNewOrg(p=>({...p,company_phone:e.target.value}))} placeholder="+254 700 000 000"/>
-            <div style={{ gridColumn:"1/-1" }}>
-              <Input label="Physical Address" value={newOrg.company_address||""} onChange={e=>setNewOrg(p=>({...p,company_address:e.target.value}))} placeholder="e.g. P.O Box 3341, Wilson Airport, Nairobi"/>
-            </div>
-            <div>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",letterSpacing:0.8,textTransform:"uppercase",display:"block",marginBottom:6 }}>QMS Form Prefix</label>
-              <input value={newOrg.form_prefix||"QMS"} onChange={e=>setNewOrg(p=>({...p,form_prefix:e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6)}))}
-                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1,boxSizing:"border-box" }}
-                maxLength={6} placeholder="QMS"/>
-              <div style={{ fontSize:11,color:"#8a9ab0",marginTop:4 }}>Forms: <span style={{ fontFamily:"monospace" }}>{newOrg.form_prefix||"QMS"} 002</span> / <span style={{ fontFamily:"monospace" }}>{newOrg.form_prefix||"QMS"} 004</span></div>
-            </div>
-            <div>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",letterSpacing:0.8,textTransform:"uppercase",display:"block",marginBottom:6 }}>Organisation Type</label>
-              <select value={newOrg.org_type||""} onChange={e=>setNewOrg(p=>({...p,org_type:e.target.value}))}
-                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box" }}>
-                <option value="">Select type…</option>
-                {["ATO — Approved Training Organisation","AOC — Air Operator Certificate","AMO — Approved Maintenance Organisation","Airport Operator","Other"].map(r=><option key={r}>{r}</option>)}
-              </select>
-            </div>
           </div>
           {/* Demo / Full Access toggle */}
           <div style={{ marginTop:20,background:"#f8fafc",borderRadius:10,padding:"14px 16px",border:"1px solid #dde3ea" }}>
@@ -7011,7 +7575,6 @@ const SuperAdminPanel = ({ orgs, orgUsers, onRefresh, showToast }) => {
 // ─── Generic Modal Shell ──────────────────────────────────────
 
 
-// ─── Pegasus Letterhead ───────────────────────────────────────
 // ─── Pending User Row ────────────────────────────────────────
 const PendingUserRow = ({ u, orgs, onAssign }) => {
   const [orgId, setOrgId] = useState("");
@@ -7241,7 +7804,6 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
         <Input label="Display Name" value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name"/>
         <Btn onClick={saveName} disabled={saving} style={{ opacity:saving?0.7:1 }}>{saving?"Saving…":"Save Name"}</Btn>
       </div>
-
       <div style={cardStyle}>
         {sectionHead("Change Password","Enter a new password for your account")}
         <form onSubmit={changePassword}>
@@ -7258,162 +7820,150 @@ const ProfilePage = ({ user, profile, showToast, onRefresh }) => {
 
 // ─── Org Settings Page ────────────────────────────────────────
 const OrgSettingsPage = ({ org, onSave }) => {
-  const [prefix,      setPrefix]     = useState(org?.car_prefix||"ORG");
-  const [qmPw,        setQmPw]       = useState(org?.qm_password||"");
-  const [areas,       setAreas]      = useState(()=>parseAreas(org?.audit_areas));
-  const [companyName, setCompanyName]= useState(org?.company_name||"");
-  const [address,     setAddress]    = useState(org?.company_address||"");
-  const [phone,       setPhone]      = useState(org?.company_phone||"");
-  const [email,       setEmail]      = useState(org?.company_email||"");
-  const [formPrefix,  setFormPrefix] = useState(org?.form_prefix||"QMS");
+  const [prefix, setPrefix] = useState(org?.car_prefix||"ORG");
+  const [areas,  setAreas]  = useState(()=>{
+    try{ return JSON.parse(org?.audit_areas||"null") || ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
+    catch{ return ["Flight Operations","Maintenance","Training","Safety","Quality","Administration","Engineering","Ground Operations"]; }
+  });
+  const [depts, setDepts] = useState(()=>{
+    try{ return JSON.parse(org?.departments||"null") || DEFAULT_DEPARTMENTS; }
+    catch{ return DEFAULT_DEPARTMENTS; }
+  });
+  const [reportName,    setReportName]    = useState(org?.report_org_name || org?.name || "");
+  const [reportAddress, setReportAddress] = useState(org?.report_address  || "");
+  const [reportPhone,   setReportPhone]   = useState(org?.report_phone    || "");
   const [newArea, setNewArea] = useState("");
+  const [newDept, setNewDept] = useState("");
   const [saving,  setSaving]  = useState(false);
 
-  // Re-sync whenever any org field we care about changes
-  useEffect(()=>{
-    setPrefix(org?.car_prefix||"ORG");
-    setQmPw(org?.qm_password||"");
-    setAreas(parseAreas(org?.audit_areas));
-    setCompanyName(org?.company_name||"");
-    setAddress(org?.company_address||"");
-    setPhone(org?.company_phone||"");
-    setEmail(org?.company_email||"");
-    setFormPrefix(org?.form_prefix||"QMS");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[org?.id, org?.car_prefix, org?.audit_areas, org?.qm_password, org?.company_name, org?.company_address, org?.company_phone, org?.company_email, org?.form_prefix]);
-
-  const [newCode, setNewCode] = useState("");
   const addArea = () => {
     const trimmed = newArea.trim();
-    const code = newCode.trim().replace(/[^A-Z0-9a-z]/g,"").slice(0,6).toUpperCase() || String(areas.length+1).padStart(3,"0");
-    if(!trimmed || areas.find(a=>a.name===trimmed)) return;
-    setAreas(prev=>[...prev, {name:trimmed, code}]); setNewArea(""); setNewCode("");
+    if(!trimmed || areas.includes(trimmed)) return;
+    setAreas(prev=>[...prev, trimmed]); setNewArea("");
   };
-  const removeArea = (name) => setAreas(prev=>prev.filter(a=>a.name!==name));
-  const updateAreaCode = (idx, code) => setAreas(prev=>prev.map((a,i)=>i===idx?{...a,code:code.replace(/[^A-Z0-9a-z]/g,"").slice(0,6).toUpperCase()}:a));
-  const updateAreaName = (idx, name) => setAreas(prev=>prev.map((a,i)=>i===idx?{...a,name}:a));
+  const removeArea = (a) => setAreas(prev=>prev.filter(x=>x!==a));
   const moveArea = (idx, dir) => {
     const next = [...areas]; const swap = idx+dir;
     if(swap<0||swap>=next.length) return;
     [next[idx],next[swap]]=[next[swap],next[idx]]; setAreas(next);
   };
+
+  const addDept = () => {
+    const trimmed = newDept.trim();
+    if(!trimmed || depts.includes(trimmed)) return;
+    setDepts(prev=>[...prev, trimmed]); setNewDept("");
+  };
+  const removeDept = (d) => setDepts(prev=>prev.filter(x=>x!==d));
+  const moveDept = (idx, dir) => {
+    const next = [...depts]; const swap = idx+dir;
+    if(swap<0||swap>=next.length) return;
+    [next[idx],next[swap]]=[next[swap],next[idx]]; setDepts(next);
+  };
+
   const save = async() => {
     if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
     setSaving(true);
-    const updates = {
-      car_prefix: prefix.trim().toUpperCase(),
-      audit_areas: JSON.stringify(areas),
-      company_name: companyName.trim(),
-      company_address: address.trim(),
-      company_phone: phone.trim(),
-      company_email: email.trim(),
-      form_prefix: formPrefix.trim().toUpperCase()||"QMS",
-    };
-    if(qmPw.trim()) updates.qm_password = qmPw.trim();
-    await onSave(updates);
+    await onSave({
+      car_prefix:      prefix.trim().toUpperCase(),
+      audit_areas:     JSON.stringify(areas),
+      departments:     JSON.stringify(depts),
+      report_org_name: reportName.trim(),
+      report_address:  reportAddress.trim(),
+      report_phone:    reportPhone.trim(),
+    });
     setSaving(false);
   };
 
-  const iStyle = { width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,boxSizing:"border-box" };
+  const ListEditor = ({ title, subtitle, items, onMove, onRemove, onAdd, newVal, setNewVal, placeholder }) => (
+    <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+      <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>{title}</div>
+      <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>{subtitle}</div>
+      <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
+        {items.map((a,i)=>(
+          <div key={a} style={{ display:"flex",alignItems:"center",gap:8,background:"#f5f8fc",borderRadius:8,padding:"8px 12px",border:"1px solid #dde3ea" }}>
+            <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
+              <button onClick={()=>onMove(i,-1)} disabled={i===0} style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▲</button>
+              <button onClick={()=>onMove(i,1)} disabled={i===items.length-1} style={{ background:"none",border:"none",cursor:i===items.length-1?"default":"pointer",color:i===items.length-1?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▼</button>
+            </div>
+            <span style={{ flex:1,fontSize:13,color:"#1a2332",fontWeight:500 }}>{a}</span>
+            <button onClick={()=>onRemove(a)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"3px 9px" }}>✕</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:"flex",gap:8 }}>
+        <input value={newVal} onChange={e=>setNewVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onAdd()}
+          style={{ flex:1,padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
+          placeholder={placeholder}/>
+        <button onClick={onAdd} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer" }}>+ Add</button>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ maxWidth:700,display:"flex",flexDirection:"column",gap:28 }}>
-      {/* ── Organisation Profile ── */}
+
+      {/* ── Report Branding ── */}
       <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
-        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Organisation Profile</div>
-        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>This information appears on all generated PDF forms — audit notifications, audit reports and CAR reports.</div>
-        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-          <div>
-            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Company Name</label>
-            <input value={companyName} onChange={e=>setCompanyName(e.target.value)} style={iStyle} placeholder="e.g. Pegasus Flyers (E.A.) Ltd."/>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Report Branding</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>These details appear in all PDF report headers and footers. Leave blank to use the organisation name.</div>
+        <Input label="Organisation Name (for reports)" value={reportName} onChange={e=>setReportName(e.target.value)} placeholder={org?.name||"e.g. East African Air Charters Ltd."} />
+        <Input label="Address / Location" value={reportAddress} onChange={e=>setReportAddress(e.target.value)} placeholder="e.g. P.O Box 45611-00100, Wilson Airport, Nairobi" />
+        <Input label="Phone / Contact" value={reportPhone} onChange={e=>setReportPhone(e.target.value)} placeholder="e.g. +254 20 600 1467" />
+        {/* Live preview */}
+        <div style={{ background:"#f0f4f8",borderRadius:8,padding:"12px 16px",marginTop:4 }}>
+          <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>PDF Header Preview</div>
+          <div style={{ fontFamily:"monospace",fontSize:11,color:"#1a2332" }}>
+            ✈ {reportName||org?.name||"Organisation Name"}&nbsp;&nbsp;|&nbsp;&nbsp;CORRECTIVE ACTION REQUEST
           </div>
-          <div>
-            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Address</label>
-            <input value={address} onChange={e=>setAddress(e.target.value)} style={iStyle} placeholder="e.g. P.O Box 3341-00100, Wilson Airport, Nairobi"/>
-          </div>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-            <div>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Phone</label>
-              <input value={phone} onChange={e=>setPhone(e.target.value)} style={iStyle} placeholder="e.g. +254206001467"/>
-            </div>
-            <div>
-              <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Email</label>
-              <input value={email} onChange={e=>setEmail(e.target.value)} style={iStyle} placeholder="e.g. quality@company.com"/>
-            </div>
-          </div>
-          <div>
-            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Form Number Prefix</label>
-            <input value={formPrefix} onChange={e=>setFormPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))} style={{...iStyle,fontFamily:"monospace",fontWeight:700,letterSpacing:1}} maxLength={6} placeholder="QMS"/>
-            <div style={{ fontSize:11,color:"#8a9ab0",marginTop:6 }}>
-              Forms will be numbered <span style={{ fontFamily:"monospace",fontWeight:700,color:"#01579b" }}>{formPrefix||"QMS"} 002</span> (Notification), <span style={{ fontFamily:"monospace",fontWeight:700,color:"#01579b" }}>{formPrefix||"QMS"} 004</span> (Audit Report)
-            </div>
+          <div style={{ fontFamily:"monospace",fontSize:10,color:"#5f7285",marginTop:4 }}>
+            {reportAddress||"Address not set"}&nbsp;&nbsp;·&nbsp;&nbsp;{reportPhone||"Phone not set"}
           </div>
         </div>
       </div>
+
+      {/* ── CAR Naming ── */}
       <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
         <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>CAR Naming Convention</div>
         <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Set the prefix used to generate CAR and CAPA reference numbers.</div>
         <input value={prefix} onChange={e=>setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6))}
           style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,fontFamily:"monospace",fontWeight:700,letterSpacing:1,boxSizing:"border-box" }}
-          maxLength={6} placeholder="e.g. PGF, KQA, AMO"/>
+          maxLength={6} placeholder="e.g. EAAC, KQA, AMO"/>
         <div style={{ background:"#f0f4f8",borderRadius:8,padding:"12px 16px",marginTop:12 }}>
           <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6 }}>Preview</div>
-          <div style={{ fontFamily:"monospace",fontSize:13,color:"#1a2332" }}>
-            <div>CAR ID: <strong>{prefix||"ORG"}-QMS-001-13032026-CAPA001</strong></div>
+          <div style={{ fontFamily:"monospace",fontSize:12,color:"#1a2332",display:"flex",flexDirection:"column",gap:3 }}>
+            <div>Internal: <strong>{prefix||"ORG"}-INT-13032026-001</strong></div>
+            <div>KCAA: <strong>{prefix||"ORG"}-KCAA-13032026-001</strong></div>
+            <div>Linked: <strong>{prefix||"ORG"}-QMS-007-13032026-CAPA-001</strong></div>
           </div>
         </div>
       </div>
-      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
-        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Schedule Generation Password</div>
-        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Password required to generate the annual audit schedule. Leave blank to keep current password.</div>
-        <input type="password" value={qmPw} onChange={e=>setQmPw(e.target.value)}
-          style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:14,boxSizing:"border-box" }}
-          placeholder="Enter new password (leave blank to keep existing)"/>
-        <div style={{ fontSize:11,color:"#8a9ab0",marginTop:8 }}>
-          Only Quality Managers should know this password. It gates the generation of a new annual audit programme.
-        </div>
-      </div>
-      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
-        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Audit Areas</div>
-        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Customise audit areas and their reference codes. The code appears in all CAR and audit reference numbers.</div>
-        <div style={{ display:"grid",gridTemplateColumns:"auto 1fr 90px auto",gap:"6px 8px",alignItems:"center",marginBottom:6 }}>
-          <div/>
-          <div style={{ fontSize:10,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5,paddingLeft:4 }}>Area Name</div>
-          <div style={{ fontSize:10,fontWeight:700,color:"#8a9ab0",textTransform:"uppercase",letterSpacing:0.5 }}>Code</div>
-          <div/>
-        </div>
-        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
-          {areas.map((a,i)=>(
-            <div key={i} style={{ display:"grid",gridTemplateColumns:"auto 1fr 90px auto",gap:8,alignItems:"center",background:"#f5f8fc",borderRadius:8,padding:"6px 10px",border:"1px solid #dde3ea" }}>
-              <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
-                <button onClick={()=>moveArea(i,-1)} disabled={i===0} style={{ background:"none",border:"none",cursor:i===0?"default":"pointer",color:i===0?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▲</button>
-                <button onClick={()=>moveArea(i,1)} disabled={i===areas.length-1} style={{ background:"none",border:"none",cursor:i===areas.length-1?"default":"pointer",color:i===areas.length-1?"#ccc":"#5f7285",fontSize:10,padding:0,lineHeight:1 }}>▼</button>
-              </div>
-              <input value={a.name} onChange={e=>updateAreaName(i,e.target.value)}
-                style={{ padding:"6px 10px",border:"1.5px solid #dde3ea",borderRadius:7,fontSize:13,fontWeight:500,background:"#fff" }}/>
-              <input value={a.code} onChange={e=>updateAreaCode(i,e.target.value)}
-                style={{ padding:"6px 10px",border:"1.5px solid #dde3ea",borderRadius:7,fontSize:13,fontFamily:"monospace",fontWeight:700,textAlign:"center",background:"#fff",letterSpacing:1 }}
-                placeholder="001" maxLength={6}/>
-              <button onClick={()=>removeArea(a.name)} style={{ background:"#ffebee",border:"none",borderRadius:6,color:"#c62828",fontWeight:700,fontSize:12,cursor:"pointer",padding:"5px 10px" }}>✕</button>
-            </div>
-          ))}
-        </div>
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 90px auto",gap:8,alignItems:"center" }}>
-          <input value={newArea} onChange={e=>setNewArea(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addArea()}
-            style={{ padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13 }}
-            placeholder="New area name…"/>
-          <input value={newCode} onChange={e=>setNewCode(e.target.value.replace(/[^A-Z0-9a-z]/g,"").slice(0,6).toUpperCase())} onKeyDown={e=>e.key==="Enter"&&addArea()}
-            style={{ padding:"9px 12px",border:"1.5px solid #dde3ea",borderRadius:8,fontSize:13,fontFamily:"monospace",fontWeight:700,textAlign:"center",letterSpacing:1 }}
-            placeholder="Code" maxLength={6}/>
-          <button onClick={addArea} style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap" }}>+ Add</button>
-        </div>
-        <div style={{ fontSize:11,color:"#8a9ab0",marginTop:10 }}>
-          Code is a 3-digit number used in reference IDs e.g. <span style={{ fontFamily:"monospace",fontWeight:700 }}>{prefix||"ORG"}-QMS-<span style={{ color:"#01579b" }}>004</span>-01012026</span>. Each code must be unique across areas.
-        </div>
-      </div>
-      <div style={{ background:"#e3f2fd",borderRadius:10,padding:"14px 18px",border:"1px solid #90caf9",fontSize:12,color:"#01579b",lineHeight:1.6 }}>
-        <strong>ℹ️ After saving audit areas:</strong> Go to the <strong>Audits</strong> module and use <strong>Generate Schedule</strong> to create slots for the new areas. Saving here only updates the template — it does not create schedule rows automatically.
-      </div>
+
+      {/* ── Departments ── */}
+      <ListEditor
+        title="Departments"
+        subtitle="Used in the CAR 'Department' dropdown. Customise to match your organisational structure."
+        items={depts}
+        onMove={moveDept}
+        onRemove={removeDept}
+        onAdd={addDept}
+        newVal={newDept}
+        setNewVal={setNewDept}
+        placeholder="Add department…"
+      />
+
+      {/* ── Audit Areas ── */}
+      <ListEditor
+        title="Audit Areas"
+        subtitle="Used in the audit schedule grid and audit CAR linking. Separate from departments."
+        items={areas}
+        onMove={moveArea}
+        onRemove={removeArea}
+        onAdd={addArea}
+        newVal={newArea}
+        setNewVal={setNewArea}
+        placeholder="Add audit area…"
+      />
+
       <div style={{ display:"flex",justifyContent:"flex-end" }}>
         <button onClick={save} disabled={saving}
           style={{ background:"#01579b",color:"#fff",border:"none",borderRadius:8,padding:"12px 32px",fontWeight:700,fontSize:14,cursor:saving?"wait":"pointer",opacity:saving?0.7:1 }}>
@@ -7478,9 +8028,7 @@ export default function App() {
         setShowPasswordReset(true);
         setShowLogin(false);
         setLoading(false);
-        // Do NOT clear the hash here — Supabase needs the recovery token
-        // in the URL to establish the session used by updateUser().
-        // The hash is cleared after the password is successfully updated.
+        window.location.hash = "";
         return;
       }
       // Handle email confirmation — user clicked verify link
@@ -7525,63 +8073,35 @@ export default function App() {
 
   const loadAll = useCallback(async()=>{
     if(!user)return;
-
-    // ── Step 1: resolve profile & org identity first ──────────────────
-    const profRes = await supabase.from(TABLES.profiles).select("*").eq("id",user.id).single();
-    const prof = profRes.data;
-    const isSuperAdminMode = prof?.is_super_admin && !loginOrgOverride;
-    const orgIdToLoad = loginOrgOverride || (!isSuperAdminMode ? prof?.org_id : null);
-
-    // ── Step 2: if we have an org, load & validate it first ───────────
-    let currentOrg = null;
-    if(orgIdToLoad){
-      const { data: orgData } = await supabase.from("organisations").select("*").eq("id",orgIdToLoad).single();
-      if(orgData){
-        // Demo expiry check — enforce mid-session, not just at login
-        if(orgData.demo_expires_at && new Date(orgData.demo_expires_at) < new Date()){
-          await supabase.auth.signOut();
-          return; // signOut triggers onAuthStateChange which resets state
-        }
-        currentOrg = orgData;
-        setOrg(orgData);
-      }
-    } else if(isSuperAdminMode){
-      setOrg(null);
-    }
-
-    // ── Step 3: scope all data queries to org_id (defence-in-depth) ───
-    // RLS is the primary guard; these client-side filters are the backstop.
-    const scope = (q) => orgIdToLoad ? q.eq("org_id", orgIdToLoad) : q;
-
-    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,risks,auditSchedule]=await Promise.all([
-      scope(supabase.from(TABLES.cars).select("*")).order("created_at",{ascending:false}),
-      scope(supabase.from(TABLES.caps).select("*")),
-      scope(supabase.from(TABLES.verifications).select("*")),
-      scope(supabase.from(TABLES.documents).select("*")).order("created_at",{ascending:false}),
-      scope(supabase.from(TABLES.flightDocs).select("*")).order("expiry_date",{ascending:true}),
-      scope(supabase.from(TABLES.audits).select("*")).order("date",{ascending:true}),
-      scope(supabase.from(TABLES.contractors).select("*")).order("name",{ascending:true}),
-      scope(supabase.from(TABLES.changeLog).select("*")).order("created_at",{ascending:false}).limit(200),
-      scope(supabase.from(TABLES.managers).select("*")).order("id"),
-      scope(supabase.from(TABLES.risks).select("*")).order("created_at",{ascending:false}),
-      scope(supabase.from("audit_schedule").select("*")).order("year",{ascending:false}),
+    const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,prof,risks,auditSchedule]=await Promise.all([
+      supabase.from(TABLES.cars).select("*").order("created_at",{ascending:false}),
+      supabase.from(TABLES.caps).select("*"),
+      supabase.from(TABLES.verifications).select("*"),
+      supabase.from(TABLES.documents).select("*").order("created_at",{ascending:false}),
+      supabase.from(TABLES.flightDocs).select("*").order("expiry_date",{ascending:true}),
+      supabase.from(TABLES.audits).select("*").order("date",{ascending:true}),
+      supabase.from(TABLES.contractors).select("*").order("name",{ascending:true}),
+      supabase.from(TABLES.changeLog).select("*").order("created_at",{ascending:false}).limit(200),
+      supabase.from(TABLES.managers).select("*").order("id"),
+      supabase.from(TABLES.profiles).select("*").eq("id",user.id).single(),
+      supabase.from(TABLES.risks).select("*").order("created_at",{ascending:false}),
+      supabase.from("audit_schedule").select("*").order("year",{ascending:false}),
     ]);
-
-    // ── Step 4: auto-mark overdue CARs ────────────────────────────────
+    // Auto-mark overdue CARs — any non-closed CAR past due date becomes Overdue
     const OVERDUE_ELIGIBLE = ["Open","In Progress"];
-    const todayD = new Date(); todayD.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0,0,0,0);
     const processedCars = (cars.data||[]).map(c => {
-      if(!OVERDUE_ELIGIBLE.includes(c.status)) return c;
+      if(!OVERDUE_ELIGIBLE.includes(c.status)) return c; // only Open/In Progress can become Overdue
       if(!c.due_date) return c;
       const due = new Date(c.due_date); due.setHours(0,0,0,0);
-      if(due < todayD) {
+      if(due < today) {
         supabase.from(TABLES.cars).update({status:"Overdue",updated_at:new Date().toISOString()}).eq("id",c.id).then(()=>{});
         return {...c, status:"Overdue"};
       }
       return c;
     });
 
-    // ── Step 5: batch all state updates ───────────────────────────────
+    // Batch all state updates together to prevent intermediate empty renders
     flushSync(()=>{
       setData({
         cars:processedCars,caps:caps.data||[],verifications:verifs.data||[],auditSchedule:auditSchedule.data||[],
@@ -7590,13 +8110,22 @@ export default function App() {
         risks:risks.data||[],
       });
       setManagers(mgrs.data||[]);
-      setProfile(prof);
-      setIsSuperAdmin(prof?.is_super_admin||false);
+      setProfile(prof.data);
+      setIsSuperAdmin(prof.data?.is_super_admin||false);
       setLoading(false);
     });
-
-    // ── Step 6: super admin supplemental loads ────────────────────────
-    if(prof?.is_super_admin){
+    // Load org details — use login override if provided, otherwise use profile org_id
+    // If super admin logged in without an org override, don't load an org (stay in platform mode)
+    const isSuperAdminMode = prof.data?.is_super_admin && !loginOrgOverride;
+    const orgIdToLoad = loginOrgOverride || (!isSuperAdminMode ? prof.data?.org_id : null);
+    if(orgIdToLoad){
+      supabase.from("organisations").select("*").eq("id",orgIdToLoad).single()
+        .then(({data})=>{ if(data) setOrg(data); });
+    } else if(isSuperAdminMode){
+      setOrg(null); // clear org so sidebar shows platform mode
+    }
+    // Super admin: load all orgs and all users
+    if(prof.data?.is_super_admin){
       supabase.from("organisations").select("*").order("name")
         .then(({data})=>{ if(data) setOrgs(data); });
       supabase.from(TABLES.profiles).select("*").order("created_at",{ascending:false})
@@ -7606,21 +8135,13 @@ export default function App() {
 
   useEffect(()=>{ loadAll(); },[loadAll]);
 
-  // Clear stale data immediately when org context changes — prevents cross-org bleed-through
-  useEffect(()=>{
-    setData({cars:[],caps:[],verifications:[],documents:[],flightDocs:[],audits:[],contractors:[],changeLog:[],risks:[],auditSchedule:[]});
-  },[loginOrgOverride]);
-
   useEffect(()=>{
     if(!user||loading)return;
-    // Debounce: rapid successive changes fire only one reload
-    let debounceTimer = null;
-    const debouncedLoad = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(()=>loadAll(), 300); };
     const tables=["cars","caps","capa_verifications","documents","flight_school_docs","audits","contractors","change_log","risk_register","audit_schedule"];
     subs.current=tables.map(t=>
-      supabase.channel(`rt-${t}`).on("postgres_changes",{event:"*",schema:"public",table:t},debouncedLoad).subscribe()
+      supabase.channel(`rt-${t}`).on("postgres_changes",{event:"*",schema:"public",table:t},()=>loadAll()).subscribe()
     );
-    return()=>{ clearTimeout(debounceTimer); subs.current.forEach(s=>s.unsubscribe()); };
+    return()=>{subs.current.forEach(s=>s.unsubscribe());};
   },[user,loading,loadAll]);
 
   const isAdmin  = profile?.role==="admin" || isSuperAdmin;
@@ -7726,24 +8247,11 @@ export default function App() {
                 if(!slug) return;
                 const { data: orgData } = await supabase.from("organisations").select("*").eq("slug", slug.trim().toUpperCase()).single();
                 if(!orgData){ alert("Organisation not found. Check the ID and try again."); return; }
-                // Super admin must be an approved member of the org — no bypass
-                const { data: sessionData } = await supabase.auth.getSession();
-                const userId = sessionData?.session?.user?.id;
-                const { data: prof } = await supabase.from("profiles").select("org_id,status").eq("id", userId).single();
-                const isPrimary = prof?.org_id === orgData.id && prof?.status === "approved";
-                if(!isPrimary){
-                  const { data: junction } = await supabase.from("user_organisations")
-                    .select("status").eq("user_id", userId).eq("org_id", orgData.id).single();
-                  if(!junction || junction.status !== "approved"){
-                    alert("You are not an approved member of this organisation. The org admin must add and approve your account first.");
-                    return;
-                  }
-                }
                 setLoginOrgOverride(orgData.id);
                 setOrg(orgData);
               }}
               style={{ background:"#1a3a5c", border:"1px solid #2a5a8c", borderRadius:7, padding:"6px 14px", color:"#90b4d4", fontSize:12, cursor:"pointer" }}
-              title="Enter an org ID to view as org user (must be an approved member)">
+              title="Enter an org ID to view as org user">
               🏢 Enter Org
             </button>
             <button
@@ -7792,6 +8300,16 @@ export default function App() {
       </div>
       <nav style={{ flex:1, padding:"10px 8px", overflowY:"auto" }}>
         <div className="sidebar-section-label" style={{ fontSize:9, color:T.light, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Main</div>
+        {isSuperAdmin&&(
+          <div>
+            <div className="sidebar-section-label" style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"6px 8px 4px", marginBottom:2 }}>Super Admin</div>
+            <button className={`nav-item${activeTab==="superadmin"?" active":""}`} onClick={()=>{ setTab("superadmin"); onNav&&onNav(); }}
+              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:activeTab==="superadmin"?T.red:T.muted,fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:4,transition:"all 0.15s" }}>
+              <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
+              <span className="sidebar-label">Organisations</span>
+            </button>
+          </div>
+        )}
         {TABS.filter(t=>t.group==="main").map(t=>{
           const cnt=counts[t.id]; const active=activeTab===t.id;
           return (
@@ -7814,17 +8332,6 @@ export default function App() {
             </button>
           );
         })}
-        {/* Super admin: platform portal link — only shown when viewing an org */}
-        {isSuperAdmin&&org&&(
-          <>
-            <div className="sidebar-section-label" style={{ fontSize:9, color:"#c62828", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", padding:"14px 8px 4px", marginBottom:2 }}>Platform</div>
-            <button onClick={()=>{ setLoginOrgOverride(null); setOrg(null); setTab("superadmin"); onNav&&onNav(); }}
-              style={{ width:"100%",textAlign:"left",background:"transparent",border:"none",borderLeft:"3px solid transparent",borderRadius:"0 7px 7px 0",padding:"9px 12px",color:"#c62828",fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:9,marginBottom:1,transition:"all 0.15s",cursor:"pointer" }}>
-              <span style={{ fontSize:15,width:20,textAlign:"center" }}>⚡</span>
-              <span className="sidebar-label">Platform Portal</span>
-            </button>
-          </>
-        )}
       </nav>
       <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}` }}>
         <div className="sidebar-user-info" style={{ display:"flex",alignItems:"center",gap:9,marginBottom:10 }}>
@@ -7934,22 +8441,18 @@ export default function App() {
 
           {activeTab==="dashboard" && <Dashboard data={data}/>}
           {activeTab==="cars" && <CARsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
-          {activeTab==="documents" && <GenericPage title="Document Register" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="flightdocs" && <GenericPage title="Certificates & Approvals" subtitle="Certificates and Approvals" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Certificate / Approval" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="audits" && org && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
+          {activeTab==="documents" && <GenericPage title="Documents" subtitle="QMS documents with revision control" table="documents" columns={DOC_COLS} modalFields={DOC_FIELDS} modalTitle="Document" modalDefaults={{status:"Draft",rev:"Rev 1",date:today()}} data={data} canEdit={canEdit} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="flightdocs" && <GenericPage title="Company Documents" subtitle="Approvals, certificates, permits and regulatory documents" table="flight_school_docs" columns={FLIGHT_DOC_COLS} modalFields={FLIGHT_DOC_FIELDS} modalTitle="Company Document" modalDefaults={{status:"Valid",issue_date:today()}} data={{flight_school_docs:data.flightDocs}} canEdit={isQM} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
+          {activeTab==="audits" && <AuditsView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
           {activeTab==="contractors" && <GenericPage title="Contractors" subtitle="Approved contractor register" table="contractors" columns={CONTRACTOR_COLS} modalFields={CONTRACTOR_FIELDS} modalTitle="Contractor" modalDefaults={{status:"Approved",rating:"A"}} data={data} canEdit={isAdmin} canDelete={isAdmin} user={user} profile={profile} onRefresh={loadAll} showToast={showToast}/>}
-          {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast} org={org}/>}
+          {activeTab==="risks"    && <RiskRegisterView data={data} user={user} profile={profile} managers={managers} onRefresh={loadAll} showToast={showToast}/>}
           {activeTab==="rca"      && <RCAView data={data} user={user} profile={profile}/>}
-          {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin} user={user}/>}
+          {activeTab==="managers" && <ManagersPage managers={managers} onRefresh={loadAll} showToast={showToast} isAdmin={isAdmin}/>}
           {activeTab==="users" && isAdmin && <OrgUsersPage org={org} user={user} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="profile" && <ProfilePage user={user} profile={profile} showToast={showToast} onRefresh={loadAll}/>}
           {activeTab==="orgsettings" && isAdmin && <OrgSettingsPage org={org} onSave={async(updates)=>{
             const{error}=await supabase.from("organisations").update(updates).eq("id",org.id);
             if(error){showToast("Error saving settings: "+error.message,"error");return;}
-            await logChange({user,action:"updated org settings",table:"organisations",recordId:org.id,recordTitle:org.name,newData:updates});
-            // Merge updates into org state. Do NOT call loadAll() here — it races
-            // against this optimistic update and overwrites it with stale DB data.
-            // The updated org will be picked up correctly on next full page load.
             setOrg(prev=>({...prev,...updates}));
             showToast("Organisation settings saved","success");
           }} />}
