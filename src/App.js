@@ -3754,7 +3754,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
             {filtered.length===0
               ? <tr><td colSpan={9} style={{ padding:32, textAlign:"center", color:T.muted }}>No CARs found</td></tr>
               : filtered.map(c=>{
-                const od=isOverdue(c.due_date)&&!["Closed","Completed","Pending Verification","Pending Acceptance","Submitted","Accepted","Follow-up Pending","Overdue"].includes(c.status);
+                const od=isOverdue(c.due_date)&&["Open","Returned for Resubmission"].includes(c.status);
                 const cap=getCAP(c.id); const verif=getVerif(c.id);
                 // Detect external: source field (preferred), fallback to ref/cycles columns,
                 // final fallback: ID pattern (catches pre-migration KCAA CARs like KCAA/FOPS/SURV/...)
@@ -3765,8 +3765,13 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
                 return (
                   <tr key={c.id} className="row-hover" style={{ borderBottom:`1px solid ${T.border}`, background:od&&c.status!=="Closed"?"#fff8f8":"" }}>
                     <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
-                      <div style={{ fontFamily:"'Source Code Pro',monospace", color:T.primary, fontSize:11, fontWeight:600 }}>{c.id}</div>
-                      {c.external_ref && <div style={{ fontSize:10,color:"#8a9ab0",marginTop:2,fontFamily:"monospace" }}>Ext: {c.external_ref}</div>}
+                      {extCar && c.external_ref ? (<>
+                        <div style={{ fontFamily:"'Source Code Pro',monospace", color:T.primary, fontSize:11, fontWeight:700 }}>{c.external_ref}</div>
+                        <div style={{ fontSize:10,color:"#8a9ab0",marginTop:2,fontFamily:"monospace" }}>{c.id}</div>
+                      </>) : (<>
+                        <div style={{ fontFamily:"'Source Code Pro',monospace", color:T.primary, fontSize:11, fontWeight:600 }}>{c.id}</div>
+                        {c.external_ref && <div style={{ fontSize:10,color:"#8a9ab0",marginTop:2,fontFamily:"monospace" }}>Ext: {c.external_ref}</div>}
+                      </>)}
                     </td>
                     <td style={{ padding:"10px 14px", maxWidth:140 }}>
                       {extCar
@@ -8266,15 +8271,11 @@ export default function App() {
     ]);
 
     // Auto-mark overdue CARs (fire-and-forget, no await)
-    // Statuses where the CAR is at a milestone or complete — never auto-mark these as Overdue.
-    // "Returned for Resubmission" gets a fresh due_date set in saveVerification (+14 days),
-    // so the normal date comparison handles it correctly.
-    const NON_OVERDUE_STATUSES = new Set([
-      "Closed","Completed","Pending Verification","Pending Acceptance",
-      "Submitted","Accepted","Follow-up Pending","Overdue",
-    ]);
+    // Only Open and Returned for Resubmission are overdue-eligible.
+    // Every other status means work is in-flight or complete — never auto-mark those.
+    const OVERDUE_ELIGIBLE = new Set(["Open","Returned for Resubmission"]);
     const processedCars = (cars.data||[]).map(c => {
-      if(NON_OVERDUE_STATUSES.has(c.status)||!c.due_date) return c;
+      if(!OVERDUE_ELIGIBLE.has(c.status)||!c.due_date) return c;
       const due = new Date(c.due_date); due.setHours(0,0,0,0);
       if(due < today){
         supabase.from(TABLES.cars).update({status:"Overdue",updated_at:new Date().toISOString()}).eq("id",c.id).then(()=>{});
@@ -8325,9 +8326,8 @@ export default function App() {
   const isQM     = ["admin","quality_manager"].includes(profile?.role) || isSuperAdmin;
   const canEdit  = ["admin","quality_manager","quality_auditor","manager"].includes(profile?.role) || isSuperAdmin;
 
-  const CAR_NON_OVERDUE = ["Closed","Completed","Pending Verification","Pending Acceptance","Submitted","Accepted","Follow-up Pending","Overdue"];
   const alertItems = [
-    ...data.cars.filter(c=>!CAR_NON_OVERDUE.includes(c.status)&&(isOverdue(c.due_date)||isApproaching(c.due_date))).map(c=>({id:c.id,due:c.due_date})),
+    ...data.cars.filter(c=>["Open","Returned for Resubmission"].includes(c.status)&&(isOverdue(c.due_date)||isApproaching(c.due_date))).map(c=>({id:c.id,due:c.due_date})),
     ...data.flightDocs.filter(d=>!["Expired","Approved"].includes(d.status)&&(isOverdue(d.expiry_date)||isApproaching(d.expiry_date))).map(d=>({id:d.id,due:d.expiry_date})),
     ...data.audits.filter(a=>a.status==="Scheduled"&&isOverdue(a.date)).map(a=>({id:a.id,due:a.date})),
     ...(data.risks||[]).filter(r=>!["Closed","Monitoring"].includes(r.status)&&isOverdue(r.target_date)).map(r=>({id:r.id,due:r.target_date})),
