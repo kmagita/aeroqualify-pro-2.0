@@ -3050,7 +3050,14 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const payload={...form,id:verifId,verified_by:user.id,verified_by_name:profile?.full_name||user.email,verified_at:new Date().toISOString()};
     const{error}=await supabase.from(TABLES.verifications).insert(payload);
     if(error){showToast(`Error: ${error.message}`,"error");return;}
-    await supabase.from(TABLES.cars).update({status:carStatus,updated_at:new Date().toISOString()}).eq("id",selected.id);
+    // When returning for resubmission, restart the due-date counter: today + 14 days
+    const carUpdate = {status:carStatus,updated_at:new Date().toISOString()};
+    if(carStatus==="Returned for Resubmission"){
+      const newDue = new Date();
+      newDue.setDate(newDue.getDate()+14);
+      carUpdate.due_date = newDue.toISOString().slice(0,10);
+    }
+    await supabase.from(TABLES.cars).update(carUpdate).eq("id",selected.id);
     const rm=managers.find(m=>m.role_title===selected.responsible_manager);
     await logChange({user,action:"verified CAPA",table:"capa_verifications",recordId:form.id,recordTitle:selected.id,newData:form});
     const toastMsg = form.effectiveness_rating==="Not Effective"
@@ -3747,7 +3754,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
             {filtered.length===0
               ? <tr><td colSpan={9} style={{ padding:32, textAlign:"center", color:T.muted }}>No CARs found</td></tr>
               : filtered.map(c=>{
-                const od=isOverdue(c.due_date)&&!["Closed","Completed"].includes(c.status);
+                const od=isOverdue(c.due_date)&&!["Closed","Completed","Pending Verification","Pending Acceptance","Submitted","Accepted","Follow-up Pending","Overdue"].includes(c.status);
                 const cap=getCAP(c.id); const verif=getVerif(c.id);
                 // Detect external: source field (preferred), fallback to ref/cycles columns,
                 // final fallback: ID pattern (catches pre-migration KCAA CARs like KCAA/FOPS/SURV/...)
@@ -8242,7 +8249,7 @@ export default function App() {
     // content that can be many MB per record. It is fetched on-demand in generateReport.
     const q = (tbl) => supabase.from(tbl).select("*").eq("org_id",orgId);
     const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,risks,auditSchedule,orgResult] = await Promise.all([
-      q(TABLES.cars).order("created_at",{ascending:false}),
+      q(TABLES.cars).order("date_raised",{ascending:false}),
       supabase.from(TABLES.caps)
         .select("id,car_id,org_id,status,immediate_action,root_cause_analysis,corrective_action,preventive_action,target_date,submitted_at,submitted_by,submitted_by_name,evidence_filename,evidence_url,updated_at,risk_score,risk_label,linked_risk_id")
         .eq("org_id",orgId),
@@ -8259,10 +8266,15 @@ export default function App() {
     ]);
 
     // Auto-mark overdue CARs (fire-and-forget, no await)
-    const today = new Date(); today.setHours(0,0,0,0);
-    const OVERDUE_ELIGIBLE = ["Open","In Progress"];
+    // Statuses where the CAR is at a milestone or complete — never auto-mark these as Overdue.
+    // "Returned for Resubmission" gets a fresh due_date set in saveVerification (+14 days),
+    // so the normal date comparison handles it correctly.
+    const NON_OVERDUE_STATUSES = new Set([
+      "Closed","Completed","Pending Verification","Pending Acceptance",
+      "Submitted","Accepted","Follow-up Pending","Overdue",
+    ]);
     const processedCars = (cars.data||[]).map(c => {
-      if(!OVERDUE_ELIGIBLE.includes(c.status)||!c.due_date) return c;
+      if(NON_OVERDUE_STATUSES.has(c.status)||!c.due_date) return c;
       const due = new Date(c.due_date); due.setHours(0,0,0,0);
       if(due < today){
         supabase.from(TABLES.cars).update({status:"Overdue",updated_at:new Date().toISOString()}).eq("id",c.id).then(()=>{});
@@ -8313,8 +8325,9 @@ export default function App() {
   const isQM     = ["admin","quality_manager"].includes(profile?.role) || isSuperAdmin;
   const canEdit  = ["admin","quality_manager","quality_auditor","manager"].includes(profile?.role) || isSuperAdmin;
 
+  const CAR_NON_OVERDUE = ["Closed","Completed","Pending Verification","Pending Acceptance","Submitted","Accepted","Follow-up Pending","Overdue"];
   const alertItems = [
-    ...data.cars.filter(c=>!["Closed","Completed"].includes(c.status)&&(isOverdue(c.due_date)||isApproaching(c.due_date))).map(c=>({id:c.id,due:c.due_date})),
+    ...data.cars.filter(c=>!CAR_NON_OVERDUE.includes(c.status)&&(isOverdue(c.due_date)||isApproaching(c.due_date))).map(c=>({id:c.id,due:c.due_date})),
     ...data.flightDocs.filter(d=>!["Expired","Approved"].includes(d.status)&&(isOverdue(d.expiry_date)||isApproaching(d.expiry_date))).map(d=>({id:d.id,due:d.expiry_date})),
     ...data.audits.filter(a=>a.status==="Scheduled"&&isOverdue(a.date)).map(a=>({id:a.id,due:a.date})),
     ...(data.risks||[]).filter(r=>!["Closed","Monitoring"].includes(r.status)&&isOverdue(r.target_date)).map(r=>({id:r.id,due:r.target_date})),
