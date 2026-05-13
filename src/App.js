@@ -2223,7 +2223,10 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose, 
         <div style={{ background:`linear-gradient(135deg,#01579b,#0277bd)`,padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
           <div>
             <div style={{ fontFamily:"'Source Code Pro',monospace",color:"rgba(255,255,255,0.7)",fontSize:11 }}>CAPA PROGRESS REPORT</div>
-            <div style={{ fontFamily:"'Oxanium',sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:0.5 }}>{car.id}</div>
+            <div style={{ fontFamily:"'Oxanium',sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:0.5 }}>
+              {car.external_ref || car.id}
+            </div>
+            {car.external_ref && <div style={{ fontFamily:"'Source Code Pro',monospace",color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:2 }}>{car.id}</div>}
           </div>
           <div style={{ display:"flex",gap:10,alignItems:"center" }}>
             <Btn size="sm" onClick={onPDF} style={{ background:"rgba(255,255,255,0.15)",color:"#fff",border:"1px solid rgba(255,255,255,0.3)" }}>📄 Export PDF</Btn>
@@ -2309,7 +2312,8 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose, 
               <div style={{ fontSize:13,color:T.text,lineHeight:1.6,fontFamily:"'Source Code Pro',monospace" }}>{car.qms_clause||"—"}</div>
             </div>
             {[
-              ["CAR Number",car.id,true],["Date Raised",fmt(car.date_raised),false],
+              ...(car.external_ref ? [["External Reference",car.external_ref,true],["System ID",car.id,true]] : [["CAR Number",car.id,true]]),
+              ["Date Raised",fmt(car.date_raised),false],
               ["Severity",null,false,car.severity],["Status",null,false,car.status],
               ["Department",car.department,false],["Due Date",fmt(car.due_date),false],
               ["Responsible Manager",car.responsible_manager,false],["Raised By",car.raised_by_name,false],
@@ -3099,6 +3103,10 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const W=210; const margin=14; const col=W-margin*2;
 
+    // For external CARs, the external reference is the primary identifier
+    const carDisplayId = car.external_ref || car.id;
+    const carSubId     = car.external_ref ? car.id : null;
+
     // ── helpers ──
     const LINE_H=4.5; // line height for 9pt text
     const LABEL_SZ=6.5; const BODY_SZ=9;
@@ -3186,7 +3194,8 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     // ── CAR Header bar ──
     doc.setFillColor(0,60,113); doc.rect(margin,y,col,10,"F");
     doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
-    doc.text("CAR: "+car.id,margin+4,y+7);
+    doc.text("CAR: "+carDisplayId,margin+4,y+7);
+    if(carSubId){ doc.setFontSize(7); doc.setTextColor(200,220,240); doc.text(carSubId,margin+4,y+12); }
     // status pill — right aligned, text only (avoid roundedRect encoding issues)
     const sc={Open:[198,40,40],"In Progress":[230,81,0],"Pending Verification":[69,39,160],Closed:[46,125,50],Overdue:[198,40,40],"Returned for Resubmission":[183,28,28]};
     const sCol=sc[car.status]||[95,114,133];
@@ -3267,7 +3276,8 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     y=sectionTitle("SECTION 1 — CORRECTIVE ACTION REQUEST (CAR)",y);
     y=needPage(y,estBoxH(car.finding_description,col)); y=box("Description of Finding",car.finding_description,margin,y,col);
     y=needPage(y,estBoxH(car.qms_clause,col));          y=box("QMS Clause Reference",car.qms_clause,margin,y,col);
-    y=needPage(y,14); y=boxRow([["CAR Number",car.id],["Date Raised",fmt(car.date_raised)]],margin,y,col);
+    y=needPage(y,14); y=boxRow([[car.external_ref?"External Reference":"CAR Number",carDisplayId],[car.external_ref?"System ID":"Date Raised",car.external_ref?carSubId:fmt(car.date_raised)]],margin,y,col);
+    if(car.external_ref) y=boxRow([["Date Raised",fmt(car.date_raised)],["Source",car.source||"External"]],margin,y,col);
     y=needPage(y,14); y=boxRow([["Severity",car.severity],["Status",car.status]],margin,y,col);
     y=needPage(y,14); y=boxRow([["Department",car.department],["Due Date",fmt(car.due_date)]],margin,y,col);
     y=needPage(y,14); y=boxRow([["Responsible Manager",car.responsible_manager],["Raised By",car.raised_by_name]],margin,y,col);
@@ -3472,7 +3482,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
           doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(200,210,220);
           doc.text(evFile.name,W-margin,8,{align:"right"});
           doc.setFontSize(7); doc.setTextColor(160,180,200);
-          doc.text(`CAR: ${car.id}  |  Evidence of Closure`,margin,14);
+          doc.text(`CAR: ${carDisplayId}  |  Evidence of Closure`,margin,14);
           return doc.getNumberOfPages();
         };
 
@@ -3512,7 +3522,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
             }
             window._pdfMergeQueue.push({
               name:evFile.name, bytes,
-              index:fi+1, total:pdfEvidenceFiles.length, carId:car.id
+              index:fi+1, total:pdfEvidenceFiles.length, carId:carDisplayId
             });
           } catch(e){
             // Fallback: reference page with note
@@ -3549,7 +3559,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
           doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(55,71,79);
           doc.text("File Type:",margin+4,50); doc.setFont("helvetica","bold"); doc.text(ext.toUpperCase()+" Document",margin+40,50);
           doc.setFont("helvetica","normal");
-          doc.text("Evidence For:",margin+4,60); doc.setFont("helvetica","bold"); doc.text("CAR: "+car.id,margin+40,60);
+          doc.text("Evidence For:",margin+4,60); doc.setFont("helvetica","bold"); doc.text("CAR: "+carDisplayId,margin+40,60);
           doc.setFont("helvetica","normal");
           doc.text("Submission:",margin+4,70); doc.setFont("helvetica","bold");
           const capForFile=allCapsForCar.find(c=>{
@@ -3681,7 +3691,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
 
         const merged=await mainPdf.save();
         const url=URL.createObjectURL(new Blob([merged],{type:"application/pdf"}));
-        const a=document.createElement("a"); a.href=url; a.download=`CAPA-Report-${car.id}.pdf`;
+        const a=document.createElement("a"); a.href=url; a.download=`CAPA-Report-${carDisplayId.replace(/[/\\:*?"<>|]/g,"-")}.pdf`;
         a.click(); URL.revokeObjectURL(url);
         showToast("PDF report with all evidence generated","success");
         return;
@@ -3692,7 +3702,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       }
     }
 
-    doc.save(`CAPA-Report-${car.id}.pdf`);
+    doc.save(`CAPA-Report-${carDisplayId.replace(/[/\\:*?"<>|]/g,"-")}.pdf`);
     showToast("PDF report generated","success");
   };
 
