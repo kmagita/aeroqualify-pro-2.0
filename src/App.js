@@ -6164,22 +6164,6 @@ const ADHOC_TRIGGERS = [
   "Other",
 ];
 
-// ─── Org colour scheme helpers ───────────────────────────────
-const COLOR_PRESETS = [
-  { name:"Crimson & Gold",    primary:"#7A1E2C", secondary:"#B89320" },
-  { name:"Ocean Blue",        primary:"#01295E", secondary:"#0277BD" },
-  { name:"Deep Navy & Gold",  primary:"#0A1628", secondary:"#C9973A" },
-  { name:"Forest Green",      primary:"#1A3D2B", secondary:"#2D7A4F" },
-  { name:"Slate & Steel",     primary:"#1E293B", secondary:"#475569" },
-  { name:"Dark Teal",         primary:"#0D3D45", secondary:"#0E7490" },
-];
-const hexToRgb = (hex, fallback=[1,45,90]) => {
-  if(!hex) return fallback;
-  const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
-  return r?[parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)]:fallback;
-};
-const lightenRgb = (rgb, f=0.88) => rgb.map(v=>Math.round(v+(255-v)*f));
-
 // ── EAAC-style jsPDF header & section helpers ─────────────────
 // drawDocHeader — 3-cell bordered header matching the EAAC document library format.
 // Logo | Title + subtitle | Meta rows with horizontal dividers.
