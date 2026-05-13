@@ -3754,7 +3754,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
                 const extCar = isExternalSource(c.source)
                   || !!c.external_ref
                   || !!c.external_cycles
-                  || (typeof c.id==="string" && /^KCAA[/\-]|[/\-]KCAA[/\-]|-KCAA-|-EXT-/i.test(c.id));
+                  || (typeof c.id==="string" && /^KCAA[/-]|[/-]KCAA[/-]|-KCAA-|-EXT-/i.test(c.id));
                 return (
                   <tr key={c.id} className="row-hover" style={{ borderBottom:`1px solid ${T.border}`, background:od&&c.status!=="Closed"?"#fff8f8":"" }}>
                     <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
@@ -3820,7 +3820,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       {modal==="verify"&&selected&&<VerificationModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} onSave={saveVerification} onClose={()=>setModal(null)} />}
       {modal==="detail"&&selected&&<CAPADetailModal car={selected} cap={getCAP(selected.id)} verif={getVerif(selected.id)} allCaps={getAllCAPs(selected.id)} allVerifs={getAllVerifs(selected.id)} onPDF={()=>generateReport(selected)} onClose={()=>setModal(null)} org={org}/>}
       {modal==="external"&&selected&&<ExternalResponseModal car={selected} onSave={saveExternalResponse} onClose={()=>setModal(null)} profile={profile} user={user}/>}
-      {modal==="status"&&selected&&<QuickStatusModal car={selected} isExt={isExternalSource(selected.source)||!!selected.external_ref||!!selected.external_cycles||(typeof selected.id==="string"&&/^KCAA[/\-]|[/\-]KCAA[/\-]|-KCAA-|-EXT-/i.test(selected.id))} onSave={saveQuickStatus} onClose={()=>setModal(null)}/>}
+      {modal==="status"&&selected&&<QuickStatusModal car={selected} isExt={isExternalSource(selected.source)||!!selected.external_ref||!!selected.external_cycles||(typeof selected.id==="string"&&/^KCAA[/-]|[/-]KCAA[/-]|-KCAA-|-EXT-/i.test(selected.id))} onSave={saveQuickStatus} onClose={()=>setModal(null)}/>}
     </div>
   );
 };
