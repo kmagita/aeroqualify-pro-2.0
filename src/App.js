@@ -8128,8 +8128,6 @@ const OrgSettingsPage = ({ org, onSave }) => {
   const [secondaryColor,setSecondaryColor]= useState(org?.report_secondary_color || "#0277bd");
   const [reportLogo,    setReportLogo]    = useState(org?.report_logo            || "");
   const [logoLoading,   setLogoLoading]   = useState(false);
-  const [reportLogo,    setReportLogo]    = useState(org?.report_logo            || "");
-  const [logoLoading,   setLogoLoading]   = useState(false);
   const [newArea, setNewArea] = useState("");
   const [newDept, setNewDept] = useState("");
   const [saving,  setSaving]  = useState(false);
