@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 // react-dom flushSync removed — React 18 auto-batches state updates
 import { supabase, TABLES, logChange, sendNotification, SUPABASE_URL, SUPABASE_ANON } from "./supabase";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
@@ -1113,7 +1113,6 @@ const LoginScreen = ({ onLogin, authPopup, setAuthPopup }) => {
         // Resolve org slug if provided
         if(orgSlug.trim()){
           let { data: orgData } = await supabase.from("organisations").select("id,name,status,demo_expires_at").ilike("slug", orgSlug.trim()).single();
-          if(!orgData){ showToast("Organisation not found. Check your organisation code.","error"); setLoading(false); return; }
           if(!orgData){ setErr("Organisation ID not found. Please check and try again."); await supabase.auth.signOut(); setLoading(false); return; }
           if(orgData.status !== "active"){
             // Check if it's a demo expiry
