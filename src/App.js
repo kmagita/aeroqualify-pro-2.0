@@ -3711,22 +3711,76 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const{jsPDF}=await import("jspdf");
     const{default:autoTable}=await import("jspdf-autotable");
     const doc=new jsPDF("landscape");
+    const W=297; const H=210; const M=14;
 
-    doc.setDrawColor(1,87,155); doc.setLineWidth(0.8); doc.line(14,30,270,30);
-    doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(1,87,155);
-    doc.text("CAPA STATUS REPORT",14,38);
-    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(100,100,100);
-    doc.text(`${org?.report_org_name||org?.name||"Organisation"} · `+`Generated: ${new Date().toLocaleDateString("en-GB")}  |  Total CARs: ${data.cars.length}`,14,44);
+    const orgName    = org?.report_org_name||org?.name||"Organisation";
+    const orgAddress = org?.report_address||"";
+    const genDate    = new Date().toLocaleDateString("en-GB");
+    const totalPages = { n:1 }; // updated after render
+
+    // ── Compact header ───────────────────────────────────────────
+    // Navy bar — full width, 18mm tall
+    doc.setFillColor(1,45,90); doc.rect(0,0,W,18,"F");
+
+    // Title — left side
+    doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(255,255,255);
+    doc.text("CAPA STATUS REPORT",M,12);
+
+    // Org name + date — right side
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,200,240);
+    doc.text(orgName,W-M,7,{align:"right"});
+    doc.text(`Generated: ${genDate}  ·  Total CARs: ${data.cars.length}`,W-M,13,{align:"right"});
+
+    // Thin accent line below header
+    doc.setDrawColor(0,120,212); doc.setLineWidth(0.4); doc.line(0,18,W,18);
+
+    // AeroQualify watermark — subtle, below title
+    doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(100,140,180);
+    doc.text("Powered by AeroQualify Pro",M,22);
+    if(orgAddress){ doc.setTextColor(120,120,120); doc.text(orgAddress,W-M,22,{align:"right"}); }
     doc.setTextColor(0,0,0);
-    autoTable(doc,{startY:50,head:[["CAR #","Severity","Status","Department","Raised","Due","Resp. Manager"]],
+
+    // ── Table ───────────────────────────────────────────────────
+    autoTable(doc,{
+      startY: 25,
+      margin: { left:M, right:M, bottom:16 }, // leave room for footer
+      head:[["CAR #","Severity","Status","Department","Date Raised","Due Date","Resp. Manager"]],
       body:data.cars.map(c=>{
         const extCar = isExternalSource(c.source)||!!c.external_ref||!!c.external_cycles||/^KCAA[/-]/i.test(c.id);
         const displayStatus = extCar ? deriveExternalStatus(c) : c.status;
         return [(c.external_ref||c.id),c.severity,displayStatus,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"];
       }),
-      styles:{fontSize:9},headStyles:{fillColor:[1,87,155]},
-      alternateRowStyles:{fillColor:[245,248,252]},
+      styles:{ fontSize:8.5, cellPadding:3, overflow:"ellipsize" },
+      headStyles:{ fillColor:[1,60,120], textColor:255, fontStyle:"bold", fontSize:8.5 },
+      alternateRowStyles:{ fillColor:[245,249,252] },
+      columnStyles:{
+        0:{ cellWidth:60 },   // CAR #
+        1:{ cellWidth:18 },   // Severity
+        2:{ cellWidth:30 },   // Status
+        3:{ cellWidth:28 },   // Department
+        4:{ cellWidth:22 },   // Date Raised
+        5:{ cellWidth:22 },   // Due Date
+        6:{ cellWidth:"auto" }, // Resp. Manager
+      },
+      // ── Per-page footer ──────────────────────────────────────
+      didDrawPage:(hookData)=>{
+        const pg = hookData.pageNumber;
+        const pageCount = doc.internal.getNumberOfPages();
+        const footY = H-6;
+        // Footer line
+        doc.setDrawColor(180,180,180); doc.setLineWidth(0.3); doc.line(M,footY-4,W-M,footY-4);
+        // Left: confidential
+        doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(100,100,100);
+        doc.text(`CONFIDENTIAL  —  ${orgName}`,M,footY);
+        // Centre: AeroQualify
+        doc.setFont("helvetica","normal"); doc.setTextColor(140,140,140);
+        doc.text("AeroQualify Pro · QMS Document",W/2,footY,{align:"center"});
+        // Right: page number
+        doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+        doc.text(`Page ${pg} of ${pageCount}`,W-M,footY,{align:"right"});
+      },
     });
+
     doc.save(`CAPA-Status-Report-${new Date().toISOString().slice(0,10)}.pdf`);
     showToast("Status report generated","success");
   };
