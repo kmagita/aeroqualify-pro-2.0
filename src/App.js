@@ -2182,16 +2182,39 @@ const ModalShell = ({ title, children, onClose, wide }) => (
 );
 
 
+// ─── Colour helpers & org brand presets ──────────────────────
+const hexToRgb = (hex, fallback=[1,45,90]) => {
+  if(!hex) return fallback;
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : fallback;
+};
+const lightenRgb = (rgb, amount=0.88) => rgb.map(v=>Math.round(v+(255-v)*amount));
+const rgbToHex = (rgb) => "#"+rgb.map(v=>v.toString(16).padStart(2,"0")).join("");
+
+const COLOR_PRESETS = [
+  { name:"EAAC Maroon",   primary:"#7F2D33", secondary:"#4A5568", desc:"Maroon + Slate" },
+  { name:"Pegasus Navy",  primary:"#01295E", secondary:"#0277BD", desc:"Deep Navy + Blue" },
+  { name:"Forest",        primary:"#1A3D2B", secondary:"#2D7A4F", desc:"Dark Green + Mid" },
+  { name:"Slate",         primary:"#1E293B", secondary:"#475569", desc:"Charcoal + Steel" },
+  { name:"Teal",          primary:"#0D3D45", secondary:"#0E7490", desc:"Deep Teal + Cyan" },
+  { name:"Burgundy Gold", primary:"#4A1530", secondary:"#B7963E", desc:"Burgundy + Gold" },
+];
+
+// Returns org primary rgb triplet, or AeroQualify default navy
+const orgPrimaryRgb  = (org) => hexToRgb(org?.report_primary_color,  [1,45,90]);
+const orgSecondaryRgb= (org) => hexToRgb(org?.report_secondary_color, [2,119,189]);
+
 // ─── Org Letterhead (replaces hardcoded Pegasus branding) ─────
 const OrgLetterhead = ({ org }) => {
   const name    = org?.report_org_name || org?.name || "Organisation";
   const address = org?.report_address  || "";
   const phone   = org?.report_phone    || "";
+  const primary = org?.report_primary_color || "#01295e";
   return (
-    <div style={{ borderBottom:`2px solid #01579b`, paddingBottom:14, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-      <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:"#01579b", letterSpacing:1 }}>✈ {name}</div>
+    <div style={{ borderBottom:`2px solid ${primary}`, paddingBottom:14, marginBottom:18, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:22, color:primary, letterSpacing:1 }}>✈ {name}</div>
       <div style={{ textAlign:"right" }}>
-        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:13, color:"#01579b" }}>CORRECTIVE ACTION REQUEST</div>
+        <div style={{ fontFamily:"'Oxanium',sans-serif", fontWeight:800, fontSize:13, color:primary }}>CORRECTIVE ACTION REQUEST</div>
         {address && <div style={{ fontSize:10, color:"#5f7285", marginTop:2 }}>{address}</div>}
         {phone   && <div style={{ fontSize:10, color:"#5f7285" }}>Tel: {phone}</div>}
       </div>
@@ -2220,7 +2243,7 @@ const CAPADetailModal = ({ car, cap, verif, allCaps, allVerifs, onPDF, onClose, 
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
       <div style={{ background:"#fff",borderRadius:14,width:780,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 8px 50px rgba(0,0,0,0.2)",animation:"fadeIn 0.2s ease" }} onClick={e=>e.stopPropagation()}>
         {/* Header */}
-        <div style={{ background:`linear-gradient(135deg,#01579b,#0277bd)`,padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+        <div style={{ background:`linear-gradient(135deg,${org?.report_primary_color||"#01579b"},${org?.report_secondary_color||"#0277bd"})`,padding:"18px 24px",borderRadius:"14px 14px 0 0",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
           <div>
             <div style={{ fontFamily:"'Source Code Pro',monospace",color:"rgba(255,255,255,0.7)",fontSize:11 }}>CAPA PROGRESS REPORT</div>
             <div style={{ fontFamily:"'Oxanium',sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:0.5 }}>
@@ -3108,16 +3131,23 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const carDisplayId = car.external_ref || car.id;
     const carSubId     = car.external_ref ? car.id : null;
 
+    // Org colour scheme
+    const primRgb = hexToRgb(org?.report_primary_color,   [1,41,94]);
+    const secRgb  = hexToRgb(org?.report_secondary_color, [2,119,189]);
+    const altRgb  = lightenRgb(primRgb, 0.93);
+    const orgLogo = org?.report_logo||"";
+
+    // Org brand colours
+    const pRgb = orgPrimaryRgb(org);   // primary
+    const sRgb = orgSecondaryRgb(org); // secondary
+    const ltRgb = lightenRgb(pRgb);    // light tint for backgrounds
+
     // ── helpers ──
     const LINE_H=4.5; // line height for 9pt text
     const LABEL_SZ=6.5; const BODY_SZ=9;
 
-    const sectionTitle=(text,y,color=[1,87,155])=>{
-      doc.setFillColor(...color); doc.rect(margin,y,col,7,"F");
-      doc.setFont("helvetica","bold"); doc.setFontSize(LABEL_SZ+1); doc.setTextColor(255,255,255);
-      doc.text(text,margin+3,y+4.8); doc.setTextColor(0,0,0);
-      return y+9;
-    };
+    // Section title now uses EAAC underline style instead of filled bar
+    const sectionTitle=(text,y,color=primRgb)=>docSectionTitle(doc,text,y,color,margin,col);
 
     // Draws a labelled box that auto-sizes to its content. Returns bottom y.
     const box=(label,value,x,y,w)=>{
@@ -3180,30 +3210,19 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
       return y+8;
     };
 
-    let y=margin;
-
-    // ── Letterhead ──
-    doc.setFillColor(1,87,155); doc.rect(0,0,W,18,"F");
-    doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(255,255,255);
-    doc.text("AeroQualify Pro",margin,12);
-    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(200,220,255);
-    doc.text("CAPA PROGRESS REPORT",margin+52,12);
-    doc.text(`${orgName}${orgAddress?`  |  ${orgAddress}`:""}${orgPhone?`  |  ${orgPhone}`:""}`,W-margin,9,{align:"right"});
-    doc.text("Generated: "+new Date().toLocaleDateString("en-GB"),W-margin,14,{align:"right"});
-    y=24;
-
-    // ── CAR Header bar ──
-    doc.setFillColor(0,60,113); doc.rect(margin,y,col,10,"F");
-    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(255,255,255);
-    doc.text("CAR: "+carDisplayId,margin+4,y+7);
-    if(carSubId){ doc.setFontSize(7); doc.setTextColor(200,220,240); doc.text(carSubId,margin+4,y+12); }
-    // status pill — right aligned, text only (avoid roundedRect encoding issues)
-    const sc={Open:[198,40,40],"In Progress":[230,81,0],"Pending Verification":[69,39,160],Closed:[46,125,50],Overdue:[198,40,40],"Returned for Resubmission":[183,28,28]};
-    const sCol=sc[car.status]||[95,114,133];
-    doc.setFillColor(...sCol); doc.rect(W-margin-34,y+2,32,6,"F");
-    doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
-    doc.text(car.status,W-margin-34+16,y+6.2,{align:"center"});
-    y+=14;
+    // ── EAAC 3-cell document header ─────────────────────────────
+    const statusColors={Open:[198,40,40],"In Progress":[230,81,0],"Pending Verification":[69,39,160],Closed:[46,125,50],Overdue:[198,40,40],"Returned for Resubmission":[183,28,28],Submitted:[29,78,216],Accepted:[21,128,61],Returned:[153,27,27]};
+    let y = drawDocHeader(doc, {
+      primRgb, M:margin, col, orgLogo,
+      title:    "Corrective Action Request",
+      subtitle: `CAPA Progress Report  ·  AeroQualify Pro`,
+      metaRows: [
+        {lbl: carSubId?"External Ref":"CAR Ref",  val: carDisplayId},
+        {lbl: carSubId?"System Ref":"Date Raised", val: carSubId||fmt(car.date_raised)},
+        {lbl:"Resp. Manager",   val: car.responsible_manager||"—"},
+        {lbl:"Status",          val: car.status},
+      ],
+    });
 
     // ── Progress Tracker ──
     doc.setFillColor(245,248,252); doc.rect(margin,y,col,16,"F");
@@ -3711,76 +3730,55 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const{jsPDF}=await import("jspdf");
     const{default:autoTable}=await import("jspdf-autotable");
     const doc=new jsPDF("landscape");
-    const W=297; const H=210; const M=14;
+    const W=297; const H=210; const M=14; const col=W-M*2;
 
-    const orgName    = org?.report_org_name||org?.name||"Organisation";
-    const orgAddress = org?.report_address||"";
-    const genDate    = new Date().toLocaleDateString("en-GB");
-    const totalPages = { n:1 }; // updated after render
+    const orgName  = org?.report_org_name||org?.name||"Organisation";
+    const orgLogo  = org?.report_logo||"";
+    const genDate  = new Date().toLocaleDateString("en-GB");
+    const primRgb  = hexToRgb(org?.report_primary_color, [122,30,44]);
+    const TOTAL_PG = "{total_pages_count_string}";
 
-    // ── Compact header ───────────────────────────────────────────
-    // Navy bar — full width, 18mm tall
-    doc.setFillColor(1,45,90); doc.rect(0,0,W,18,"F");
+    // ── EAAC 3-cell document header ─────────────────────────────
+    let y = drawDocHeader(doc, {
+      primRgb, M, col, orgLogo,
+      title:    "CAPA Status Report",
+      subtitle: `${orgName}  ·  Quality Management System`,
+      metaRows: [
+        {lbl:"Generated",   val:genDate},
+        {lbl:"Total CARs",  val:String(data.cars.length)},
+        {lbl:"Prepared by", val:"Quality Manager"},
+        {lbl:"",            val:"CONFIDENTIAL"},
+      ],
+    });
 
-    // Title — left side
-    doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(255,255,255);
-    doc.text("CAPA STATUS REPORT",M,12);
-
-    // Org name + date — right side
-    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,200,240);
-    doc.text(orgName,W-M,7,{align:"right"});
-    doc.text(`Generated: ${genDate}  ·  Total CARs: ${data.cars.length}`,W-M,13,{align:"right"});
-
-    // Thin accent line below header
-    doc.setDrawColor(0,120,212); doc.setLineWidth(0.4); doc.line(0,18,W,18);
-
-    // AeroQualify watermark — subtle, below title
-    doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(100,140,180);
-    doc.text("Powered by AeroQualify Pro",M,22);
-    if(orgAddress){ doc.setTextColor(120,120,120); doc.text(orgAddress,W-M,22,{align:"right"}); }
-    doc.setTextColor(0,0,0);
-
-    // ── Table ───────────────────────────────────────────────────
+    // ── Table ────────────────────────────────────────────────────
+    const ts = eaacTableStyles(primRgb);
     autoTable(doc,{
-      startY: 25,
-      margin: { left:M, right:M, bottom:16 }, // leave room for footer
+      startY: y,
+      margin: { left:M, right:M, bottom:14 },
       head:[["CAR #","Severity","Status","Department","Date Raised","Due Date","Resp. Manager"]],
       body:data.cars.map(c=>{
         const extCar = isExternalSource(c.source)||!!c.external_ref||!!c.external_cycles||/^KCAA[/-]/i.test(c.id);
         const displayStatus = extCar ? deriveExternalStatus(c) : c.status;
         return [(c.external_ref||c.id),c.severity,displayStatus,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"];
       }),
-      styles:{ fontSize:8.5, cellPadding:3, overflow:"ellipsize" },
-      headStyles:{ fillColor:[1,60,120], textColor:255, fontStyle:"bold", fontSize:8.5 },
-      alternateRowStyles:{ fillColor:[245,249,252] },
+      ...ts,
       columnStyles:{
-        0:{ cellWidth:60 },   // CAR #
-        1:{ cellWidth:18 },   // Severity
-        2:{ cellWidth:30 },   // Status
-        3:{ cellWidth:28 },   // Department
-        4:{ cellWidth:22 },   // Date Raised
-        5:{ cellWidth:22 },   // Due Date
-        6:{ cellWidth:"auto" }, // Resp. Manager
+        0:{cellWidth:62}, 1:{cellWidth:18}, 2:{cellWidth:30},
+        3:{cellWidth:28}, 4:{cellWidth:22}, 5:{cellWidth:22}, 6:{cellWidth:"auto"},
       },
-      // ── Per-page footer ──────────────────────────────────────
-      didDrawPage:(hookData)=>{
-        const pg = hookData.pageNumber;
-        const pageCount = doc.internal.getNumberOfPages();
-        const footY = H-6;
-        // Footer line
-        doc.setDrawColor(180,180,180); doc.setLineWidth(0.3); doc.line(M,footY-4,W-M,footY-4);
-        // Left: confidential
-        doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(100,100,100);
+      didDrawPage:(d)=>{
+        const footY=H-6;
+        doc.setDrawColor(208,208,208); doc.setLineWidth(0.3); doc.line(M,footY-3,W-M,footY-3);
+        doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(119,119,119);
         doc.text(`CONFIDENTIAL  —  ${orgName}`,M,footY);
-        // Centre: AeroQualify
-        doc.setFont("helvetica","normal"); doc.setTextColor(140,140,140);
-        doc.text("AeroQualify Pro · QMS Document",W/2,footY,{align:"center"});
-        // Right: page number
-        doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
-        doc.text(`Page ${pg} of ${pageCount}`,W-M,footY,{align:"right"});
+        doc.setFont("helvetica","normal"); doc.setTextColor(170,170,170);
+        doc.text("AeroQualify Pro · Quality Management System",W/2,footY,{align:"center"});
+        doc.setTextColor(119,119,119);
+        doc.text(`Page ${d.pageCount} of ${TOTAL_PG}`,W-M,footY,{align:"right"});
       },
     });
-
+    doc.putTotalPages(TOTAL_PG);
     doc.save(`CAPA-Status-Report-${new Date().toISOString().slice(0,10)}.pdf`);
     showToast("Status report generated","success");
   };
@@ -5277,7 +5275,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
         <div style={{ display:"flex",gap:10,justifyContent:"flex-end",padding:"16px 24px",borderTop:"1px solid #eef2f7",background:"#fafbfc",flexShrink:0,flexWrap:"wrap" }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
           <Btn variant="ghost" onClick={()=>generateNotificationPDF({...slot,...form,attachments})}>🔔 Notification Form</Btn>
-          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""})}>📄 Audit Report PDF</Btn>}
+          {slot.status==="Completed"&&<Btn variant="ghost" onClick={()=>generateAuditReport({...slot,...form,finding_items:JSON.stringify(findingItems),org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||"",org_primary:org?.report_primary_color||"",org_secondary:org?.report_secondary_color||"",org_logo:org?.report_logo||""})}>📄 Audit Report PDF</Btn>}
           <Btn onClick={handleSave}>💾 Save Audit Record</Btn>
         </div>
       </div>
@@ -5326,12 +5324,10 @@ const generateAuditReport = async (slot) => {
   try { findingItems = JSON.parse(slot.finding_items||"[]"); } catch {}
 
   // ── helpers (same pattern as CAPA PDF) ──
-  const sectionTitle = (text, y, color=[1,87,155]) => {
-    doc.setFillColor(...color); doc.rect(M,y,col,7,"F");
-    doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
-    doc.text(text, M+3, y+4.8); doc.setTextColor(0,0,0);
-    return y+9;
-  };
+  const primRgb = hexToRgb(slot.org_primary,   [1,87,155]);
+  const secRgb  = hexToRgb(slot.org_secondary, [2,119,189]);
+
+  const sectionTitle = (text, y, color=primRgb) => docSectionTitle(doc, text, y, color, M, col);
   const box = (label, value, x, y, w) => {
     doc.setFont("helvetica","normal"); doc.setFontSize(BODY_SZ);
     const lines = doc.splitTextToSize(String(value||"—"), w-5);
@@ -5377,16 +5373,19 @@ const generateAuditReport = async (slot) => {
     }
   };
 
-  // ── HEADER ──────────────────────────────────────────────────
-  doc.setFillColor(26,35,50); doc.rect(0,0,W,28,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(255,255,255);
-  doc.text("AeroQualify Pro", M, 11);
-  doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
-  doc.text("AUDIT REPORT — QMS 004", M, 17);
-  doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text(`Issued: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
-
-  let y = 34;
+  // ── EAAC 3-cell document header ─────────────────────────────
+  const auditRef2 = slot.org_prefix ? `${slot.org_prefix}-QMS-004` : "QMS-004";
+  let y = drawDocHeader(doc, {
+    primRgb, M, col, orgLogo: slot.org_logo||"",
+    title:    "Audit Report",
+    subtitle: `Internal Quality Audit  ·  QMS 004  ·  AeroQualify Pro`,
+    metaRows: [
+      {lbl:"Ref",           val: auditRef2},
+      {lbl:"Date",          val: slot.planned_date ? new Date(slot.planned_date).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB")},
+      {lbl:"Lead Auditor",  val: slot.lead_auditor||"—"},
+      {lbl:"Audit Area",    val: slot.area||"—"},
+    ],
+  });
 
   // ── AUDIT IDENTITY BAR ───────────────────────────────────────
   const AREA_CODES_PDF = {
@@ -5671,24 +5670,27 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
     }
   };
 
-  // Header
-  doc.setFillColor(26,35,50); doc.rect(0,0,W,22,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(255,255,255);
-  doc.text("AeroQualify Pro", M, 10);
-  doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(160,185,210);
-  doc.text(`ANNUAL AUDIT PROGRAMME — ${year}`, M, 17);
-  doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(160,185,210);
-  doc.text(`${approval?.org_name||"Organisation"}${approval?.org_address?`  |  ${approval.org_address}`:""}${approval?.org_phone?`  |  ${approval.org_phone}`:""}`, W-M, 10, {align:"right"});
-  doc.text(`Generated: ${new Date().toLocaleDateString("en-GB")}`, W-M, 17, {align:"right"});
-
-  let y = 28;
+  // ── EAAC 3-cell document header ─────────────────────────────
+  const schedOrgName = approval?.org_name||"Organisation";
+  let y = drawDocHeader(doc, {
+    primRgb, M, col, orgLogo: approval?.org_logo||"",
+    title:    `Annual Audit Programme — ${year}`,
+    subtitle: `${schedOrgName}  ·  Quality Management System`,
+    metaRows: [
+      {lbl:"Year",        val: String(year)},
+      {lbl:"Areas",       val: `${auditAreasList.length} audit areas`},
+      {lbl:"Generated",   val: new Date().toLocaleDateString("en-GB")},
+      {lbl:"",            val: "CONTROLLED DOCUMENT"},
+    ],
+  });
   // Column widths
   const areaW = 52; const monthW = (col - areaW - 22) / 12; const statusW = 22;
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  // Table header
-  doc.setFillColor(1,87,155); doc.rect(M,y,col,8,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
+  // Table header — EAAC grey style
+  doc.setFillColor(242,242,242); doc.rect(M,y,col,8,"F");
+  doc.setDrawColor(208,208,208); doc.setLineWidth(0.2); doc.rect(M,y,col,8,"S");
+  doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(0,0,0);
   doc.text("AUDIT AREA", M+2, y+5.2);
   months.forEach((m,i) => doc.text(m, M+areaW+i*monthW+monthW/2, y+5.2, {align:"center"}));
   doc.text("STATUS", M+areaW+12*monthW+statusW/2, y+5.2, {align:"center"});
@@ -5832,7 +5834,7 @@ const generateNotificationPDF = async (slot) => {
   let y = 34;
 
   // ── Ref bar ──────────────────────────────────────────────────
-  doc.setFillColor(1,87,155); doc.rect(M,y,col,10,"F");
+  doc.setFillColor(...primRgb); doc.rect(M,y,col,10,"F");
   doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(255,255,255);
   doc.text(`Notification Reference: ${notifRef}`, M+3, y+6.5);
   doc.text(`${slot.area}`, W-M-3, y+6.5, {align:"right"});
@@ -5859,7 +5861,7 @@ const generateNotificationPDF = async (slot) => {
   };
 
   // ── SECTION 1: AUDIT DETAILS ─────────────────────────────────
-  doc.setFillColor(1,87,155); doc.rect(M,y,col,7,"F");
+  doc.setFillColor(...primRgb); doc.rect(M,y,col,7,"F");
   doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
   doc.text("SECTION 1 — AUDIT DETAILS", M+3, y+4.8);
   y+=9;
@@ -5980,7 +5982,7 @@ const generateNotificationPDF = async (slot) => {
   // ── SECTION 4: ISSUED BY ─────────────────────────────────────
   const sigW2 = (col-6)/2;
   y = needPage(y, 34);
-  doc.setFillColor(1,87,155); doc.rect(M,y,col,7,"F");
+  doc.setFillColor(...primRgb); doc.rect(M,y,col,7,"F");
   doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
   doc.text("SECTION 4 — ISSUED BY — QUALITY MANAGER", M+3, y+4.8);
   y+=9;
@@ -6162,7 +6164,99 @@ const ADHOC_TRIGGERS = [
   "Other",
 ];
 
-// ─── CAR Source constants ─────────────────────────────────────
+// ─── Org colour scheme helpers ───────────────────────────────
+const COLOR_PRESETS = [
+  { name:"Crimson & Gold",    primary:"#7A1E2C", secondary:"#B89320" },
+  { name:"Ocean Blue",        primary:"#01295E", secondary:"#0277BD" },
+  { name:"Deep Navy & Gold",  primary:"#0A1628", secondary:"#C9973A" },
+  { name:"Forest Green",      primary:"#1A3D2B", secondary:"#2D7A4F" },
+  { name:"Slate & Steel",     primary:"#1E293B", secondary:"#475569" },
+  { name:"Dark Teal",         primary:"#0D3D45", secondary:"#0E7490" },
+];
+const hexToRgb = (hex, fallback=[1,45,90]) => {
+  if(!hex) return fallback;
+  const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  return r?[parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)]:fallback;
+};
+const lightenRgb = (rgb, f=0.88) => rgb.map(v=>Math.round(v+(255-v)*f));
+
+// ── EAAC-style jsPDF header & section helpers ─────────────────
+// drawDocHeader — 3-cell bordered header matching the EAAC document library format.
+// Logo | Title + subtitle | Meta rows with horizontal dividers.
+// Returns Y position immediately after the header.
+const drawDocHeader = (doc, { primRgb, M, col, orgLogo, title, subtitle, metaRows }) => {
+  const LOGO_W  = 38;
+  const META_W  = 70;
+  const TITLE_W = col - LOGO_W - META_W;
+  const H = 22;
+  const y = M;
+  const [pr,pg,pb] = primRgb;
+  // Outer border
+  doc.setDrawColor(pr,pg,pb); doc.setLineWidth(0.5);
+  doc.rect(M, y, col, H, "S");
+  // Logo cell — right divider
+  doc.line(M+LOGO_W, y, M+LOGO_W, y+H);
+  if(orgLogo){
+    try{
+      const fmt=orgLogo.includes("data:image/png")?"PNG":"JPEG";
+      doc.addImage(orgLogo,fmt,M+2,y+2,LOGO_W-4,H-4);
+    }catch{}
+  }
+  // Title cell — right divider
+  doc.line(M+LOGO_W+TITLE_W, y, M+LOGO_W+TITLE_W, y+H);
+  const tx = M+LOGO_W+4;
+  doc.setFont("helvetica","bold"); doc.setFontSize(10.5);
+  doc.setTextColor(0,0,0);
+  const titleLines = doc.splitTextToSize(title.toUpperCase(), TITLE_W-6);
+  doc.text(titleLines, tx, y+7.5);
+  if(subtitle){
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
+    doc.setTextColor(68,68,68);
+    doc.text(subtitle, tx, y+14);
+  }
+  // Meta cell — horizontal row dividers
+  const mx = M+LOGO_W+TITLE_W;
+  const rowH = H/metaRows.length;
+  metaRows.forEach((row,i)=>{
+    const ry = y+i*rowH;
+    if(i<metaRows.length-1){
+      doc.setDrawColor(pr,pg,pb); doc.setLineWidth(0.2);
+      doc.line(mx, ry+rowH, M+col, ry+rowH);
+    }
+    const textY = ry+rowH*0.62;
+    doc.setFont("helvetica","bold"); doc.setFontSize(6);
+    doc.setTextColor(pr,pg,pb);
+    doc.text((row.lbl||"").toUpperCase(), mx+2, textY);
+    if(row.val){
+      doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
+      doc.setTextColor(0,0,0);
+      const lblW = row.lbl ? 22 : 0;
+      const v = String(row.val);
+      doc.text(doc.splitTextToSize(v, META_W-lblW-4)[0], mx+lblW, textY);
+    }
+  });
+  return y+H+5;
+};
+
+// docSectionTitle — EAAC-style section heading: primary-colour bold uppercase + 2px underline
+const docSectionTitle = (doc, text, y, primRgb, M, col) => {
+  const [pr,pg,pb] = primRgb;
+  doc.setFont("helvetica","bold"); doc.setFontSize(9);
+  doc.setTextColor(pr,pg,pb);
+  doc.text(text.toUpperCase(), M, y);
+  doc.setDrawColor(pr,pg,pb); doc.setLineWidth(0.5);
+  doc.line(M, y+1.5, M+col, y+1.5);
+  doc.setTextColor(0,0,0);
+  return y+7;
+};
+
+// eaacTableStyles — standard autoTable styles matching EAAC document format
+const eaacTableStyles = (primRgb) => ({
+  styles:         { fontSize:8.5, cellPadding:2.5, overflow:"ellipsize", lineColor:[208,208,208], lineWidth:0.2 },
+  headStyles:     { fillColor:[242,242,242], textColor:[0,0,0], fontStyle:"bold", fontSize:8.5, lineColor:[208,208,208] },
+  alternateRowStyles: { fillColor:[250,250,250] },
+  tableLineColor: [208,208,208], tableLineWidth: 0.2,
+});
 const CAR_SOURCES_INTERNAL = [
   "Internal Scheduled Audit",
   "Internal Ad-hoc / Triggered Audit",
@@ -6702,7 +6796,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
             ))}
           </div>
           {isQM && hasSchedule && (
-            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, {...(yearSlots[0]||{}),org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""}, orgAuditAreas)}>
+            <Btn variant="ghost" onClick={()=>generateSchedulePDF(yearSlots, year, {...(yearSlots[0]||{}),org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||"",org_primary:org?.report_primary_color||"",org_secondary:org?.report_secondary_color||""}, orgAuditAreas)}>
               📥 Export Schedule PDF
             </Btn>
           )}
@@ -6906,7 +7000,7 @@ const AuditsView = ({ data, user, profile, managers, onRefresh, showToast, org }
                       <td style={{ padding:"10px 14px" }}>
                         <div style={{ display:"flex",gap:6 }}>
                           {isQM&&<Btn size="sm" variant="ghost" onClick={()=>setModal(s)}>Edit</Btn>}
-                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||""})}>📄 PDF</Btn>}
+                          {s.status==="Completed"&&<Btn size="sm" variant="ghost" onClick={()=>generateAuditReport({...s,org_prefix:org?.car_prefix||"ORG",org_name:org?.report_org_name||org?.name||"",org_address:org?.report_address||"",org_phone:org?.report_phone||"",org_primary:org?.report_primary_color||"",org_secondary:org?.report_secondary_color||"",org_logo:org?.report_logo||""})}>📄 PDF</Btn>}
                         </div>
                       </td>
                     </tr>
@@ -8046,6 +8140,12 @@ const OrgSettingsPage = ({ org, onSave }) => {
   const [reportName,    setReportName]    = useState(org?.report_org_name || org?.name || "");
   const [reportAddress, setReportAddress] = useState(org?.report_address  || "");
   const [reportPhone,   setReportPhone]   = useState(org?.report_phone    || "");
+  const [primaryColor,  setPrimaryColor]  = useState(org?.report_primary_color   || "#01295e");
+  const [secondaryColor,setSecondaryColor]= useState(org?.report_secondary_color || "#0277bd");
+  const [reportLogo,    setReportLogo]    = useState(org?.report_logo            || "");
+  const [logoLoading,   setLogoLoading]   = useState(false);
+  const [reportLogo,    setReportLogo]    = useState(org?.report_logo            || "");
+  const [logoLoading,   setLogoLoading]   = useState(false);
   const [newArea, setNewArea] = useState("");
   const [newDept, setNewDept] = useState("");
   const [saving,  setSaving]  = useState(false);
@@ -8078,12 +8178,15 @@ const OrgSettingsPage = ({ org, onSave }) => {
     if(!prefix.trim()){ alert("CAR prefix cannot be empty"); return; }
     setSaving(true);
     await onSave({
-      car_prefix:      prefix.trim().toUpperCase(),
-      audit_areas:     JSON.stringify(areas),
-      departments:     JSON.stringify(depts),
-      report_org_name: reportName.trim(),
-      report_address:  reportAddress.trim(),
-      report_phone:    reportPhone.trim(),
+      car_prefix:            prefix.trim().toUpperCase(),
+      audit_areas:           JSON.stringify(areas),
+      departments:           JSON.stringify(depts),
+      report_org_name:       reportName.trim(),
+      report_address:        reportAddress.trim(),
+      report_phone:          reportPhone.trim(),
+      report_primary_color:  primaryColor.trim()||"#01295e",
+      report_secondary_color:secondaryColor.trim()||"#0277bd",
+      report_logo:           reportLogo,
     });
     setSaving(false);
   };
@@ -8131,6 +8234,114 @@ const OrgSettingsPage = ({ org, onSave }) => {
           </div>
           <div style={{ fontFamily:"monospace",fontSize:10,color:"#5f7285",marginTop:4 }}>
             {reportAddress||"Address not set"}&nbsp;&nbsp;·&nbsp;&nbsp;{reportPhone||"Phone not set"}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Logo Upload ── */}
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Organisation Logo</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:18 }}>Appears in PDF report headers. PNG or JPEG, max 300 KB. Recommended dimensions: 200 × 80 px.</div>
+        <div style={{ display:"flex",alignItems:"flex-start",gap:20,flexWrap:"wrap" }}>
+          {/* Preview */}
+          <div style={{ width:180,height:72,borderRadius:8,border:"1px solid #dde3ea",background:"#f8fafc",
+            display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0 }}>
+            {reportLogo
+              ? <img src={reportLogo} alt="Logo preview" style={{ maxWidth:"100%",maxHeight:"100%",objectFit:"contain" }}/>
+              : <span style={{ fontSize:11,color:"#b0bec5",textAlign:"center" }}>No logo<br/>uploaded</span>
+            }
+          </div>
+          {/* Controls */}
+          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+            <label style={{ background:"#01579b",color:"#fff",borderRadius:7,padding:"9px 18px",fontWeight:600,
+              fontSize:13,cursor:logoLoading?"wait":"pointer",display:"inline-block",opacity:logoLoading?0.7:1 }}>
+              {logoLoading?"Processing…":"📁 Upload Logo"}
+              <input type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml" style={{ display:"none" }}
+                onChange={async(e)=>{
+                  const file = e.target.files?.[0]; if(!file) return;
+                  if(file.size > 350000){ alert("Image must be under 300 KB. Please resize and try again."); return; }
+                  setLogoLoading(true);
+                  const reader = new FileReader();
+                  reader.onload = (ev) => { setReportLogo(ev.target.result); setLogoLoading(false); };
+                  reader.onerror = () => { setLogoLoading(false); alert("Failed to read file."); };
+                  reader.readAsDataURL(file);
+                  e.target.value="";
+                }}
+              />
+            </label>
+            {reportLogo&&(
+              <button onClick={()=>setReportLogo("")}
+                style={{ background:"#ffebee",color:"#c62828",border:"1px solid #ffcdd2",borderRadius:7,
+                  padding:"7px 18px",fontWeight:600,fontSize:13,cursor:"pointer" }}>
+                ✕ Remove Logo
+              </button>
+            )}
+            <div style={{ fontSize:11,color:"#8a9ab0",lineHeight:1.5 }}>
+              Logo is embedded in PDFs as base64.<br/>
+              Use a transparent PNG for best results.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Colour Scheme ── */}
+      <div style={{ background:"#fff",borderRadius:12,border:"1px solid #dde3ea",padding:28 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1a2332",marginBottom:4 }}>Report Colour Scheme</div>
+        <div style={{ fontSize:12,color:"#5f7285",marginBottom:16 }}>Applied to all PDF reports, the on-screen CAPA modal, and document letterheads.</div>
+
+        {/* Preset swatches */}
+        <div style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,marginBottom:10 }}>Presets</div>
+        <div style={{ display:"flex",flexWrap:"wrap",gap:10,marginBottom:20 }}>
+          {COLOR_PRESETS.map(p=>{
+            const active = primaryColor===p.primary && secondaryColor===p.secondary;
+            return (
+              <button key={p.name} onClick={()=>{setPrimaryColor(p.primary);setSecondaryColor(p.secondary);}}
+                style={{ padding:"8px 14px",borderRadius:8,border:`2px solid ${active?p.primary:"#dde3ea"}`,
+                  background:active?`${p.primary}10`:"#f8fafc",cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:8 }}>
+                <span style={{ display:"flex",gap:3 }}>
+                  <span style={{ width:14,height:14,borderRadius:3,background:p.primary,display:"block" }}/>
+                  <span style={{ width:14,height:14,borderRadius:3,background:p.secondary,display:"block" }}/>
+                </span>
+                <span style={{ fontSize:12,fontWeight:active?700:400,color:active?p.primary:"#475569" }}>{p.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Custom inputs */}
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16 }}>
+          <div>
+            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:6 }}>Primary Colour</label>
+            <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+              <input type="color" value={primaryColor} onChange={e=>setPrimaryColor(e.target.value)}
+                style={{ width:40,height:36,border:"1px solid #dde3ea",borderRadius:6,padding:2,cursor:"pointer" }}/>
+              <input type="text" value={primaryColor} onChange={e=>setPrimaryColor(e.target.value)}
+                style={{ flex:1,padding:"8px 10px",border:"1px solid #dde3ea",borderRadius:6,fontSize:13,fontFamily:"monospace" }}
+                placeholder="#01295e"/>
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize:11,fontWeight:700,color:"#5f7285",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:6 }}>Secondary Colour</label>
+            <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+              <input type="color" value={secondaryColor} onChange={e=>setSecondaryColor(e.target.value)}
+                style={{ width:40,height:36,border:"1px solid #dde3ea",borderRadius:6,padding:2,cursor:"pointer" }}/>
+              <input type="text" value={secondaryColor} onChange={e=>setSecondaryColor(e.target.value)}
+                style={{ flex:1,padding:"8px 10px",border:"1px solid #dde3ea",borderRadius:6,fontSize:13,fontFamily:"monospace" }}
+                placeholder="#0277bd"/>
+            </div>
+          </div>
+        </div>
+
+        {/* Live preview strip */}
+        <div style={{ marginTop:14,borderRadius:8,overflow:"hidden",border:"1px solid #dde3ea" }}>
+          <div style={{ background:primaryColor,padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+            <span style={{ color:"#fff",fontWeight:700,fontSize:13 }}>CAPA STATUS REPORT</span>
+            <span style={{ color:"rgba(255,255,255,0.7)",fontSize:10 }}>Preview header</span>
+          </div>
+          <div style={{ padding:"8px 16px",display:"flex",gap:8 }}>
+            <span style={{ background:secondaryColor,color:"#fff",borderRadius:4,padding:"2px 8px",fontSize:11 }}>Section header</span>
+            <span style={{ background:`${primaryColor}15`,border:`1px solid ${primaryColor}40`,color:primaryColor,borderRadius:4,padding:"2px 8px",fontSize:11 }}>Alt row</span>
           </div>
         </div>
       </div>
