@@ -3719,7 +3719,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     doc.text(`${org?.report_org_name||org?.name||"Organisation"} · `+`Generated: ${new Date().toLocaleDateString("en-GB")}  |  Total CARs: ${data.cars.length}`,14,44);
     doc.setTextColor(0,0,0);
     autoTable(doc,{startY:50,head:[["CAR #","Severity","Status","Department","Raised","Due","Resp. Manager"]],
-      body:data.cars.map(c=>[c.id,c.severity,c.status,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"]),
+      body:data.cars.map(c=>[(c.external_ref||c.id),c.severity,c.status,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"]),
       styles:{fontSize:9},headStyles:{fillColor:[1,87,155]},
       alternateRowStyles:{fillColor:[245,248,252]},
     });
