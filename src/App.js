@@ -3719,7 +3719,11 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     doc.text(`${org?.report_org_name||org?.name||"Organisation"} · `+`Generated: ${new Date().toLocaleDateString("en-GB")}  |  Total CARs: ${data.cars.length}`,14,44);
     doc.setTextColor(0,0,0);
     autoTable(doc,{startY:50,head:[["CAR #","Severity","Status","Department","Raised","Due","Resp. Manager"]],
-      body:data.cars.map(c=>[(c.external_ref||c.id),c.severity,c.status,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"]),
+      body:data.cars.map(c=>{
+        const extCar = isExternalSource(c.source)||!!c.external_ref||!!c.external_cycles||/^KCAA[/-]/i.test(c.id);
+        const displayStatus = extCar ? deriveExternalStatus(c) : c.status;
+        return [(c.external_ref||c.id),c.severity,displayStatus,c.department||"—",fmt(c.date_raised),fmt(c.due_date),c.responsible_manager||"--"];
+      }),
       styles:{fontSize:9},headStyles:{fillColor:[1,87,155]},
       alternateRowStyles:{fillColor:[245,248,252]},
     });
@@ -8278,11 +8282,23 @@ export default function App() {
       supabase.from("organisations").select("*").eq("id",orgId).single(),
     ]);
 
-    // Auto-mark overdue CARs (fire-and-forget, no await)
-    // Only Open and Returned for Resubmission are overdue-eligible.
-    // Every other status means work is in-flight or complete — never auto-mark those.
+    // Process CARs — two passes:
+    // 1. External CARs: reconcile DB status with derived status from external_cycles data
+    //    (the DB may have a stale "Overdue" written by the old auto-mark code)
+    // 2. Internal CARs: auto-mark as Overdue if past due date and status is Open/Returned
     const OVERDUE_ELIGIBLE = new Set(["Open","Returned for Resubmission"]);
     const processedCars = (cars.data||[]).map(c => {
+      // ── External CAR reconciliation ───────────────────────────
+      if(c.external_cycles){
+        const derived = deriveExternalStatus(c);
+        if(c.status !== derived){
+          // DB status is stale — silently correct it
+          supabase.from(TABLES.cars).update({status:derived,updated_at:new Date().toISOString()}).eq("id",c.id).then(()=>{});
+          return {...c,status:derived};
+        }
+        return c;
+      }
+      // ── Internal CAR overdue check ────────────────────────────
       if(!OVERDUE_ELIGIBLE.has(c.status)||!c.due_date) return c;
       const due = new Date(c.due_date); due.setHours(0,0,0,0);
       if(due < today){
