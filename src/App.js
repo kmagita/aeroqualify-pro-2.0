@@ -3073,7 +3073,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     window._pdfMergeQueue = [];
 
     const{jsPDF}=await import("jspdf");
-    const{default:autoTable}=await import("jspdf-autotable");
+    await import("jspdf-autotable"); // side-effect: registers doc.autoTable on jsPDF prototype
     const cap=getCAP(car.id); const verif=getVerif(car.id);
     let allCapsForCar=getAllCAPs(car.id);
 
@@ -5236,7 +5236,7 @@ const AuditScheduleModal = ({ slot, onSave, onClose, managers, data, user, profi
 // ─── Audit Report PDF Generator ───────────────────────────────
 const generateAuditReport = async (slot) => {
   const { jsPDF } = await import("jspdf");
-  const { default: autoTable } = await import("jspdf-autotable");
+  await import("jspdf-autotable"); // side-effect registration
   const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210; const M=14; const col=W-M*2;
   const LINE_H=4.5; const LABEL_SZ=6.5; const BODY_SZ=9;
