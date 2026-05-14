@@ -3053,7 +3053,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
     const allFilled = form.immediate_action&&form.root_cause_analysis&&form.corrective_action&&form.preventive_action&&hasEvidence;
     const isResubmission = selected.status==="Returned for Resubmission";
     const capId = isResubmission ? `${selected.id}-cap-${Date.now()}` : form.id;
-    const capPayload={...form,id:capId,evidence_files,evidence_url,evidence_filename,submitted_by:user.id,submitted_by_name:profile?.full_name||user.email,submitted_at:new Date().toISOString(),status:allFilled?"Complete":"Pending"};
+    const capPayload={...form,id:capId,org_id:org?.id,evidence_files,evidence_url,evidence_filename,submitted_by:user.id,submitted_by_name:profile?.full_name||user.email,submitted_at:new Date().toISOString(),status:allFilled?"Complete":"Pending"};
     const{error}=await supabase.from(TABLES.caps).upsert(capPayload);
     if(error){showToast(`Error saving CAP: ${error.message}`,"error");return;}
     if(allFilled){
@@ -3880,7 +3880,7 @@ const CARsView = ({ data, user, profile, managers, onRefresh, showToast, org }) 
                         </>) : (<>
                           {/* Internal CAR: full CAP/Verification flow */}
                           <Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("detail")}} style={{color:T.teal,borderColor:T.teal}}>View</Btn>
-                          {c.status!=="Closed"&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("cap")}}>CAP</Btn>}
+                          {c.status!=="Closed"&&!extCar&&<Btn size="sm" variant="outline" onClick={()=>{setSelected(c);setModal("cap")}}>CAP</Btn>}
                           {c.status==="Pending Verification"&&["admin","quality_manager"].includes(profile?.role)&&
                             <Btn size="sm" variant="success" onClick={()=>{setSelected(c);setModal("verify")}}>Verify</Btn>}
                           {(cap||verif)&&<Btn size="sm" variant="ghost" onClick={()=>generateReport(c)}>📄 PDF</Btn>}
@@ -5659,6 +5659,7 @@ const generateSchedulePDF = async (yearSlots, year, approval, auditAreasList=AUD
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
   const W=297; const H=210; const M=12; const col=W-M*2;
+  const primRgb = hexToRgb(approval?.org_primary, [1,87,155]);
   const addFooter = () => {
     const pages = doc.getNumberOfPages();
     for(let i=1;i<=pages;i++){
@@ -5779,6 +5780,7 @@ const generateNotificationPDF = async (slot) => {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
   const W=210; const M=14; const col=W-M*2;
+  const primRgb = hexToRgb(slot.org_primary, [1,87,155]);
 
   const addFooter = () => {
     const pages = doc.getNumberOfPages();
@@ -8515,7 +8517,7 @@ export default function App() {
     const [cars,caps,verifs,docs,fdocs,audits,contractors,logs,mgrs,risks,auditSchedule,orgResult] = await Promise.all([
       q(TABLES.cars).order("date_raised",{ascending:false}),
       supabase.from(TABLES.caps)
-        .select("id,car_id,org_id,status,immediate_action,root_cause_analysis,corrective_action,preventive_action,target_date,submitted_at,submitted_by,submitted_by_name,evidence_filename,evidence_url,updated_at,risk_score,risk_label,linked_risk_id")
+        .select("*")
         .eq("org_id",orgId),
       q(TABLES.verifications),
       q(TABLES.documents).order("created_at",{ascending:false}),
@@ -8556,6 +8558,19 @@ export default function App() {
     });
 
     // Batch state — React 18 auto-batches so flushSync is not needed
+    // Fallback: load any caps saved before org_id was required (org_id is null on old records).
+    // These are identified by finding cars that have no matching cap in the loaded set.
+    const loadedCapCarIds = new Set((caps.data||[]).map(c=>c.car_id));
+    const carsWithoutCaps = processedCars.filter(c=>!loadedCapCarIds.has(c.id));
+    if(carsWithoutCaps.length>0){
+      const missingIds = carsWithoutCaps.map(c=>c.id);
+      const{data:legacyCaps}=await supabase.from(TABLES.caps).select("*").in("car_id",missingIds);
+      if(legacyCaps&&legacyCaps.length>0){
+        // Backfill org_id silently so future loads pick them up
+        supabase.from(TABLES.caps).update({org_id:orgId}).in("car_id",missingIds).is("org_id",null).then(()=>{});
+        caps.data=[...(caps.data||[]),...legacyCaps];
+      }
+    }
     setData({
       cars:processedCars, caps:caps.data||[], verifications:verifs.data||[],
       auditSchedule:auditSchedule.data||[], documents:docs.data||[],
